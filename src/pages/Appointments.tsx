@@ -46,6 +46,7 @@ import { useAppointments, useTodayAppointments, usePendingAppointments, useCance
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServiceCategories } from '@/hooks/useServices';
 import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
+import { NewAppointmentModal } from '@/components/modals';
 
 type SortField = 'date' | 'customer' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -112,6 +113,7 @@ export default function Appointments() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
 
   const { data: allAppointments = [], isLoading } = useAppointments(
     statusFilter !== 'all' ? { status: statusFilter as AppointmentStatus } : undefined
@@ -206,7 +208,7 @@ export default function Appointments() {
           <h1 className="text-2xl font-bold tracking-tight">Appointments</h1>
           <p className="text-muted-foreground">Manage and track all service appointments</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary-hover">
+        <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsNewAppointmentOpen(true)}>
           <Plus className="h-4 w-4" />
           New Appointment
         </Button>
@@ -336,6 +338,10 @@ export default function Appointments() {
                   <TableCell colSpan={8} className="text-center py-12">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
                     <p className="text-muted-foreground">No appointments found</p>
+                    <Button className="mt-4" onClick={() => setIsNewAppointmentOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Your First Appointment
+                    </Button>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -442,30 +448,29 @@ export default function Appointments() {
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                      
-                      {/* Expanded Row */}
+
+                      {/* Expanded Row Details */}
                       {isExpanded && (
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                          <TableCell colSpan={8} className="p-4">
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <TableRow key={`${apt.id}-expanded`}>
+                          <TableCell colSpan={8} className="bg-muted/30 p-4">
+                            <div className="grid gap-4 md:grid-cols-3">
                               <div>
-                                <h4 className="text-sm font-medium mb-2">Address</h4>
-                                <p className="text-sm text-muted-foreground flex items-start gap-2">
+                                <p className="text-xs text-muted-foreground mb-1">Full Address</p>
+                                <p className="text-sm flex items-start gap-1">
                                   <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                                   {apt.address}
+                                  {apt.city && `, ${apt.city}`}
+                                  {apt.state && `, ${apt.state}`}
+                                  {apt.zip_code && ` ${apt.zip_code}`}
                                 </p>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium mb-2">Customer Notes</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {apt.customer_notes || 'No notes'}
-                                </p>
+                                <p className="text-xs text-muted-foreground mb-1">Customer Notes</p>
+                                <p className="text-sm">{apt.customer_notes || 'No notes'}</p>
                               </div>
                               <div>
-                                <h4 className="text-sm font-medium mb-2">Internal Notes</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {apt.internal_notes || 'No internal notes'}
-                                </p>
+                                <p className="text-xs text-muted-foreground mb-1">Internal Notes</p>
+                                <p className="text-sm">{apt.internal_notes || 'No notes'}</p>
                               </div>
                             </div>
                           </TableCell>
@@ -479,6 +484,12 @@ export default function Appointments() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* New Appointment Modal */}
+      <NewAppointmentModal 
+        open={isNewAppointmentOpen} 
+        onOpenChange={setIsNewAppointmentOpen} 
+      />
     </div>
   );
 }

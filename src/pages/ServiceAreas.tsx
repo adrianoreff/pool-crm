@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { useServiceAreas, useToggleServiceAreaActive } from '@/hooks/useServiceAreas';
 import { ServiceAreaWithTechnician } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AddServiceAreaModal } from '@/components/modals';
 
 // Generate a color based on index for visual differentiation
 const areaColors = ['#3B82F6', '#10B981', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4'];
@@ -201,6 +202,7 @@ function ServiceAreaCard({ area, colorIndex }: { area: ServiceAreaWithTechnician
 export default function ServiceAreas() {
   const { data: serviceAreas = [], isLoading } = useServiceAreas();
   const activeAreas = serviceAreas.filter(a => a.is_active).length;
+  const [isAddServiceAreaOpen, setIsAddServiceAreaOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -236,7 +238,7 @@ export default function ServiceAreas() {
             {activeAreas} of {serviceAreas.length} areas active
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary-hover">
+        <Button className="bg-primary hover:bg-primary-hover" onClick={() => setIsAddServiceAreaOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Service Area
         </Button>
@@ -263,7 +265,7 @@ export default function ServiceAreas() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Define your service areas to optimize scheduling
                 </p>
-                <Button className="bg-primary hover:bg-primary-hover">
+                <Button className="bg-primary hover:bg-primary-hover" onClick={() => setIsAddServiceAreaOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Service Area
                 </Button>
@@ -278,6 +280,12 @@ export default function ServiceAreas() {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Add Service Area Modal */}
+      <AddServiceAreaModal 
+        open={isAddServiceAreaOpen} 
+        onOpenChange={setIsAddServiceAreaOpen} 
+      />
     </div>
   );
 }

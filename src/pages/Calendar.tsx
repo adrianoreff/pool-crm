@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NewAppointmentModal } from '@/components/modals';
 
 type ViewType = 'day' | 'week' | 'month';
 
@@ -52,6 +53,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<ViewType>('week');
   const [selectedTechnician, setSelectedTechnician] = useState<string>('all');
+  const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
 
   // Get week dates for filtering
   const getWeekDates = () => {
@@ -176,7 +178,7 @@ export default function CalendarPage() {
           <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
           <p className="text-muted-foreground">Manage your appointments</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary-hover">
+        <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsNewAppointmentOpen(true)}>
           <Plus className="h-4 w-4" />
           New Appointment
         </Button>
@@ -301,6 +303,7 @@ export default function CalendarPage() {
                                     'h-16 border-b hover:bg-muted/30 cursor-pointer transition-colors',
                                     isToday && 'bg-primary/5'
                                   )}
+                                  onClick={() => setIsNewAppointmentOpen(true)}
                                 />
                               ))}
 
@@ -365,6 +368,7 @@ export default function CalendarPage() {
                       <div 
                         key={time} 
                         className="h-16 border-b hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => setIsNewAppointmentOpen(true)}
                       />
                     ))}
 
@@ -432,79 +436,71 @@ export default function CalendarPage() {
               {view === 'month' && (
                 <div className="p-4">
                   {/* Month View Grid */}
-                  <div className="grid grid-cols-7 gap-px bg-border">
-                    {/* Day Headers */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {/* Day headers */}
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                      <div key={day} className="bg-muted/30 p-2 text-center text-sm font-medium">
+                      <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
                         {day}
                       </div>
                     ))}
-
-                    {/* Calendar Days */}
+                    
+                    {/* Calendar days */}
                     {(() => {
                       const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
                       const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-                      const startPadding = firstDay.getDay();
-                      const days: (Date | null)[] = [];
+                      const startOffset = firstDay.getDay();
+                      const days = [];
 
-                      // Add padding for days before month starts
-                      for (let i = 0; i < startPadding; i++) {
-                        days.push(null);
+                      // Empty cells for days before the first day of the month
+                      for (let i = 0; i < startOffset; i++) {
+                        days.push(<div key={`empty-${i}`} className="p-2 min-h-[100px]" />);
                       }
 
-                      // Add actual days
-                      for (let i = 1; i <= lastDay.getDate(); i++) {
-                        days.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), i));
-                      }
+                      // Days of the month
+                      for (let day = 1; day <= lastDay.getDate(); day++) {
+                        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                        const isToday = date.toDateString() === today.toDateString();
+                        const dayAppointments = getAppointmentsForDate(date);
 
-                      return days.map((date, idx) => {
-                        const dayAppointments = date ? getAppointmentsForDate(date) : [];
-                        const isToday = date && date.toDateString() === today.toDateString();
-
-                        return (
-                          <div 
-                            key={idx}
+                        days.push(
+                          <div
+                            key={day}
                             className={cn(
-                              'min-h-[100px] bg-background p-1',
-                              !date && 'bg-muted/20'
+                              'p-2 min-h-[100px] border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors',
+                              isToday && 'bg-primary/5 border-primary/20'
                             )}
+                            onClick={() => setIsNewAppointmentOpen(true)}
                           >
-                            {date && (
-                              <>
-                                <p className={cn(
-                                  'text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full',
-                                  isToday && 'bg-primary text-primary-foreground'
-                                )}>
-                                  {date.getDate()}
-                                </p>
-                                <div className="space-y-1">
-                                  {dayAppointments.slice(0, 3).map((apt) => {
-                                    const techColor = apt.technician?.color || '#F97316';
-
-                                    return (
-                                      <div
-                                        key={apt.id}
-                                        className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80"
-                                        style={{
-                                          backgroundColor: `${techColor}20`,
-                                          borderLeft: `2px solid ${techColor}`,
-                                        }}
-                                      >
-                                        {formatTimeShort(apt.scheduled_start_time)} {apt.customer?.last_name}
-                                      </div>
-                                    );
-                                  })}
-                                  {dayAppointments.length > 3 && (
-                                    <p className="text-xs text-muted-foreground text-center">
-                                      +{dayAppointments.length - 3} more
-                                    </p>
-                                  )}
+                            <p className={cn(
+                              'text-sm font-medium mb-1',
+                              isToday && 'text-primary'
+                            )}>
+                              {day}
+                            </p>
+                            <div className="space-y-1">
+                              {dayAppointments.slice(0, 3).map((apt) => (
+                                <div
+                                  key={apt.id}
+                                  className="text-xs p-1 rounded truncate"
+                                  style={{
+                                    backgroundColor: `${apt.technician?.color || '#F97316'}20`,
+                                    borderLeft: `2px solid ${apt.technician?.color || '#F97316'}`,
+                                  }}
+                                >
+                                  {apt.customer?.first_name}
                                 </div>
-                              </>
-                            )}
+                              ))}
+                              {dayAppointments.length > 3 && (
+                                <p className="text-xs text-muted-foreground">
+                                  +{dayAppointments.length - 3} more
+                                </p>
+                              )}
+                            </div>
                           </div>
                         );
-                      });
+                      }
+
+                      return days;
                     })()}
                   </div>
                 </div>
@@ -514,20 +510,12 @@ export default function CalendarPage() {
         </CardContent>
       </Card>
 
-      {/* Technician Legend */}
-      <div className="flex flex-wrap gap-4 text-sm">
-        {technicians.map((tech) => (
-          <div key={tech.id} className="flex items-center gap-2">
-            <div 
-              className="h-3 w-3 rounded-full" 
-              style={{ backgroundColor: tech.color || '#F97316' }}
-            />
-            <span className="text-muted-foreground">
-              {tech.first_name} {tech.last_name}
-            </span>
-          </div>
-        ))}
-      </div>
+      {/* New Appointment Modal */}
+      <NewAppointmentModal 
+        open={isNewAppointmentOpen} 
+        onOpenChange={setIsNewAppointmentOpen}
+        preselectedDate={currentDate}
+      />
     </div>
   );
 }

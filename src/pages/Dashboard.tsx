@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
   Clock, 
@@ -24,6 +26,7 @@ import { useTodayAppointments, usePendingAppointments } from '@/hooks/useAppoint
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { useCallLogs } from '@/hooks/useCallLogs';
 import { AppointmentWithRelations } from '@/types/database';
+import { AddCustomerModal, NewAppointmentModal } from '@/components/modals';
 
 // Get greeting based on time of day
 const getGreeting = () => {
@@ -96,11 +99,16 @@ function AppointmentSkeleton() {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const { data: todaysAppointments = [], isLoading: loadingAppointments } = useTodayAppointments();
   const { data: pendingAppointments = [], isLoading: loadingPending } = usePendingAppointments();
   const { data: activityFeed = [], isLoading: loadingActivity } = useActivityFeed(10);
   const { data: callLogs = [] } = useCallLogs();
+
+  // Modal states
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
 
   const pendingCount = pendingAppointments.length;
   const inProgressCount = todaysAppointments.filter(a => a.status === 'in_progress').length;
@@ -166,11 +174,11 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setIsAddCustomerOpen(true)}>
             <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Customer</span>
           </Button>
-          <Button className="gap-2 bg-primary hover:bg-primary-hover">
+          <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsNewAppointmentOpen(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Appointment</span>
           </Button>
@@ -212,7 +220,12 @@ export default function Dashboard() {
               <CardTitle className="text-lg">Today's Schedule</CardTitle>
               <CardDescription>{todaysAppointments.length} appointments</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" className="text-primary hover:text-primary-hover">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-primary hover:text-primary-hover"
+              onClick={() => navigate('/calendar')}
+            >
               View Calendar
               <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
@@ -230,7 +243,7 @@ export default function Dashboard() {
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground">No appointments scheduled for today</p>
-                    <Button className="mt-4" size="sm">
+                    <Button className="mt-4" size="sm" onClick={() => setIsNewAppointmentOpen(true)}>
                       <Plus className="h-4 w-4 mr-2" />
                       Schedule Appointment
                     </Button>
@@ -426,6 +439,16 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Modals */}
+      <AddCustomerModal 
+        open={isAddCustomerOpen} 
+        onOpenChange={setIsAddCustomerOpen} 
+      />
+      <NewAppointmentModal 
+        open={isNewAppointmentOpen} 
+        onOpenChange={setIsNewAppointmentOpen} 
+      />
     </div>
   );
 }

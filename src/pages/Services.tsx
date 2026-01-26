@@ -41,6 +41,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useServices, useServiceCategories, useToggleServiceActive } from '@/hooks/useServices';
 import { ServiceWithCategory, ServiceCategory } from '@/types/database';
+import { AddServiceModal, AddCategoryModal } from '@/components/modals';
 
 const categoryIcons: Record<string, React.ElementType> = {
   Droplets, Zap, Thermometer, Home, Waves, Wrench,
@@ -114,6 +115,8 @@ function ServiceRow({ service, categoryColor }: { service: ServiceWithCategory; 
 export default function Services() {
   const { data: services = [], isLoading: loadingServices } = useServices();
   const { data: categories = [], isLoading: loadingCategories } = useServiceCategories();
+  const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
 
   const totalServices = services.length;
   const activeServices = services.filter(s => s.is_active).length;
@@ -135,54 +138,93 @@ export default function Services() {
           <p className="text-muted-foreground">{activeServices} of {totalServices} services active</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><Plus className="h-4 w-4 mr-2" />Add Category</Button>
-          <Button className="bg-primary hover:bg-primary-hover"><Plus className="h-4 w-4 mr-2" />Add Service</Button>
+          <Button variant="outline" onClick={() => setIsAddCategoryOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Category
+          </Button>
+          <Button className="bg-primary hover:bg-primary-hover" onClick={() => setIsAddServiceOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Service
+          </Button>
         </div>
       </div>
 
-      <Accordion type="multiple" defaultValue={categories.map(c => c.id)}>
-        {categories.map((category) => {
-          const categoryServices = services.filter(s => s.category_id === category.id);
-          const Icon = categoryIcons[category.icon || 'Wrench'] || Wrench;
-          const activeCount = categoryServices.filter(s => s.is_active).length;
+      {categories.length === 0 ? (
+        <Card className="shadow-card">
+          <CardContent className="p-12 text-center">
+            <Wrench className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+            <p className="text-muted-foreground mb-4">No service categories yet</p>
+            <Button onClick={() => setIsAddCategoryOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Category
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Accordion type="multiple" defaultValue={categories.map(c => c.id)}>
+          {categories.map((category) => {
+            const categoryServices = services.filter(s => s.category_id === category.id);
+            const Icon = categoryIcons[category.icon || 'Wrench'] || Wrench;
+            const activeCount = categoryServices.filter(s => s.is_active).length;
 
-          return (
-            <AccordionItem key={category.id} value={category.id} className="border rounded-lg shadow-card mb-4 overflow-hidden">
-              <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 hover:no-underline">
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="rounded-lg p-2" style={{ backgroundColor: `${category.color}20` }}>
-                    <Icon className="h-5 w-5" style={{ color: category.color || '#888' }} />
+            return (
+              <AccordionItem key={category.id} value={category.id} className="border rounded-lg shadow-card mb-4 overflow-hidden">
+                <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 hover:no-underline">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="rounded-lg p-2" style={{ backgroundColor: `${category.color}20` }}>
+                      <Icon className="h-5 w-5" style={{ color: category.color || '#888' }} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold">{category.name}</h3>
+                      <p className="text-sm text-muted-foreground">{activeCount} of {categoryServices.length} services active</p>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <h3 className="font-semibold">{category.name}</h3>
-                    <p className="text-sm text-muted-foreground">{activeCount} of {categoryServices.length} services active</p>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pb-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[30px]"></TableHead>
-                      <TableHead>Service</TableHead>
-                      <TableHead className="hidden md:table-cell">Description</TableHead>
-                      <TableHead className="hidden sm:table-cell">Duration</TableHead>
-                      <TableHead className="hidden lg:table-cell">Price</TableHead>
-                      <TableHead className="w-[60px]">Active</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categoryServices.map((service) => (
-                      <ServiceRow key={service.id} service={service} categoryColor={category.color || '#888'} />
-                    ))}
-                  </TableBody>
-                </Table>
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
+                </AccordionTrigger>
+                <AccordionContent className="pb-0">
+                  {categoryServices.length === 0 ? (
+                    <div className="p-6 text-center">
+                      <p className="text-muted-foreground mb-4">No services in this category</p>
+                      <Button variant="outline" size="sm" onClick={() => setIsAddServiceOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Service
+                      </Button>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[30px]"></TableHead>
+                          <TableHead>Service</TableHead>
+                          <TableHead className="hidden md:table-cell">Description</TableHead>
+                          <TableHead className="hidden sm:table-cell">Duration</TableHead>
+                          <TableHead className="hidden lg:table-cell">Price</TableHead>
+                          <TableHead className="w-[60px]">Active</TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {categoryServices.map((service) => (
+                          <ServiceRow key={service.id} service={service} categoryColor={category.color || '#888'} />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      )}
+
+      {/* Modals */}
+      <AddServiceModal 
+        open={isAddServiceOpen} 
+        onOpenChange={setIsAddServiceOpen} 
+      />
+      <AddCategoryModal 
+        open={isAddCategoryOpen} 
+        onOpenChange={setIsAddCategoryOpen} 
+      />
     </div>
   );
 }
