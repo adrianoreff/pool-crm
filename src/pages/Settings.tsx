@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,14 +8,34 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building, Bell, Link, Shield, Code, CheckCircle } from 'lucide-react';
-import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig } from '@/hooks/useBusiness';
+import { Building, Bell, Link, Code, Settings2 } from 'lucide-react';
+import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig, useUpdateBusiness } from '@/hooks/useBusiness';
 
 export default function Settings() {
   const { data: business, isLoading: loadingBusiness } = useBusiness();
   const { data: bookingRules, isLoading: loadingRules } = useBookingRules();
   const { data: notificationSettings } = useNotificationSettings();
   const { data: widgetConfig } = useWidgetConfig();
+  const updateBusiness = useUpdateBusiness();
+
+  // Integration state
+  const [vapiAssistantId, setVapiAssistantId] = useState('');
+  const [mapboxToken, setMapboxToken] = useState('');
+
+  // Sync state with fetched data
+  useEffect(() => {
+    if (business) {
+      setVapiAssistantId(business.vapi_assistant_id || '');
+      setMapboxToken((business as any).mapbox_public_token || '');
+    }
+  }, [business]);
+
+  const handleSaveIntegrations = () => {
+    updateBusiness.mutate({
+      vapi_assistant_id: vapiAssistantId || null,
+      mapbox_public_token: mapboxToken || null,
+    } as any);
+  };
 
   if (loadingBusiness) {
     return (
@@ -102,27 +123,76 @@ export default function Settings() {
         <TabsContent value="integrations">
           <Card className="shadow-card">
             <CardHeader><CardTitle className="flex items-center gap-2"><Link className="h-5 w-5" />Integrations</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {[
-                { name: 'VAPI', status: business?.vapi_assistant_id ? 'Ready' : 'Not configured', desc: 'AI Phone Assistant' },
-                { name: 'Mapbox', status: 'Ready', desc: 'Maps & Geocoding' },
-              ].map((integration) => (
-                <div key={integration.name} className="flex items-center justify-between py-4 border-b last:border-0">
+            <CardContent className="space-y-6">
+              {/* VAPI Integration */}
+              <div className="space-y-4 pb-6 border-b">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{integration.name}</p>
-                    <p className="text-sm text-primary">{integration.desc}</p>
+                    <p className="font-medium">VAPI</p>
+                    <p className="text-sm text-primary">AI Phone Assistant</p>
                   </div>
                   <Badge 
                     variant="outline" 
-                    className={integration.status === 'Ready' 
+                    className={vapiAssistantId 
                       ? 'text-foreground border-border bg-transparent font-normal' 
                       : 'text-muted-foreground border-border bg-transparent font-normal'
                     }
                   >
-                    {integration.status}
+                    {vapiAssistantId ? 'Ready' : 'Not configured'}
                   </Badge>
                 </div>
-              ))}
+                <div className="space-y-2">
+                  <Label htmlFor="vapi-id">Assistant ID</Label>
+                  <Input 
+                    id="vapi-id"
+                    placeholder="Enter your VAPI Assistant ID"
+                    value={vapiAssistantId}
+                    onChange={(e) => setVapiAssistantId(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Find your Assistant ID in the VAPI dashboard under Assistant settings.
+                  </p>
+                </div>
+              </div>
+
+              {/* Mapbox Integration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Mapbox</p>
+                    <p className="text-sm text-primary">Maps & Geocoding</p>
+                  </div>
+                  <Badge 
+                    variant="outline" 
+                    className={mapboxToken 
+                      ? 'text-foreground border-border bg-transparent font-normal' 
+                      : 'text-muted-foreground border-border bg-transparent font-normal'
+                    }
+                  >
+                    {mapboxToken ? 'Ready' : 'Not configured'}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mapbox-token">Public Token</Label>
+                  <Input 
+                    id="mapbox-token"
+                    placeholder="pk.eyJ1Ijoi..."
+                    value={mapboxToken}
+                    onChange={(e) => setMapboxToken(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Get your public token from the Mapbox account dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <Button 
+                className="bg-primary hover:bg-primary-hover"
+                onClick={handleSaveIntegrations}
+                disabled={updateBusiness.isPending}
+              >
+                {updateBusiness.isPending ? 'Saving...' : 'Save Integrations'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
