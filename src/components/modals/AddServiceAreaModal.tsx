@@ -83,7 +83,7 @@ export function AddServiceAreaModal({ open, onOpenChange, onSuccess }: AddServic
         business_id: profile.business_id,
         name: data.name,
         zip_codes: zipCodes,
-        default_technician_id: data.default_technician_id || null,
+        default_technician_id: data.default_technician_id && data.default_technician_id !== 'none' ? data.default_technician_id : null,
         travel_surcharge: data.travel_surcharge || 0,
         is_active: true,
       });
@@ -151,7 +151,7 @@ export function AddServiceAreaModal({ open, onOpenChange, onSuccess }: AddServic
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No default</SelectItem>
+                      <SelectItem value="none">No default</SelectItem>
                       {technicians.map((tech) => (
                         <SelectItem key={tech.id} value={tech.id}>
                           <div className="flex items-center gap-2">
