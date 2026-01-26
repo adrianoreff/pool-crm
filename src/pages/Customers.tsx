@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,21 +43,18 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import {
-  mockCustomers,
-  mockAppointments,
-  getServiceById,
-  Customer,
-} from '@/data/mockData';
+import { useCustomers, useCustomerAppointments } from '@/hooks/useCustomers';
+import { CustomerWithAddresses } from '@/types/database';
 
-const formatCurrency = (amount: number) => {
+const formatCurrency = (amount: number | null) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-  }).format(amount);
+  }).format(amount || 0);
 };
 
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return 'Never';
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { 
     month: 'short', 
@@ -65,54 +63,188 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-const getInitials = (firstName: string, lastName: string) => {
-  return `${firstName[0]}${lastName[0]}`.toUpperCase();
+const getInitials = (firstName: string, lastName: string | null) => {
+  return `${firstName[0]}${lastName?.[0] || ''}`.toUpperCase();
 };
+
+function CustomerDetailPanel({ customer, onClose }: { customer: CustomerWithAddresses; onClose: () => void }) {
+  const { data: appointments = [], isLoading } = useCustomerAppointments(customer.id);
+  const primaryAddress = customer.customer_addresses?.find(a => a.is_primary) || customer.customer_addresses?.[0];
+
+  return (
+    <>
+      <SheetHeader className="space-y-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-16 w-16">
+              <AvatarFallback className="bg-primary/10 text-primary text-xl font-medium">
+                {getInitials(customer.first_name, customer.last_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <SheetTitle className="text-xl">
+                {customer.first_name} {customer.last_name}
+              </SheetTitle>
+              <p className="text-sm text-muted-foreground">
+                Customer since {formatDate(customer.created_at)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </SheetHeader>
+
+      <ScrollArea className="h-[calc(100vh-180px)] mt-6 -mx-6 px-6">
+        <div className="space-y-6">
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-4">
+            <Card className="shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-primary/10 p-2">
+                    <Calendar className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{customer.total_appointments || 0}</p>
+                    <p className="text-xs text-muted-foreground">Appointments</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-success/10 p-2">
+                    <DollarSign className="h-4 w-4 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{formatCurrency(customer.total_spent)}</p>
+                    <p className="text-xs text-muted-foreground">Total Spent</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Contact Info */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Contact Information</h3>
+            <Card className="shadow-card">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{customer.phone}</span>
+                  </div>
+                  <Button variant="ghost" size="sm">Call</Button>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate">{customer.email || 'No email'}</span>
+                  </div>
+                  <Button variant="ghost" size="sm" disabled={!customer.email}>Email</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Addresses */}
+          {customer.customer_addresses && customer.customer_addresses.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">Addresses</h3>
+              <div className="space-y-2">
+                {customer.customer_addresses.map((address) => (
+                  <Card key={address.id} className="shadow-card">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                          <div>
+                            <p className="font-medium">{address.address}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {address.city}, {address.state} {address.zip_code}
+                            </p>
+                          </div>
+                        </div>
+                        {address.is_primary && (
+                          <Badge variant="secondary" className="text-xs">Primary</Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {customer.notes && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">Notes</h3>
+              <Card className="shadow-card">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">{customer.notes}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Appointment History */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Appointment History</h3>
+            <div className="space-y-2">
+              {isLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i} className="shadow-card">
+                    <CardContent className="p-4">
+                      <Skeleton className="h-4 w-32 mb-2" />
+                      <Skeleton className="h-3 w-24" />
+                    </CardContent>
+                  </Card>
+                ))
+              ) : appointments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No appointments yet</p>
+              ) : (
+                appointments.slice(0, 5).map((apt) => (
+                  <Card key={apt.id} className="shadow-card hover:shadow-elevated cursor-pointer transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{apt.service?.name || 'Service'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(apt.scheduled_date)}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={cn(
+                          apt.status === 'completed' && 'bg-success/10 text-success',
+                          apt.status === 'cancelled' && 'bg-destructive/10 text-destructive',
+                          apt.status === 'scheduled' && 'bg-info/10 text-info',
+                        )}>
+                          {apt.status.replace('_', ' ')}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
+    </>
+  );
+}
 
 export default function Customers() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithAddresses | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'appointments' | 'spent'>('name');
 
-  // Filter and sort customers
-  let filteredCustomers = mockCustomers.filter((customer) => {
-    if (!searchQuery) return true;
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      customer.firstName.toLowerCase().includes(searchLower) ||
-      customer.lastName.toLowerCase().includes(searchLower) ||
-      customer.phone.includes(searchQuery) ||
-      customer.email.toLowerCase().includes(searchLower) ||
-      customer.addresses.some(a => 
-        a.street.toLowerCase().includes(searchLower) ||
-        a.city.toLowerCase().includes(searchLower) ||
-        a.zip.includes(searchQuery)
-      )
-    );
+  const { data: customers = [], isLoading } = useCustomers({
+    search: searchQuery,
+    sortBy,
   });
-
-  // Sort
-  filteredCustomers = [...filteredCustomers].sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return `${a.lastName}${a.firstName}`.localeCompare(`${b.lastName}${b.firstName}`);
-      case 'date':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      case 'appointments':
-        return b.totalAppointments - a.totalAppointments;
-      case 'spent':
-        return b.totalSpent - a.totalSpent;
-      default:
-        return 0;
-    }
-  });
-
-  // Get customer appointments
-  const getCustomerAppointments = (customerId: string) => {
-    return mockAppointments
-      .filter(a => a.customerId === customerId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  };
 
   return (
     <div className="space-y-6">
@@ -120,7 +252,7 @@ export default function Customers() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
-          <p className="text-muted-foreground">{mockCustomers.length} customers in your database</p>
+          <p className="text-muted-foreground">{customers.length} customers in your database</p>
         </div>
         <Button className="gap-2 bg-primary hover:bg-primary-hover">
           <Plus className="h-4 w-4" />
@@ -179,7 +311,19 @@ export default function Customers() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCustomers.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><div className="flex items-center gap-3"><Skeleton className="h-10 w-10 rounded-full" /><div><Skeleton className="h-4 w-24 mb-1" /><Skeleton className="h-3 w-20" /></div></div></TableCell>
+                    <TableCell><Skeleton className="h-8 w-32" /></TableCell>
+                    <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell className="text-center hidden sm:table-cell"><Skeleton className="h-6 w-8 mx-auto" /></TableCell>
+                    <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell className="text-right hidden sm:table-cell"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                  </TableRow>
+                ))
+              ) : customers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12">
                     <div className="flex flex-col items-center">
@@ -189,8 +333,8 @@ export default function Customers() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredCustomers.map((customer) => {
-                  const primaryAddress = customer.addresses.find(a => a.isPrimary) || customer.addresses[0];
+                customers.map((customer) => {
+                  const primaryAddress = customer.customer_addresses?.find(a => a.is_primary) || customer.customer_addresses?.[0];
 
                   return (
                     <TableRow 
@@ -202,15 +346,15 @@ export default function Customers() {
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10">
                             <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                              {getInitials(customer.firstName, customer.lastName)}
+                              {getInitials(customer.first_name, customer.last_name)}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <p className="font-medium">
-                              {customer.firstName} {customer.lastName}
+                              {customer.first_name} {customer.last_name}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Customer since {formatDate(customer.createdAt)}
+                              Customer since {formatDate(customer.created_at)}
                             </p>
                           </div>
                         </div>
@@ -223,7 +367,7 @@ export default function Customers() {
                           </p>
                           <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
                             <Mail className="h-3 w-3" />
-                            <span className="truncate max-w-[150px]">{customer.email}</span>
+                            <span className="truncate max-w-[150px]">{customer.email || 'No email'}</span>
                           </p>
                         </div>
                       </TableCell>
@@ -232,21 +376,21 @@ export default function Customers() {
                           <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
                             <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
                             <span className="truncate max-w-[200px]">
-                              {primaryAddress.street}, {primaryAddress.city}
+                              {primaryAddress.address}, {primaryAddress.city}
                             </span>
                           </div>
                         )}
                       </TableCell>
                       <TableCell className="text-center hidden sm:table-cell">
-                        <Badge variant="secondary">{customer.totalAppointments}</Badge>
+                        <Badge variant="secondary">{customer.total_appointments || 0}</Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <span className="text-sm text-muted-foreground">
-                          {customer.lastServiceDate ? formatDate(customer.lastServiceDate) : 'Never'}
+                          {formatDate(customer.last_appointment_at)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right hidden sm:table-cell">
-                        <span className="font-medium">{formatCurrency(customer.totalSpent)}</span>
+                        <span className="font-medium">{formatCurrency(customer.total_spent)}</span>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -294,174 +438,7 @@ export default function Customers() {
       <Sheet open={!!selectedCustomer} onOpenChange={() => setSelectedCustomer(null)}>
         <SheetContent className="w-full sm:max-w-lg">
           {selectedCustomer && (
-            <>
-              <SheetHeader className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-16 w-16">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xl font-medium">
-                        {getInitials(selectedCustomer.firstName, selectedCustomer.lastName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <SheetTitle className="text-xl">
-                        {selectedCustomer.firstName} {selectedCustomer.lastName}
-                      </SheetTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Customer since {formatDate(selectedCustomer.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </SheetHeader>
-
-              <ScrollArea className="h-[calc(100vh-180px)] mt-6 -mx-6 px-6">
-                <div className="space-y-6">
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <Card className="shadow-card">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-primary/10 p-2">
-                            <Calendar className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold">{selectedCustomer.totalAppointments}</p>
-                            <p className="text-xs text-muted-foreground">Appointments</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="shadow-card">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-success/10 p-2">
-                            <DollarSign className="h-4 w-4 text-success" />
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold">{formatCurrency(selectedCustomer.totalSpent)}</p>
-                            <p className="text-xs text-muted-foreground">Total Spent</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Contact Info */}
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3">Contact Information</h3>
-                    <Card className="shadow-card">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            <span>{selectedCustomer.phone}</span>
-                          </div>
-                          <Button variant="ghost" size="sm">Call</Button>
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            <span className="truncate">{selectedCustomer.email}</span>
-                          </div>
-                          <Button variant="ghost" size="sm">Email</Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Addresses */}
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3">Addresses</h3>
-                    <div className="space-y-2">
-                      {selectedCustomer.addresses.map((address) => (
-                        <Card key={address.id} className="shadow-card">
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-start gap-3">
-                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                                <div>
-                                  <p className="font-medium">{address.street}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {address.city}, {address.state} {address.zip}
-                                  </p>
-                                </div>
-                              </div>
-                              {address.isPrimary && (
-                                <Badge variant="secondary" className="text-xs">Primary</Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Notes */}
-                  {selectedCustomer.notes && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3">Notes</h3>
-                      <Card className="shadow-card">
-                        <CardContent className="p-4">
-                          <p className="text-sm text-muted-foreground">{selectedCustomer.notes}</p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-
-                  {/* Appointment History */}
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3">Appointment History</h3>
-                    <div className="space-y-2">
-                      {getCustomerAppointments(selectedCustomer.id).slice(0, 5).map((apt) => {
-                        const service = getServiceById(apt.serviceId);
-                        
-                        return (
-                          <Card key={apt.id} className="shadow-card">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-medium">{service?.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {formatDate(apt.date)}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      apt.status === 'completed' && 'border-success/50 text-success',
-                                      apt.status === 'cancelled' && 'border-destructive/50 text-destructive',
-                                      apt.status === 'scheduled' && 'border-info/50 text-info',
-                                    )}
-                                  >
-                                    {apt.status.replace('_', ' ')}
-                                  </Badge>
-                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </ScrollArea>
-
-              {/* Actions */}
-              <div className="flex gap-2 mt-6 pt-4 border-t">
-                <Button className="flex-1 bg-primary hover:bg-primary-hover">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Book Appointment
-                </Button>
-                <Button variant="outline">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-              </div>
-            </>
+            <CustomerDetailPanel customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
           )}
         </SheetContent>
       </Sheet>

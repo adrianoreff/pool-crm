@@ -19,7 +19,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { mockNotifications, getUnreadNotificationsCount } from '@/data/mockData';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -32,7 +31,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const unreadCount = getUnreadNotificationsCount();
+  const unreadCount = 0; // Will be replaced with real notifications later
 
   const handleSignOut = async () => {
     await signOut();
@@ -101,31 +100,9 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
             </div>
             <ScrollArea className="h-[300px]">
               <div className="divide-y">
-                {mockNotifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={cn(
-                      'flex gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors',
-                      !notification.read && 'bg-accent/30'
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'h-2 w-2 mt-2 rounded-full flex-shrink-0',
-                        notification.read ? 'bg-transparent' : 'bg-primary'
-                      )}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{notification.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {notification.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(notification.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  No notifications
+                </div>
               </div>
             </ScrollArea>
             <div className="border-t p-2">

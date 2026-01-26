@@ -17,20 +17,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import {
-  mockTeam,
-  mockAppointments,
-  mockActivityFeed,
-  mockCustomers,
-  mockServices,
-  mockServiceCategories,
-  getCustomerById,
-  getTeamMemberById,
-  getServiceById,
-  getTodaysAppointments,
-  getPendingConfirmationCount,
-} from '@/data/mockData';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTodayAppointments, usePendingAppointments } from '@/hooks/useAppointments';
+import { useActivityFeed } from '@/hooks/useActivityFeed';
+import { useCallLogs } from '@/hooks/useCallLogs';
+import { AppointmentWithRelations } from '@/types/database';
 
 // Get greeting based on time of day
 const getGreeting = () => {
@@ -85,21 +78,44 @@ const getActivityIcon = (type: string) => {
   return icons[type as keyof typeof icons] || Calendar;
 };
 
+function AppointmentSkeleton() {
+  return (
+    <div className="flex gap-4 rounded-lg border p-4">
+      <div className="flex-shrink-0 text-center">
+        <Skeleton className="h-4 w-16 mb-1" />
+        <Skeleton className="h-3 w-12" />
+      </div>
+      <Skeleton className="w-1 h-16 rounded-full" />
+      <div className="flex-1">
+        <Skeleton className="h-4 w-32 mb-2" />
+        <Skeleton className="h-3 w-24 mb-2" />
+        <Skeleton className="h-3 w-48" />
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
-  const currentUser = mockTeam[0];
-  const todaysAppointments = getTodaysAppointments();
-  const pendingCount = getPendingConfirmationCount();
-  
-  // Calculate stats
+  const { profile } = useAuth();
+  const { data: todaysAppointments = [], isLoading: loadingAppointments } = useTodayAppointments();
+  const { data: pendingAppointments = [], isLoading: loadingPending } = usePendingAppointments();
+  const { data: activityFeed = [], isLoading: loadingActivity } = useActivityFeed(10);
+  const { data: callLogs = [] } = useCallLogs();
+
+  const pendingCount = pendingAppointments.length;
   const inProgressCount = todaysAppointments.filter(a => a.status === 'in_progress').length;
   const scheduledCount = todaysAppointments.filter(a => a.status === 'scheduled').length;
-  const thisWeekRevenue = 4250; // Mock value
-  const newCallsToday = 3; // Mock value
+  
+  // Get today's calls
+  const today = new Date().toISOString().split('T')[0];
+  const newCallsToday = callLogs.filter(c => 
+    c.started_at.split('T')[0] === today
+  ).length;
 
   const stats = [
     {
       title: "Today's Jobs",
-      value: todaysAppointments.length.toString(),
+      value: loadingAppointments ? '-' : todaysAppointments.length.toString(),
       subtitle: `${inProgressCount} in progress, ${scheduledCount} scheduled`,
       icon: Calendar,
       iconColor: 'text-primary',
@@ -107,7 +123,7 @@ export default function Dashboard() {
     },
     {
       title: 'Pending Requests',
-      value: pendingCount.toString(),
+      value: loadingPending ? '-' : pendingCount.toString(),
       subtitle: 'Awaiting confirmation',
       icon: Clock,
       iconColor: 'text-warning',
@@ -116,8 +132,8 @@ export default function Dashboard() {
     },
     {
       title: 'This Week Revenue',
-      value: `$${thisWeekRevenue.toLocaleString()}`,
-      subtitle: '+12% from last week',
+      value: '$0', // Will be calculated from invoices
+      subtitle: 'From paid invoices',
       icon: DollarSign,
       iconColor: 'text-success',
       iconBg: 'bg-success/10',
@@ -138,7 +154,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {getGreeting()}, {currentUser.firstName}
+            {getGreeting()}, {profile?.first_name || 'User'}
           </h1>
           <p className="text-muted-foreground">
             {new Date().toLocaleDateString('en-US', { 
@@ -204,7 +220,13 @@ export default function Dashboard() {
           <CardContent>
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-4">
-                {todaysAppointments.length === 0 ? (
+                {loadingAppointments ? (
+                  <>
+                    <AppointmentSkeleton />
+                    <AppointmentSkeleton />
+                    <AppointmentSkeleton />
+                  </>
+                ) : todaysAppointments.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground">No appointments scheduled for today</p>
@@ -215,16 +237,11 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   todaysAppointments
-                    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                    .sort((a, b) => a.scheduled_start_time.localeCompare(b.scheduled_start_time))
                     .map((appointment) => {
-                      const customer = getCustomerById(appointment.customerId);
-                      const technician = appointment.technicianId 
-                        ? getTeamMemberById(appointment.technicianId)
-                        : null;
-                      const service = getServiceById(appointment.serviceId);
-                      const category = service 
-                        ? mockServiceCategories.find(c => c.id === service.categoryId)
-                        : null;
+                      const customer = appointment.customer;
+                      const technician = appointment.technician;
+                      const service = appointment.service;
 
                       return (
                         <div
@@ -234,10 +251,10 @@ export default function Dashboard() {
                           {/* Time Column */}
                           <div className="flex-shrink-0 text-center">
                             <p className="text-sm font-semibold text-foreground">
-                              {formatTime(appointment.startTime)}
+                              {formatTime(appointment.scheduled_start_time)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {formatTime(appointment.endTime)}
+                              {formatTime(appointment.scheduled_end_time)}
                             </p>
                           </div>
 
@@ -252,10 +269,10 @@ export default function Dashboard() {
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <p className="font-medium text-foreground">
-                                  {customer?.firstName} {customer?.lastName}
+                                  {customer?.first_name} {customer?.last_name}
                                 </p>
                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <span>{service?.name}</span>
+                                  <span>{service?.name || 'Service'}</span>
                                 </p>
                               </div>
                               {getStatusBadge(appointment.status)}
@@ -273,13 +290,13 @@ export default function Dashboard() {
                                 <Avatar className="h-6 w-6">
                                   <AvatarFallback 
                                     className="text-xs text-white"
-                                    style={{ backgroundColor: technician.color }}
+                                    style={{ backgroundColor: technician.color || '#888' }}
                                   >
-                                    {technician.firstName[0]}{technician.lastName[0]}
+                                    {technician.first_name?.[0]}{technician.last_name?.[0]}
                                   </AvatarFallback>
                                 </Avatar>
                                 <span className="text-sm text-muted-foreground">
-                                  {technician.firstName} {technician.lastName}
+                                  {technician.first_name} {technician.last_name}
                                 </span>
                               </div>
                             )}
@@ -306,12 +323,11 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockAppointments
-                    .filter(a => a.status === 'pending_confirmation')
+                  {pendingAppointments
                     .slice(0, 3)
                     .map((appointment) => {
-                      const customer = getCustomerById(appointment.customerId);
-                      const service = getServiceById(appointment.serviceId);
+                      const customer = appointment.customer;
+                      const service = appointment.service;
 
                       return (
                         <div 
@@ -320,10 +336,10 @@ export default function Dashboard() {
                         >
                           <div>
                             <p className="font-medium text-sm">
-                              {customer?.firstName} {customer?.lastName}
+                              {customer?.first_name} {customer?.last_name}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {service?.name} • {formatTime(appointment.startTime)}
+                              {service?.name} • {formatTime(appointment.scheduled_start_time)}
                             </p>
                           </div>
                           <div className="flex gap-2">
@@ -355,41 +371,55 @@ export default function Dashboard() {
             <CardContent>
               <ScrollArea className={cn(pendingCount > 0 ? 'h-[250px]' : 'h-[400px]')}>
                 <div className="space-y-4 pr-4">
-                  {mockActivityFeed.map((activity) => {
-                    const Icon = getActivityIcon(activity.type);
-                    const iconColors = {
-                      appointment_created: 'text-info bg-info/10',
-                      appointment_updated: 'text-primary bg-primary/10',
-                      appointment_completed: 'text-success bg-success/10',
-                      customer_added: 'text-info bg-info/10',
-                      payment_received: 'text-success bg-success/10',
-                      call_received: 'text-primary bg-primary/10',
-                    };
-
-                    return (
-                      <div key={activity.id} className="flex gap-3">
-                        <div className={cn(
-                          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full',
-                          iconColors[activity.type as keyof typeof iconColors]
-                        )}>
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">{activity.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {activity.description}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {new Date(activity.timestamp).toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true,
-                            })}
-                          </p>
+                  {loadingActivity ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex gap-3">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <div className="flex-1">
+                          <Skeleton className="h-4 w-32 mb-1" />
+                          <Skeleton className="h-3 w-48" />
                         </div>
                       </div>
-                    );
-                  })}
+                    ))
+                  ) : activityFeed.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">No recent activity</p>
+                  ) : (
+                    activityFeed.map((activity) => {
+                      const Icon = getActivityIcon(activity.type);
+                      const iconColors = {
+                        appointment_created: 'text-info bg-info/10',
+                        appointment_updated: 'text-primary bg-primary/10',
+                        appointment_completed: 'text-success bg-success/10',
+                        customer_added: 'text-info bg-info/10',
+                        payment_received: 'text-success bg-success/10',
+                        call_received: 'text-primary bg-primary/10',
+                      };
+
+                      return (
+                        <div key={activity.id} className="flex gap-3">
+                          <div className={cn(
+                            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full',
+                            iconColors[activity.type as keyof typeof iconColors]
+                          )}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{activity.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {activity.description}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(activity.timestamp).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true,
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
