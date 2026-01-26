@@ -9,6 +9,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface VapiToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: Record<string, any> | string;
+  };
+}
+
 interface VapiWebhookPayload {
   message: {
     type: string;
@@ -27,12 +36,20 @@ interface VapiWebhookPayload {
       name: string;
       parameters: Record<string, any>;
     };
+    toolCalls?: VapiToolCall[];
     transcript?: {
       role: string;
       content: string;
       timestamp: string;
     };
   };
+  call?: {
+    assistantId: string;
+  };
+  assistant?: {
+    id: string;
+  };
+  assistantId?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -146,6 +163,69 @@ Deno.serve(async (req: Request) => {
         }
 
         return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "tool-calls": {
+        console.log("Processing tool-calls event");
+        
+        // VAPI sends toolCalls as an array
+        const toolCalls = message.toolCalls || [];
+        
+        if (toolCalls.length === 0) {
+          return new Response(JSON.stringify({ success: true, message: "No tool calls" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Process each tool call and collect results
+        const results = [];
+        
+        for (const toolCall of toolCalls) {
+          const functionName = toolCall.function?.name;
+          const params = toolCall.function?.arguments
+            ? (typeof toolCall.function.arguments === 'string'
+                ? JSON.parse(toolCall.function.arguments)
+                : toolCall.function.arguments)
+            : {};
+
+          console.log(`Processing tool: ${functionName}`, params);
+
+          let result: Record<string, any> = { success: false, message: "Unknown function" };
+
+          switch (functionName) {
+            case "book_appointment":
+              result = await handleBookAppointment(supabase, businessId, message.call?.id || toolCall.id, params);
+              break;
+            case "cancel_appointment":
+              result = await handleCancelAppointment(supabase, businessId, params);
+              break;
+            case "reschedule_appointment":
+              result = await handleRescheduleAppointment(supabase, businessId, params);
+              break;
+            case "check_availability":
+              result = await handleCheckAvailability(supabase, businessId, params);
+              break;
+            case "get_business_info":
+              result = await getBusinessInfo(supabase, businessId);
+              break;
+            case "get_services":
+              result = await getServices(supabase, businessId);
+              break;
+            default:
+              console.log(`Unknown function: ${functionName}`);
+              result = { success: false, message: `Unknown function: ${functionName}` };
+          }
+
+          results.push({
+            toolCallId: toolCall.id,
+            result: result,
+          });
+        }
+
+        // Return results in VAPI's expected format
+        return new Response(JSON.stringify({ results }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
