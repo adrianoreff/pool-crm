@@ -7,6 +7,8 @@ import {
   UserPlus,
   Grid,
   List,
+  Calendar,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,10 +30,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useTeam } from '@/hooks/useTeam';
 import { useAppointments } from '@/hooks/useAppointments';
-import { User } from '@/types/database';
+import { User as UserType } from '@/types/database';
+import { InviteTeamModal } from '@/components/modals';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 type ViewMode = 'grid' | 'list';
 
@@ -53,15 +76,23 @@ const getInitials = (firstName: string | null, lastName: string | null) => {
   return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
 };
 
-function TeamMemberCard({ member, todayJobs }: { member: User; todayJobs: number }) {
-  // For now, we'll show "available" status - in future, this could be tracked
+interface TeamMemberCardProps {
+  member: UserType;
+  todayJobs: number;
+  onViewProfile: () => void;
+  onEdit: () => void;
+  onViewSchedule: () => void;
+  onDeactivate: () => void;
+}
+
+function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedule, onDeactivate }: TeamMemberCardProps) {
   const status = statusStyles.available;
 
   return (
     <Card className="shadow-card hover:shadow-elevated transition-shadow">
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
-          <Avatar className="h-16 w-16">
+          <Avatar className="h-16 w-16 cursor-pointer" onClick={onViewProfile}>
             <AvatarFallback 
               className="text-lg text-white font-medium"
               style={{ backgroundColor: member.color || '#888' }}
@@ -76,18 +107,20 @@ function TeamMemberCard({ member, todayJobs }: { member: User; todayJobs: number
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>View Profile</DropdownMenuItem>
-              <DropdownMenuItem>Edit</DropdownMenuItem>
-              <DropdownMenuItem>View Schedule</DropdownMenuItem>
+              <DropdownMenuItem onClick={onViewProfile}>View Profile</DropdownMenuItem>
+              <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={onViewSchedule}>View Schedule</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onClick={onDeactivate}>
+                Deactivate
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         
         <div className="space-y-3">
           <div>
-            <h3 className="font-semibold text-lg">
+            <h3 className="font-semibold text-lg cursor-pointer hover:text-primary" onClick={onViewProfile}>
               {member.first_name} {member.last_name}
             </h3>
             <div className="flex items-center gap-2 mt-1">
@@ -132,11 +165,68 @@ function TeamMemberCard({ member, todayJobs }: { member: User; todayJobs: number
   );
 }
 
+function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserType | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  if (!member) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Team Member Profile</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-6">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-20 w-20">
+              <AvatarFallback 
+                className="text-2xl text-white font-medium"
+                style={{ backgroundColor: member.color || '#888' }}
+              >
+                {getInitials(member.first_name, member.last_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="text-xl font-semibold">{member.first_name} {member.last_name}</h2>
+              <Badge variant="outline" className={cn('capitalize', roleStyles[member.role])}>
+                {member.role}
+              </Badge>
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Contact Information</h3>
+              <Card>
+                <CardContent className="p-4 space-y-2">
+                  <p className="flex items-center gap-2 text-sm">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    {member.email}
+                  </p>
+                  <p className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    {member.phone || 'No phone'}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function Team() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<UserType | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [memberToDeactivate, setMemberToDeactivate] = useState<UserType | null>(null);
+  
   const { data: team = [], isLoading } = useTeam();
   const today = new Date().toISOString().split('T')[0];
   const { data: todayAppointments = [] } = useAppointments({ dateFrom: today, dateTo: today });
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Count jobs per technician
   const jobsByTechnician = todayAppointments.reduce((acc, apt) => {
@@ -155,6 +245,42 @@ export default function Team() {
     { label: 'On Jobs Now', value: onJobsNow },
   ];
 
+  const handleViewProfile = (member: UserType) => {
+    setSelectedMember(member);
+    setIsProfileOpen(true);
+  };
+
+  const handleEdit = (member: UserType) => {
+    setSelectedMember(member);
+    // For now, we'll show the profile - you could create an EditTeamMemberModal
+    setIsProfileOpen(true);
+  };
+
+  const handleViewSchedule = (member: UserType) => {
+    // Navigate to calendar filtered by this technician
+    toast({ title: 'View Schedule', description: `Viewing schedule for ${member.first_name}` });
+  };
+
+  const handleDeactivate = async () => {
+    if (!memberToDeactivate) return;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: false })
+        .eq('id', memberToDeactivate.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: `${memberToDeactivate.first_name} has been deactivated` });
+      queryClient.invalidateQueries({ queryKey: ['team'] });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setMemberToDeactivate(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -163,7 +289,7 @@ export default function Team() {
           <h1 className="text-2xl font-bold tracking-tight">Team</h1>
           <p className="text-muted-foreground">Manage your team members and their schedules</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary-hover">
+        <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsInviteOpen(true)}>
           <UserPlus className="h-4 w-4" />
           Invite Team Member
         </Button>
@@ -222,12 +348,27 @@ export default function Team() {
                 </CardContent>
               </Card>
             ))
+          ) : team.length === 0 ? (
+            <Card className="col-span-full shadow-card">
+              <CardContent className="p-12 text-center">
+                <User className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">No team members yet</p>
+                <Button onClick={() => setIsInviteOpen(true)}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Invite Your First Team Member
+                </Button>
+              </CardContent>
+            </Card>
           ) : (
             team.map((member) => (
               <TeamMemberCard 
                 key={member.id} 
                 member={member} 
                 todayJobs={jobsByTechnician[member.id] || 0}
+                onViewProfile={() => handleViewProfile(member)}
+                onEdit={() => handleEdit(member)}
+                onViewSchedule={() => handleViewSchedule(member)}
+                onDeactivate={() => setMemberToDeactivate(member)}
               />
             ))
           )}
@@ -269,7 +410,7 @@ export default function Team() {
                     return (
                       <TableRow key={member.id}>
                         <TableCell>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleViewProfile(member)}>
                             <Avatar className="h-10 w-10">
                               <AvatarFallback 
                                 className="text-sm text-white font-medium"
@@ -279,7 +420,7 @@ export default function Team() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-medium">
+                              <p className="font-medium hover:text-primary">
                                 {member.first_name} {member.last_name}
                               </p>
                               <p className="text-sm text-muted-foreground">{member.email}</p>
@@ -321,11 +462,11 @@ export default function Team() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>View Profile</DropdownMenuItem>
-                              <DropdownMenuItem>Edit</DropdownMenuItem>
-                              <DropdownMenuItem>View Schedule</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewProfile(member)}>View Profile</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEdit(member)}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewSchedule(member)}>View Schedule</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive">
+                              <DropdownMenuItem className="text-destructive" onClick={() => setMemberToDeactivate(member)}>
                                 Deactivate
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -340,6 +481,37 @@ export default function Team() {
           </CardContent>
         </Card>
       )}
+
+      {/* Modals */}
+      <InviteTeamModal 
+        open={isInviteOpen} 
+        onOpenChange={setIsInviteOpen} 
+      />
+
+      <TeamMemberProfileSheet 
+        member={selectedMember} 
+        open={isProfileOpen} 
+        onOpenChange={setIsProfileOpen} 
+      />
+
+      {/* Deactivate Confirmation Dialog */}
+      <AlertDialog open={!!memberToDeactivate} onOpenChange={() => setMemberToDeactivate(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate Team Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to deactivate {memberToDeactivate?.first_name} {memberToDeactivate?.last_name}? 
+              They will no longer have access to the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeactivate} className="bg-destructive text-destructive-foreground">
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

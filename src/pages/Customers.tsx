@@ -45,6 +45,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useCustomers, useCustomerAppointments } from '@/hooks/useCustomers';
 import { CustomerWithAddresses } from '@/types/database';
+import { AddCustomerModal } from '@/components/modals';
 
 const formatCurrency = (amount: number | null) => {
   return new Intl.NumberFormat('en-US', {
@@ -240,6 +241,7 @@ export default function Customers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithAddresses | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'appointments' | 'spent'>('name');
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
 
   const { data: customers = [], isLoading } = useCustomers({
     search: searchQuery,
@@ -254,7 +256,7 @@ export default function Customers() {
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
           <p className="text-muted-foreground">{customers.length} customers in your database</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary-hover">
+        <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsAddCustomerOpen(true)}>
           <Plus className="h-4 w-4" />
           Add Customer
         </Button>
@@ -329,6 +331,10 @@ export default function Customers() {
                     <div className="flex flex-col items-center">
                       <Search className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-muted-foreground">No customers found</p>
+                      <Button className="mt-4" onClick={() => setIsAddCustomerOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Your First Customer
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -410,14 +416,9 @@ export default function Customers() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Book Appointment
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive">
                               <Trash className="mr-2 h-4 w-4" />
                               Delete
@@ -438,10 +439,19 @@ export default function Customers() {
       <Sheet open={!!selectedCustomer} onOpenChange={() => setSelectedCustomer(null)}>
         <SheetContent className="w-full sm:max-w-lg">
           {selectedCustomer && (
-            <CustomerDetailPanel customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+            <CustomerDetailPanel 
+              customer={selectedCustomer} 
+              onClose={() => setSelectedCustomer(null)} 
+            />
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Add Customer Modal */}
+      <AddCustomerModal 
+        open={isAddCustomerOpen} 
+        onOpenChange={setIsAddCustomerOpen} 
+      />
     </div>
   );
 }
