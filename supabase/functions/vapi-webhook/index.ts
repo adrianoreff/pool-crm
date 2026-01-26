@@ -43,26 +43,41 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const payload: VapiWebhookPayload = await req.json();
+    const payload = await req.json();
     const { message } = payload;
 
-    console.log("VAPI Webhook received:", message.type);
+    console.log("VAPI Webhook received:", message?.type);
+    console.log("Full payload structure:", JSON.stringify(payload, null, 2));
+
+    // Try multiple locations for assistantId - VAPI sends it in different places depending on message type
+    const assistantId = 
+      message?.call?.assistantId || 
+      payload.call?.assistantId ||
+      message?.assistant?.id ||
+      payload.assistant?.id ||
+      payload.assistantId;
+
+    console.log("Extracted assistantId:", assistantId);
 
     // Get business_id from assistant_id
     let businessId: string | null = null;
-    if (message.call?.assistantId) {
-      const { data: business } = await supabase
+    if (assistantId) {
+      const { data: business, error: businessError } = await supabase
         .from("businesses")
         .select("id")
-        .eq("vapi_assistant_id", message.call.assistantId)
+        .eq("vapi_assistant_id", assistantId)
         .single();
 
+      if (businessError) {
+        console.error("Error fetching business:", businessError);
+      }
       businessId = business?.id || null;
     }
 
     if (!businessId) {
-      console.error("Business not found for assistant:", message.call?.assistantId);
-      return new Response(JSON.stringify({ error: "Business not found" }), {
+      console.error("Business not found for assistant:", assistantId);
+      console.error("Available in payload - message.call:", message?.call, "payload.call:", payload.call);
+      return new Response(JSON.stringify({ error: "Business not found", extractedAssistantId: assistantId }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

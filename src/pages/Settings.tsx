@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Building, Bell, Link, Code, Pencil } from 'lucide-react';
-import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig, useUpdateBusiness } from '@/hooks/useBusiness';
+import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig, useUpdateBusiness, useUpdateBookingRules, useUpdateNotificationSettings } from '@/hooks/useBusiness';
 
 // Helper to mask sensitive values
 const maskValue = (value: string) => {
@@ -23,6 +23,28 @@ export default function Settings() {
   const { data: notificationSettings } = useNotificationSettings();
   const { data: widgetConfig } = useWidgetConfig();
   const updateBusiness = useUpdateBusiness();
+  const updateBookingRules = useUpdateBookingRules();
+  const updateNotificationSettings = useUpdateNotificationSettings();
+
+  // Business profile state
+  const [businessName, setBusinessName] = useState('');
+  const [businessPhone, setBusinessPhone] = useState('');
+  const [businessEmail, setBusinessEmail] = useState('');
+  const [businessWebsite, setBusinessWebsite] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+
+  // Booking rules state
+  const [timeSlotInterval, setTimeSlotInterval] = useState(30);
+  const [bufferTime, setBufferTime] = useState(15);
+  const [advanceBookingDays, setAdvanceBookingDays] = useState(30);
+  const [minimumNoticeHours, setMinimumNoticeHours] = useState(2);
+  const [allowSameDay, setAllowSameDay] = useState(true);
+
+  // Notification settings state
+  const [sendConfirmation, setSendConfirmation] = useState(true);
+  const [sendReminder24h, setSendReminder24h] = useState(true);
+  const [notifyAdminNewAppointment, setNotifyAdminNewAppointment] = useState(true);
+  const [notifyAdminCancellation, setNotifyAdminCancellation] = useState(true);
 
   // Integration state
   const [vapiAssistantId, setVapiAssistantId] = useState('');
@@ -39,10 +61,64 @@ export default function Settings() {
   // Sync state with fetched data
   useEffect(() => {
     if (business) {
+      setBusinessName(business.name || '');
+      setBusinessPhone(business.phone || '');
+      setBusinessEmail(business.email || '');
+      setBusinessWebsite(business.website || '');
+      setBusinessAddress(business.address || '');
       setVapiAssistantId(business.vapi_assistant_id || '');
       setMapboxToken((business as any).mapbox_public_token || '');
     }
   }, [business]);
+
+  useEffect(() => {
+    if (bookingRules) {
+      setTimeSlotInterval(bookingRules.time_slot_interval ?? 30);
+      setBufferTime(bookingRules.buffer_time ?? 15);
+      setAdvanceBookingDays(bookingRules.advance_booking_days ?? 30);
+      setMinimumNoticeHours(bookingRules.minimum_notice_hours ?? 2);
+      setAllowSameDay(bookingRules.allow_same_day ?? true);
+    }
+  }, [bookingRules]);
+
+  useEffect(() => {
+    if (notificationSettings) {
+      setSendConfirmation(notificationSettings.send_confirmation ?? true);
+      setSendReminder24h(notificationSettings.send_reminder_24h ?? true);
+      setNotifyAdminNewAppointment(notificationSettings.notify_admin_new_appointment ?? true);
+      setNotifyAdminCancellation(notificationSettings.notify_admin_cancellation ?? true);
+    }
+  }, [notificationSettings]);
+
+  // Save handlers
+  const handleSaveBusinessProfile = () => {
+    updateBusiness.mutate({
+      name: businessName,
+      phone: businessPhone,
+      email: businessEmail,
+      website: businessWebsite,
+      address: businessAddress,
+    });
+  };
+
+  const handleSaveBookingRules = () => {
+    updateBookingRules.mutate({
+      time_slot_interval: timeSlotInterval,
+      buffer_time: bufferTime,
+      advance_booking_days: advanceBookingDays,
+      minimum_notice_hours: minimumNoticeHours,
+      allow_same_day: allowSameDay,
+    });
+  };
+
+  const handleSaveNotificationSettings = () => {
+    updateNotificationSettings.mutate({
+      send_confirmation: sendConfirmation,
+      send_reminder_24h: sendReminder24h,
+      notify_admin_new_appointment: notifyAdminNewAppointment,
+      notify_admin_cancellation: notifyAdminCancellation,
+    });
+  };
 
   const handleSaveVapi = () => {
     updateBusiness.mutate({
@@ -103,13 +179,34 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2"><Label>Business Name</Label><Input defaultValue={business?.name || ''} /></div>
-                <div className="space-y-2"><Label>Phone Number</Label><Input defaultValue={business?.phone || ''} /></div>
-                <div className="space-y-2"><Label>Email</Label><Input defaultValue={business?.email || ''} /></div>
-                <div className="space-y-2"><Label>Website</Label><Input defaultValue={business?.website || ''} /></div>
+                <div className="space-y-2">
+                  <Label>Business Name</Label>
+                  <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input value={businessPhone} onChange={(e) => setBusinessPhone(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={businessEmail} onChange={(e) => setBusinessEmail(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Website</Label>
+                  <Input value={businessWebsite} onChange={(e) => setBusinessWebsite(e.target.value)} />
+                </div>
               </div>
-              <div className="space-y-2"><Label>Address</Label><Input defaultValue={business?.address || ''} /></div>
-              <Button className="bg-primary hover:bg-primary-hover">Save Changes</Button>
+              <div className="space-y-2">
+                <Label>Address</Label>
+                <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} />
+              </div>
+              <Button 
+                className="bg-primary hover:bg-primary-hover"
+                onClick={handleSaveBusinessProfile}
+                disabled={updateBusiness.isPending}
+              >
+                {updateBusiness.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -119,16 +216,34 @@ export default function Settings() {
             <CardHeader><CardTitle>Booking Rules</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2"><Label>Time Slot Interval</Label><Input type="number" defaultValue={bookingRules?.time_slot_interval || 30} /></div>
-                <div className="space-y-2"><Label>Buffer Between Jobs (min)</Label><Input type="number" defaultValue={bookingRules?.buffer_time || 15} /></div>
-                <div className="space-y-2"><Label>Advance Booking Days</Label><Input type="number" defaultValue={bookingRules?.advance_booking_days || 30} /></div>
-                <div className="space-y-2"><Label>Minimum Notice (hours)</Label><Input type="number" defaultValue={bookingRules?.minimum_notice_hours || 2} /></div>
+                <div className="space-y-2">
+                  <Label>Time Slot Interval</Label>
+                  <Input type="number" value={timeSlotInterval} onChange={(e) => setTimeSlotInterval(Number(e.target.value))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Buffer Between Jobs (min)</Label>
+                  <Input type="number" value={bufferTime} onChange={(e) => setBufferTime(Number(e.target.value))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Advance Booking Days</Label>
+                  <Input type="number" value={advanceBookingDays} onChange={(e) => setAdvanceBookingDays(Number(e.target.value))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Minimum Notice (hours)</Label>
+                  <Input type="number" value={minimumNoticeHours} onChange={(e) => setMinimumNoticeHours(Number(e.target.value))} />
+                </div>
               </div>
               <div className="flex items-center justify-between py-2">
                 <Label>Allow Same-Day Booking</Label>
-                <Switch defaultChecked={bookingRules?.allow_same_day ?? true} />
+                <Switch checked={allowSameDay} onCheckedChange={setAllowSameDay} />
               </div>
-              <Button className="bg-primary hover:bg-primary-hover">Save Changes</Button>
+              <Button 
+                className="bg-primary hover:bg-primary-hover"
+                onClick={handleSaveBookingRules}
+                disabled={updateBookingRules.isPending}
+              >
+                {updateBookingRules.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -137,18 +252,29 @@ export default function Settings() {
           <Card className="shadow-card">
             <CardHeader><CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5" />Notification Settings</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { key: 'send_confirmation', label: 'Send Confirmation Email' },
-                { key: 'send_reminder_24h', label: '24h Reminder' },
-                { key: 'notify_admin_new_appointment', label: 'Admin: New Appointment' },
-                { key: 'notify_admin_cancellation', label: 'Admin: Cancellation' },
-              ].map((item) => (
-                <div key={item.key} className="flex items-center justify-between py-2 border-b last:border-0">
-                  <Label>{item.label}</Label>
-                  <Switch defaultChecked={(notificationSettings as any)?.[item.key] ?? true} />
-                </div>
-              ))}
-              <Button className="bg-primary hover:bg-primary-hover">Save Changes</Button>
+              <div className="flex items-center justify-between py-2 border-b">
+                <Label>Send Confirmation Email</Label>
+                <Switch checked={sendConfirmation} onCheckedChange={setSendConfirmation} />
+              </div>
+              <div className="flex items-center justify-between py-2 border-b">
+                <Label>24h Reminder</Label>
+                <Switch checked={sendReminder24h} onCheckedChange={setSendReminder24h} />
+              </div>
+              <div className="flex items-center justify-between py-2 border-b">
+                <Label>Admin: New Appointment</Label>
+                <Switch checked={notifyAdminNewAppointment} onCheckedChange={setNotifyAdminNewAppointment} />
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <Label>Admin: Cancellation</Label>
+                <Switch checked={notifyAdminCancellation} onCheckedChange={setNotifyAdminCancellation} />
+              </div>
+              <Button 
+                className="bg-primary hover:bg-primary-hover"
+                onClick={handleSaveNotificationSettings}
+                disabled={updateNotificationSettings.isPending}
+              >
+                {updateNotificationSettings.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
