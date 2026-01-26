@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -41,16 +42,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import {
-  mockAppointments,
-  mockTeam,
-  mockServiceCategories,
-  getCustomerById,
-  getTeamMemberById,
-  getServiceById,
-  getTodaysAppointments,
-  getPendingConfirmationCount,
-} from '@/data/mockData';
+import { useAppointments, useTodayAppointments, usePendingAppointments, useCancelAppointment } from '@/hooks/useAppointments';
+import { useTechnicians } from '@/hooks/useTeam';
+import { useServiceCategories } from '@/hooks/useServices';
+import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
 
 type SortField = 'date' | 'customer' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -68,6 +63,7 @@ const sourceIcons = {
   ai_call: Phone,
   widget: Globe,
   manual: User,
+  phone: Phone,
 };
 
 const formatTime = (time: string) => {
@@ -117,23 +113,30 @@ export default function Appointments() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  const technicians = mockTeam.filter(t => t.role === 'technician');
-  const todaysCount = getTodaysAppointments().length;
-  const pendingCount = getPendingConfirmationCount();
+  const { data: allAppointments = [], isLoading } = useAppointments(
+    statusFilter !== 'all' ? { status: statusFilter as AppointmentStatus } : undefined
+  );
+  const { data: todaysAppointments = [] } = useTodayAppointments();
+  const { data: pendingAppointments = [] } = usePendingAppointments();
+  const { data: technicians = [] } = useTechnicians();
+  const { data: categories = [] } = useServiceCategories();
+  const cancelMutation = useCancelAppointment();
+
+  const todaysCount = todaysAppointments.length;
+  const pendingCount = pendingAppointments.length;
 
   // Filter appointments
-  let filteredAppointments = mockAppointments.filter(apt => {
-    if (statusFilter !== 'all' && apt.status !== statusFilter) return false;
-    if (technicianFilter !== 'all' && apt.technicianId !== technicianFilter) return false;
+  let filteredAppointments = allAppointments.filter(apt => {
+    if (technicianFilter !== 'all' && apt.technician_id !== technicianFilter) return false;
     
     if (searchQuery) {
-      const customer = getCustomerById(apt.customerId);
+      const customer = apt.customer;
       const searchLower = searchQuery.toLowerCase();
       const customerMatch = customer && (
-        customer.firstName.toLowerCase().includes(searchLower) ||
-        customer.lastName.toLowerCase().includes(searchLower) ||
+        customer.first_name.toLowerCase().includes(searchLower) ||
+        (customer.last_name?.toLowerCase().includes(searchLower)) ||
         customer.phone.includes(searchQuery) ||
-        customer.email.toLowerCase().includes(searchLower)
+        (customer.email?.toLowerCase().includes(searchLower))
       );
       const addressMatch = apt.address.toLowerCase().includes(searchLower);
       if (!customerMatch && !addressMatch) return false;
@@ -147,12 +150,12 @@ export default function Appointments() {
     let comparison = 0;
     
     if (sortField === 'date') {
-      comparison = new Date(`${a.date}T${a.startTime}`).getTime() - 
-                   new Date(`${b.date}T${b.startTime}`).getTime();
+      comparison = new Date(`${a.scheduled_date}T${a.scheduled_start_time}`).getTime() - 
+                   new Date(`${b.scheduled_date}T${b.scheduled_start_time}`).getTime();
     } else if (sortField === 'customer') {
-      const custA = getCustomerById(a.customerId);
-      const custB = getCustomerById(b.customerId);
-      comparison = `${custA?.lastName}`.localeCompare(`${custB?.lastName}`);
+      const custA = a.customer;
+      const custB = b.customer;
+      comparison = `${custA?.last_name}`.localeCompare(`${custB?.last_name}`);
     } else if (sortField === 'status') {
       comparison = a.status.localeCompare(b.status);
     }
@@ -160,19 +163,22 @@ export default function Appointments() {
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  // Stats
+  // Stats - calculate this week's appointments
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  const thisWeekCount = allAppointments.filter(a => {
+    const aptDate = new Date(a.scheduled_date);
+    return aptDate >= weekStart && aptDate < weekEnd;
+  }).length;
+
   const stats = [
-    { label: 'Total', value: mockAppointments.length },
+    { label: 'Total', value: allAppointments.length },
     { label: 'Today', value: todaysCount },
-    { label: 'This Week', value: mockAppointments.filter(a => {
-      const aptDate = new Date(a.date);
-      const now = new Date();
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay());
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 7);
-      return aptDate >= weekStart && aptDate < weekEnd;
-    }).length },
+    { label: 'This Week', value: thisWeekCount },
     { label: 'Pending', value: pendingCount, highlight: pendingCount > 0 },
   ];
 
@@ -218,7 +224,7 @@ export default function Appointments() {
           >
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className="text-2xl font-bold">{stat.value}</p>
+              <p className="text-2xl font-bold">{isLoading ? '-' : stat.value}</p>
             </CardContent>
           </Card>
         ))}
@@ -262,9 +268,9 @@ export default function Appointments() {
                     <div className="flex items-center gap-2">
                       <div 
                         className="h-3 w-3 rounded-full" 
-                        style={{ backgroundColor: tech.color }}
+                        style={{ backgroundColor: tech.color || '#888' }}
                       />
-                      {tech.firstName} {tech.lastName}
+                      {tech.first_name} {tech.last_name}
                     </div>
                   </SelectItem>
                 ))}
@@ -312,7 +318,20 @@ export default function Appointments() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAppointments.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                    <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell className="hidden lg:table-cell"><Skeleton className="h-8 w-28" /></TableCell>
+                    <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-4" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                  </TableRow>
+                ))
+              ) : filteredAppointments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
@@ -321,13 +340,11 @@ export default function Appointments() {
                 </TableRow>
               ) : (
                 filteredAppointments.map((apt) => {
-                  const customer = getCustomerById(apt.customerId);
-                  const technician = apt.technicianId ? getTeamMemberById(apt.technicianId) : null;
-                  const service = getServiceById(apt.serviceId);
-                  const category = service 
-                    ? mockServiceCategories.find(c => c.id === service.categoryId)
-                    : null;
-                  const SourceIcon = sourceIcons[apt.source];
+                  const customer = apt.customer;
+                  const technician = apt.technician;
+                  const service = apt.service;
+                  const category = categories.find(c => c.id === service?.category_id);
+                  const SourceIcon = sourceIcons[apt.source] || User;
                   const isExpanded = expandedRow === apt.id;
 
                   return (
@@ -340,16 +357,16 @@ export default function Appointments() {
                         <TableCell>{getStatusBadge(apt.status)}</TableCell>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{formatDate(apt.date)}</p>
+                            <p className="font-medium">{formatDate(apt.scheduled_date)}</p>
                             <p className="text-sm text-muted-foreground">
-                              {formatTime(apt.startTime)} - {formatTime(apt.endTime)}
+                              {formatTime(apt.scheduled_start_time)} - {formatTime(apt.scheduled_end_time)}
                             </p>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">
-                              {customer?.firstName} {customer?.lastName}
+                              {customer?.first_name} {customer?.last_name}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {customer?.phone}
@@ -365,7 +382,7 @@ export default function Appointments() {
                                 color: category?.color,
                               }}
                             >
-                              {service?.name}
+                              {service?.name || 'Service'}
                             </Badge>
                           </div>
                         </TableCell>
@@ -380,13 +397,13 @@ export default function Appointments() {
                               <Avatar className="h-7 w-7">
                                 <AvatarFallback 
                                   className="text-xs text-white"
-                                  style={{ backgroundColor: technician.color }}
+                                  style={{ backgroundColor: technician.color || '#888' }}
                                 >
-                                  {technician.firstName[0]}{technician.lastName[0]}
+                                  {technician.first_name?.[0]}{technician.last_name?.[0]}
                                 </AvatarFallback>
                               </Avatar>
                               <span className="text-sm">
-                                {technician.firstName} {technician.lastName}
+                                {technician.first_name} {technician.last_name}
                               </span>
                             </div>
                           ) : (
@@ -412,7 +429,13 @@ export default function Appointments() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem>Create Invoice</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive">
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelMutation.mutate({ id: apt.id });
+                                }}
+                              >
                                 Cancel
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -435,24 +458,15 @@ export default function Appointments() {
                               <div>
                                 <h4 className="text-sm font-medium mb-2">Customer Notes</h4>
                                 <p className="text-sm text-muted-foreground">
-                                  {apt.notes || 'No notes'}
+                                  {apt.customer_notes || 'No notes'}
                                 </p>
                               </div>
                               <div>
                                 <h4 className="text-sm font-medium mb-2">Internal Notes</h4>
                                 <p className="text-sm text-muted-foreground">
-                                  {apt.internalNotes || 'No internal notes'}
+                                  {apt.internal_notes || 'No internal notes'}
                                 </p>
                               </div>
-                            </div>
-                            <div className="mt-4 flex gap-2">
-                              <Button size="sm" variant="outline">
-                                <Phone className="h-4 w-4 mr-2" />
-                                Call Customer
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                View Full Details
-                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
