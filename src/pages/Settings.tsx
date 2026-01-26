@@ -102,16 +102,24 @@ export default function Settings() {
         <TabsContent value="integrations">
           <Card className="shadow-card">
             <CardHeader><CardTitle className="flex items-center gap-2"><Link className="h-5 w-5" />Integrations</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2">
               {[
-                { name: 'VAPI', status: business?.vapi_assistant_id ? 'Connected' : 'Not configured', desc: 'AI Phone Assistant' },
+                { name: 'VAPI', status: business?.vapi_assistant_id ? 'Ready' : 'Not configured', desc: 'AI Phone Assistant' },
                 { name: 'Mapbox', status: 'Ready', desc: 'Maps & Geocoding' },
-                { name: 'Resend', status: 'Connected', desc: 'Email Delivery' },
-              ].map((int) => (
-                <div key={int.name} className="flex items-center justify-between py-3 border-b last:border-0">
-                  <div><p className="font-medium">{int.name}</p><p className="text-sm text-muted-foreground">{int.desc}</p></div>
-                  <Badge variant="outline" className={int.status === 'Connected' ? 'text-success border-success/20 bg-success/10' : 'text-muted-foreground'}>
-                    {int.status === 'Connected' && <CheckCircle className="h-3 w-3 mr-1" />}{int.status}
+              ].map((integration) => (
+                <div key={integration.name} className="flex items-center justify-between py-4 border-b last:border-0">
+                  <div>
+                    <p className="font-medium">{integration.name}</p>
+                    <p className="text-sm text-primary">{integration.desc}</p>
+                  </div>
+                  <Badge 
+                    variant="outline" 
+                    className={integration.status === 'Ready' 
+                      ? 'text-foreground border-border bg-transparent font-normal' 
+                      : 'text-muted-foreground border-border bg-transparent font-normal'
+                    }
+                  >
+                    {integration.status}
                   </Badge>
                 </div>
               ))}
