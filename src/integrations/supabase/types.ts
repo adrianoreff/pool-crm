@@ -1508,6 +1508,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_business_with_owner: {
+        Args: {
+          p_business_name: string
+          p_user_first_name?: string
+          p_user_last_name?: string
+          p_user_phone?: string
+        }
+        Returns: string
+      }
       get_user_business_id: { Args: never; Returns: string }
       has_role: {
         Args: { required_role: Database["public"]["Enums"]["user_role"] }

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
@@ -18,10 +17,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { mockBusiness, getPendingConfirmationCount, getUnreadNotificationsCount } from '@/data/mockData';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -136,6 +135,7 @@ const NavSection = ({
 };
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const { business } = useAuth();
   return (
     <aside
       className={cn(
@@ -162,10 +162,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Business Name */}
-      {!collapsed && (
+      {!collapsed && business && (
         <div className="border-b border-sidebar-border px-4 py-3">
           <p className="truncate text-sm font-medium text-sidebar-foreground">
-            {mockBusiness.name}
+            {business.name}
           </p>
         </div>
       )}

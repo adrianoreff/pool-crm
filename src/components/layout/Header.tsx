@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Search, Menu, User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,8 +19,9 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { mockTeam, mockNotifications, getUnreadNotificationsCount } from '@/data/mockData';
+import { mockNotifications, getUnreadNotificationsCount } from '@/data/mockData';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -28,8 +30,18 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const currentUser = mockTeam[0]; // John Smith (admin)
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const unreadCount = getUnreadNotificationsCount();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  const userInitials = profile 
+    ? `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || profile.email[0]}`.toUpperCase()
+    : 'U';
 
   return (
     <header
@@ -129,17 +141,17 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 px-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={currentUser.avatar || undefined} />
+                <AvatarImage src={profile?.avatar_url || undefined} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  {currentUser.firstName[0]}{currentUser.lastName[0]}
+                  {userInitials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden md:flex flex-col items-start">
                 <span className="text-sm font-medium">
-                  {currentUser.firstName} {currentUser.lastName}
+                  {profile?.first_name || 'User'} {profile?.last_name || ''}
                 </span>
                 <span className="text-xs text-muted-foreground capitalize">
-                  {currentUser.role}
+                  {profile?.role || 'member'}
                 </span>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground hidden md:block" />
@@ -148,9 +160,9 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>{currentUser.firstName} {currentUser.lastName}</span>
+                <span>{profile?.first_name || 'User'} {profile?.last_name || ''}</span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  {currentUser.email}
+                  {profile?.email}
                 </span>
               </div>
             </DropdownMenuLabel>
@@ -159,12 +171,15 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <DropdownMenuItem 
+              className="text-destructive focus:text-destructive"
+              onClick={handleSignOut}
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>
