@@ -8,12 +8,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building, Bell, Link, Code, Settings2 } from 'lucide-react';
+import { Building, Bell, Link, Code, Pencil } from 'lucide-react';
 import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig, useUpdateBusiness } from '@/hooks/useBusiness';
+
+// Helper to mask sensitive values
+const maskValue = (value: string) => {
+  if (!value || value.length <= 8) return '••••••••';
+  return value.slice(0, 4) + '••••••••' + value.slice(-4);
+};
 
 export default function Settings() {
   const { data: business, isLoading: loadingBusiness } = useBusiness();
-  const { data: bookingRules, isLoading: loadingRules } = useBookingRules();
+  const { data: bookingRules } = useBookingRules();
   const { data: notificationSettings } = useNotificationSettings();
   const { data: widgetConfig } = useWidgetConfig();
   const updateBusiness = useUpdateBusiness();
@@ -21,6 +27,14 @@ export default function Settings() {
   // Integration state
   const [vapiAssistantId, setVapiAssistantId] = useState('');
   const [mapboxToken, setMapboxToken] = useState('');
+  
+  // Edit mode state
+  const [editingVapi, setEditingVapi] = useState(false);
+  const [editingMapbox, setEditingMapbox] = useState(false);
+
+  // Track if values are saved in DB
+  const savedVapiId = business?.vapi_assistant_id || '';
+  const savedMapboxToken = (business as any)?.mapbox_public_token || '';
 
   // Sync state with fetched data
   useEffect(() => {
@@ -30,11 +44,30 @@ export default function Settings() {
     }
   }, [business]);
 
-  const handleSaveIntegrations = () => {
+  const handleSaveVapi = () => {
     updateBusiness.mutate({
       vapi_assistant_id: vapiAssistantId || null,
+    } as any, {
+      onSuccess: () => setEditingVapi(false),
+    });
+  };
+
+  const handleSaveMapbox = () => {
+    updateBusiness.mutate({
       mapbox_public_token: mapboxToken || null,
-    } as any);
+    } as any, {
+      onSuccess: () => setEditingMapbox(false),
+    });
+  };
+
+  const handleCancelVapi = () => {
+    setVapiAssistantId(savedVapiId);
+    setEditingVapi(false);
+  };
+
+  const handleCancelMapbox = () => {
+    setMapboxToken(savedMapboxToken);
+    setEditingMapbox(false);
   };
 
   if (loadingBusiness) {
@@ -133,26 +166,61 @@ export default function Settings() {
                   </div>
                   <Badge 
                     variant="outline" 
-                    className={vapiAssistantId 
+                    className={savedVapiId 
                       ? 'text-foreground border-border bg-transparent font-normal' 
                       : 'text-muted-foreground border-border bg-transparent font-normal'
                     }
                   >
-                    {vapiAssistantId ? 'Ready' : 'Not configured'}
+                    {savedVapiId ? 'Ready' : 'Not configured'}
                   </Badge>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vapi-id">Assistant ID</Label>
-                  <Input 
-                    id="vapi-id"
-                    placeholder="Enter your VAPI Assistant ID"
-                    value={vapiAssistantId}
-                    onChange={(e) => setVapiAssistantId(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Find your Assistant ID in the VAPI dashboard under Assistant settings.
-                  </p>
-                </div>
+                
+                {editingVapi || !savedVapiId ? (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="vapi-id">Assistant ID</Label>
+                      <Input 
+                        id="vapi-id"
+                        placeholder="Enter your VAPI Assistant ID"
+                        value={vapiAssistantId}
+                        onChange={(e) => setVapiAssistantId(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Find your Assistant ID in the VAPI dashboard under Assistant settings.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm"
+                        className="bg-primary hover:bg-primary-hover"
+                        onClick={handleSaveVapi}
+                        disabled={updateBusiness.isPending || !vapiAssistantId}
+                      >
+                        {updateBusiness.isPending ? 'Saving...' : 'Save'}
+                      </Button>
+                      {savedVapiId && (
+                        <Button size="sm" variant="outline" onClick={handleCancelVapi}>
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground text-sm">Assistant ID</Label>
+                      <p className="font-mono text-sm">{maskValue(savedVapiId)}</p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => setEditingVapi(true)}
+                    >
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Mapbox Integration */}
@@ -164,35 +232,62 @@ export default function Settings() {
                   </div>
                   <Badge 
                     variant="outline" 
-                    className={mapboxToken 
+                    className={savedMapboxToken 
                       ? 'text-foreground border-border bg-transparent font-normal' 
                       : 'text-muted-foreground border-border bg-transparent font-normal'
                     }
                   >
-                    {mapboxToken ? 'Ready' : 'Not configured'}
+                    {savedMapboxToken ? 'Ready' : 'Not configured'}
                   </Badge>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mapbox-token">Public Token</Label>
-                  <Input 
-                    id="mapbox-token"
-                    placeholder="pk.eyJ1Ijoi..."
-                    value={mapboxToken}
-                    onChange={(e) => setMapboxToken(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Get your public token from the Mapbox account dashboard.
-                  </p>
-                </div>
+                
+                {editingMapbox || !savedMapboxToken ? (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="mapbox-token">Public Token</Label>
+                      <Input 
+                        id="mapbox-token"
+                        placeholder="pk.eyJ1Ijoi..."
+                        value={mapboxToken}
+                        onChange={(e) => setMapboxToken(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Get your public token from the Mapbox account dashboard.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm"
+                        className="bg-primary hover:bg-primary-hover"
+                        onClick={handleSaveMapbox}
+                        disabled={updateBusiness.isPending || !mapboxToken}
+                      >
+                        {updateBusiness.isPending ? 'Saving...' : 'Save'}
+                      </Button>
+                      {savedMapboxToken && (
+                        <Button size="sm" variant="outline" onClick={handleCancelMapbox}>
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground text-sm">Public Token</Label>
+                      <p className="font-mono text-sm">{maskValue(savedMapboxToken)}</p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => setEditingMapbox(true)}
+                    >
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
+                )}
               </div>
-
-              <Button 
-                className="bg-primary hover:bg-primary-hover"
-                onClick={handleSaveIntegrations}
-                disabled={updateBusiness.isPending}
-              >
-                {updateBusiness.isPending ? 'Saving...' : 'Save Integrations'}
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>
