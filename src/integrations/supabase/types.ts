@@ -365,6 +365,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          mapbox_public_token: string | null
           name: string
           phone: string | null
           settings: Json | null
@@ -388,6 +389,7 @@ export type Database = {
           email?: string | null
           id?: string
           logo_url?: string | null
+          mapbox_public_token?: string | null
           name: string
           phone?: string | null
           settings?: Json | null
@@ -411,6 +413,7 @@ export type Database = {
           email?: string | null
           id?: string
           logo_url?: string | null
+          mapbox_public_token?: string | null
           name?: string
           phone?: string | null
           settings?: Json | null

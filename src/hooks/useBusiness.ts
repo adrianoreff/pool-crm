@@ -128,6 +128,8 @@ export function useUpdateBusiness() {
       city: string;
       state: string;
       zip_code: string;
+      vapi_assistant_id: string | null;
+      mapbox_public_token: string | null;
     }>) => {
       const { error } = await supabase
         .from('businesses')
@@ -139,10 +141,10 @@ export function useUpdateBusiness() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['business'] });
       refreshProfile();
-      toast({ title: 'Business updated successfully' });
+      toast({ title: 'Settings updated successfully' });
     },
     onError: (error) => {
-      toast({ title: 'Failed to update business', description: error.message, variant: 'destructive' });
+      toast({ title: 'Failed to update settings', description: error.message, variant: 'destructive' });
     },
   });
 }
