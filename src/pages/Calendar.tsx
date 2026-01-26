@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
-  Calendar as CalendarIcon,
   Filter,
   Plus,
   Clock,
   MapPin,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,14 +21,9 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import {
-  mockAppointments,
-  mockTeam,
-  mockServiceCategories,
-  getCustomerById,
-  getTeamMemberById,
-  getServiceById,
-} from '@/data/mockData';
+import { useAppointments } from '@/hooks/useAppointments';
+import { useTechnicians } from '@/hooks/useTeam';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type ViewType = 'day' | 'week' | 'month';
 
@@ -58,7 +53,75 @@ export default function CalendarPage() {
   const [view, setView] = useState<ViewType>('week');
   const [selectedTechnician, setSelectedTechnician] = useState<string>('all');
 
-  const technicians = mockTeam.filter(t => t.role === 'technician');
+  // Get week dates for filtering
+  const getWeekDates = () => {
+    const dates: Date[] = [];
+    const start = new Date(currentDate);
+    start.setDate(start.getDate() - start.getDay());
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dates.push(date);
+    }
+    return dates;
+  };
+
+  const weekDates = getWeekDates();
+  
+  // Calculate date range for query
+  const dateRange = useMemo(() => {
+    if (view === 'day') {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      return { from: dateStr, to: dateStr };
+    } else if (view === 'week') {
+      return {
+        from: weekDates[0].toISOString().split('T')[0],
+        to: weekDates[6].toISOString().split('T')[0],
+      };
+    } else {
+      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      return {
+        from: firstDay.toISOString().split('T')[0],
+        to: lastDay.toISOString().split('T')[0],
+      };
+    }
+  }, [currentDate, view, weekDates]);
+
+  const { data: technicians = [], isLoading: isLoadingTechnicians } = useTechnicians();
+  const { data: appointments = [], isLoading: isLoadingAppointments } = useAppointments({
+    dateFrom: dateRange.from,
+    dateTo: dateRange.to,
+    technicianId: selectedTechnician !== 'all' ? selectedTechnician : undefined,
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Filter out cancelled appointments
+  const filteredAppointments = appointments.filter(apt => apt.status !== 'cancelled');
+
+  // Get appointments for a specific date
+  const getAppointmentsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return filteredAppointments.filter(apt => apt.scheduled_date === dateStr);
+  };
+
+  // Calculate appointment position and height
+  const getAppointmentStyle = (startTime: string, endTime: string) => {
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    const startMinutes = (startHour - 7) * 60 + startMin;
+    const endMinutes = (endHour - 7) * 60 + endMin;
+    const durationMinutes = endMinutes - startMinutes;
+    
+    const top = (startMinutes / 60) * 64; // 64px per hour
+    const height = Math.max((durationMinutes / 60) * 64, 32);
+    
+    return { top, height };
+  };
 
   // Navigation functions
   const goToToday = () => setCurrentDate(new Date());
@@ -77,53 +140,6 @@ export default function CalendarPage() {
     else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
     else newDate.setMonth(newDate.getMonth() + 1);
     setCurrentDate(newDate);
-  };
-
-  // Get week dates
-  const getWeekDates = () => {
-    const dates: Date[] = [];
-    const start = new Date(currentDate);
-    start.setDate(start.getDate() - start.getDay());
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      dates.push(date);
-    }
-    return dates;
-  };
-
-  const weekDates = getWeekDates();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Filter appointments
-  const filteredAppointments = mockAppointments.filter(apt => {
-    if (selectedTechnician !== 'all' && apt.technicianId !== selectedTechnician) {
-      return false;
-    }
-    return apt.status !== 'cancelled';
-  });
-
-  // Get appointments for a specific date
-  const getAppointmentsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return filteredAppointments.filter(apt => apt.date === dateStr);
-  };
-
-  // Calculate appointment position and height
-  const getAppointmentStyle = (startTime: string, endTime: string) => {
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
-    
-    const startMinutes = (startHour - 7) * 60 + startMin;
-    const endMinutes = (endHour - 7) * 60 + endMin;
-    const durationMinutes = endMinutes - startMinutes;
-    
-    const top = (startMinutes / 60) * 64; // 64px per hour
-    const height = Math.max((durationMinutes / 60) * 64, 32);
-    
-    return { top, height };
   };
 
   const formatDateHeader = () => {
@@ -149,6 +165,8 @@ export default function CalendarPage() {
       return currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
     }
   };
+
+  const isLoading = isLoadingAppointments || isLoadingTechnicians;
 
   return (
     <div className="space-y-4">
@@ -198,9 +216,9 @@ export default function CalendarPage() {
                       <div className="flex items-center gap-2">
                         <div 
                           className="h-3 w-3 rounded-full" 
-                          style={{ backgroundColor: tech.color }}
+                          style={{ backgroundColor: tech.color || '#F97316' }}
                         />
-                        {tech.firstName} {tech.lastName}
+                        {tech.first_name} {tech.last_name}
                       </div>
                     </SelectItem>
                   ))}
@@ -228,269 +246,270 @@ export default function CalendarPage() {
       {/* Calendar Grid */}
       <Card className="shadow-card overflow-hidden">
         <CardContent className="p-0">
-          {view === 'week' && (
-            <div className="flex">
-              {/* Time Column */}
-              <div className="flex-shrink-0 w-16 border-r bg-muted/30">
-                <div className="h-12 border-b" /> {/* Header spacer */}
-                {timeSlots.map((time) => (
-                  <div 
-                    key={time} 
-                    className="h-16 border-b px-2 text-right text-xs text-muted-foreground"
-                  >
-                    {formatTimeShort(time)}
-                  </div>
-                ))}
-              </div>
-
-              {/* Days Columns */}
-              <ScrollArea className="flex-1">
-                <div className="flex min-w-[700px]">
-                  {weekDates.map((date) => {
-                    const isToday = date.toDateString() === today.toDateString();
-                    const dayAppointments = getAppointmentsForDate(date);
-
-                    return (
-                      <div key={date.toISOString()} className="flex-1 min-w-[100px] border-r last:border-r-0">
-                        {/* Day Header */}
-                        <div className={cn(
-                          'h-12 border-b px-2 py-1 text-center',
-                          isToday && 'bg-primary/5'
-                        )}>
-                          <p className="text-xs text-muted-foreground">
-                            {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                          </p>
-                          <p className={cn(
-                            'text-lg font-semibold',
-                            isToday && 'text-primary'
-                          )}>
-                            {date.getDate()}
-                          </p>
-                        </div>
-
-                        {/* Time Slots */}
-                        <div className="relative">
-                          {timeSlots.map((time) => (
-                            <div 
-                              key={time} 
-                              className={cn(
-                                'h-16 border-b hover:bg-muted/30 cursor-pointer transition-colors',
-                                isToday && 'bg-primary/5'
-                              )}
-                            />
-                          ))}
-
-                          {/* Appointments */}
-                          {dayAppointments.map((apt) => {
-                            const { top, height } = getAppointmentStyle(apt.startTime, apt.endTime);
-                            const customer = getCustomerById(apt.customerId);
-                            const technician = apt.technicianId ? getTeamMemberById(apt.technicianId) : null;
-                            const service = getServiceById(apt.serviceId);
-
-                            return (
-                              <div
-                                key={apt.id}
-                                className="absolute left-1 right-1 rounded-md p-1.5 cursor-pointer transition-all hover:shadow-md overflow-hidden"
-                                style={{
-                                  top: `${top}px`,
-                                  height: `${height}px`,
-                                  backgroundColor: `${technician?.color || '#F97316'}20`,
-                                  borderLeft: `3px solid ${technician?.color || '#F97316'}`,
-                                }}
-                              >
-                                <p className="text-xs font-medium truncate">
-                                  {customer?.firstName} {customer?.lastName}
-                                </p>
-                                {height > 40 && (
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {service?.name}
-                                  </p>
-                                )}
-                                {height > 56 && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatTime(apt.startTime)}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-[600px]">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          )}
-
-          {view === 'day' && (
-            <div className="flex">
-              {/* Time Column */}
-              <div className="flex-shrink-0 w-20 border-r bg-muted/30">
-                {timeSlots.map((time) => (
-                  <div 
-                    key={time} 
-                    className="h-16 border-b px-2 text-right text-sm text-muted-foreground flex items-start justify-end pt-1"
-                  >
-                    {formatTimeShort(time)}
-                  </div>
-                ))}
-              </div>
-
-              {/* Day Content */}
-              <div className="flex-1 relative">
-                {timeSlots.map((time) => (
-                  <div 
-                    key={time} 
-                    className="h-16 border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                  />
-                ))}
-
-                {/* Appointments */}
-                {getAppointmentsForDate(currentDate).map((apt) => {
-                  const { top, height } = getAppointmentStyle(apt.startTime, apt.endTime);
-                  const customer = getCustomerById(apt.customerId);
-                  const technician = apt.technicianId ? getTeamMemberById(apt.technicianId) : null;
-                  const service = getServiceById(apt.serviceId);
-
-                  return (
-                    <div
-                      key={apt.id}
-                      className="absolute left-2 right-2 rounded-lg p-3 cursor-pointer transition-all hover:shadow-md"
-                      style={{
-                        top: `${top}px`,
-                        height: `${height}px`,
-                        backgroundColor: `${technician?.color || '#F97316'}15`,
-                        borderLeft: `4px solid ${technician?.color || '#F97316'}`,
-                      }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-medium">
-                            {customer?.firstName} {customer?.lastName}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {service?.name}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {apt.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      {height > 80 && (
-                        <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                          <p className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatTime(apt.startTime)} - {formatTime(apt.endTime)}
-                          </p>
-                          <p className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {apt.address}
-                          </p>
-                          {technician && (
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-5 w-5">
-                                <AvatarFallback 
-                                  className="text-xs text-white"
-                                  style={{ backgroundColor: technician.color }}
-                                >
-                                  {technician.firstName[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span>{technician.firstName} {technician.lastName}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {view === 'month' && (
-            <div className="p-4">
-              {/* Month View Grid */}
-              <div className="grid grid-cols-7 gap-px bg-border">
-                {/* Day Headers */}
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="bg-muted/30 p-2 text-center text-sm font-medium">
-                    {day}
-                  </div>
-                ))}
-
-                {/* Calendar Days */}
-                {(() => {
-                  const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-                  const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-                  const startPadding = firstDay.getDay();
-                  const days: (Date | null)[] = [];
-
-                  // Add padding for days before month starts
-                  for (let i = 0; i < startPadding; i++) {
-                    days.push(null);
-                  }
-
-                  // Add actual days
-                  for (let i = 1; i <= lastDay.getDate(); i++) {
-                    days.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), i));
-                  }
-
-                  return days.map((date, idx) => {
-                    const dayAppointments = date ? getAppointmentsForDate(date) : [];
-                    const isToday = date && date.toDateString() === today.toDateString();
-
-                    return (
+          ) : (
+            <>
+              {view === 'week' && (
+                <div className="flex">
+                  {/* Time Column */}
+                  <div className="flex-shrink-0 w-16 border-r bg-muted/30">
+                    <div className="h-12 border-b" /> {/* Header spacer */}
+                    {timeSlots.map((time) => (
                       <div 
-                        key={idx}
-                        className={cn(
-                          'min-h-[100px] bg-background p-1',
-                          !date && 'bg-muted/20'
-                        )}
+                        key={time} 
+                        className="h-16 border-b px-2 text-right text-xs text-muted-foreground"
                       >
-                        {date && (
-                          <>
-                            <p className={cn(
-                              'text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full',
-                              isToday && 'bg-primary text-primary-foreground'
+                        {formatTimeShort(time)}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Days Columns */}
+                  <ScrollArea className="flex-1">
+                    <div className="flex min-w-[700px]">
+                      {weekDates.map((date) => {
+                        const isToday = date.toDateString() === today.toDateString();
+                        const dayAppointments = getAppointmentsForDate(date);
+
+                        return (
+                          <div key={date.toISOString()} className="flex-1 min-w-[100px] border-r last:border-r-0">
+                            {/* Day Header */}
+                            <div className={cn(
+                              'h-12 border-b px-2 py-1 text-center',
+                              isToday && 'bg-primary/5'
                             )}>
-                              {date.getDate()}
-                            </p>
-                            <div className="space-y-1">
-                              {dayAppointments.slice(0, 3).map((apt) => {
-                                const technician = apt.technicianId 
-                                  ? getTeamMemberById(apt.technicianId)
-                                  : null;
-                                const customer = getCustomerById(apt.customerId);
+                              <p className="text-xs text-muted-foreground">
+                                {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                              </p>
+                              <p className={cn(
+                                'text-lg font-semibold',
+                                isToday && 'text-primary'
+                              )}>
+                                {date.getDate()}
+                              </p>
+                            </div>
+
+                            {/* Time Slots */}
+                            <div className="relative">
+                              {timeSlots.map((time) => (
+                                <div 
+                                  key={time} 
+                                  className={cn(
+                                    'h-16 border-b hover:bg-muted/30 cursor-pointer transition-colors',
+                                    isToday && 'bg-primary/5'
+                                  )}
+                                />
+                              ))}
+
+                              {/* Appointments */}
+                              {dayAppointments.map((apt) => {
+                                const { top, height } = getAppointmentStyle(apt.scheduled_start_time, apt.scheduled_end_time);
+                                const techColor = apt.technician?.color || '#F97316';
 
                                 return (
                                   <div
                                     key={apt.id}
-                                    className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80"
+                                    className="absolute left-1 right-1 rounded-md p-1.5 cursor-pointer transition-all hover:shadow-md overflow-hidden"
                                     style={{
-                                      backgroundColor: `${technician?.color || '#F97316'}20`,
-                                      borderLeft: `2px solid ${technician?.color || '#F97316'}`,
+                                      top: `${top}px`,
+                                      height: `${height}px`,
+                                      backgroundColor: `${techColor}20`,
+                                      borderLeft: `3px solid ${techColor}`,
                                     }}
                                   >
-                                    {formatTimeShort(apt.startTime)} {customer?.lastName}
+                                    <p className="text-xs font-medium truncate">
+                                      {apt.customer?.first_name} {apt.customer?.last_name}
+                                    </p>
+                                    {height > 40 && (
+                                      <p className="text-xs text-muted-foreground truncate">
+                                        {apt.service?.name}
+                                      </p>
+                                    )}
+                                    {height > 56 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatTime(apt.scheduled_start_time)}
+                                      </p>
+                                    )}
                                   </div>
                                 );
                               })}
-                              {dayAppointments.length > 3 && (
-                                <p className="text-xs text-muted-foreground text-center">
-                                  +{dayAppointments.length - 3} more
-                                </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {view === 'day' && (
+                <div className="flex">
+                  {/* Time Column */}
+                  <div className="flex-shrink-0 w-20 border-r bg-muted/30">
+                    {timeSlots.map((time) => (
+                      <div 
+                        key={time} 
+                        className="h-16 border-b px-2 text-right text-sm text-muted-foreground flex items-start justify-end pt-1"
+                      >
+                        {formatTimeShort(time)}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Day Content */}
+                  <div className="flex-1 relative">
+                    {timeSlots.map((time) => (
+                      <div 
+                        key={time} 
+                        className="h-16 border-b hover:bg-muted/30 cursor-pointer transition-colors"
+                      />
+                    ))}
+
+                    {/* Appointments */}
+                    {getAppointmentsForDate(currentDate).map((apt) => {
+                      const { top, height } = getAppointmentStyle(apt.scheduled_start_time, apt.scheduled_end_time);
+                      const techColor = apt.technician?.color || '#F97316';
+
+                      return (
+                        <div
+                          key={apt.id}
+                          className="absolute left-2 right-2 rounded-lg p-3 cursor-pointer transition-all hover:shadow-md"
+                          style={{
+                            top: `${top}px`,
+                            height: `${height}px`,
+                            backgroundColor: `${techColor}15`,
+                            borderLeft: `4px solid ${techColor}`,
+                          }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-medium">
+                                {apt.customer?.first_name} {apt.customer?.last_name}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {apt.service?.name}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {apt.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          {height > 80 && (
+                            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                              <p className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatTime(apt.scheduled_start_time)} - {formatTime(apt.scheduled_end_time)}
+                              </p>
+                              <p className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {apt.address}
+                              </p>
+                              {apt.technician && (
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-5 w-5">
+                                    <AvatarFallback 
+                                      className="text-xs text-white"
+                                      style={{ backgroundColor: apt.technician.color || '#F97316' }}
+                                    >
+                                      {apt.technician.first_name?.[0]}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span>{apt.technician.first_name} {apt.technician.last_name}</span>
+                                </div>
                               )}
                             </div>
-                          </>
-                        )}
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {view === 'month' && (
+                <div className="p-4">
+                  {/* Month View Grid */}
+                  <div className="grid grid-cols-7 gap-px bg-border">
+                    {/* Day Headers */}
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                      <div key={day} className="bg-muted/30 p-2 text-center text-sm font-medium">
+                        {day}
                       </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
+                    ))}
+
+                    {/* Calendar Days */}
+                    {(() => {
+                      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                      const startPadding = firstDay.getDay();
+                      const days: (Date | null)[] = [];
+
+                      // Add padding for days before month starts
+                      for (let i = 0; i < startPadding; i++) {
+                        days.push(null);
+                      }
+
+                      // Add actual days
+                      for (let i = 1; i <= lastDay.getDate(); i++) {
+                        days.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), i));
+                      }
+
+                      return days.map((date, idx) => {
+                        const dayAppointments = date ? getAppointmentsForDate(date) : [];
+                        const isToday = date && date.toDateString() === today.toDateString();
+
+                        return (
+                          <div 
+                            key={idx}
+                            className={cn(
+                              'min-h-[100px] bg-background p-1',
+                              !date && 'bg-muted/20'
+                            )}
+                          >
+                            {date && (
+                              <>
+                                <p className={cn(
+                                  'text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full',
+                                  isToday && 'bg-primary text-primary-foreground'
+                                )}>
+                                  {date.getDate()}
+                                </p>
+                                <div className="space-y-1">
+                                  {dayAppointments.slice(0, 3).map((apt) => {
+                                    const techColor = apt.technician?.color || '#F97316';
+
+                                    return (
+                                      <div
+                                        key={apt.id}
+                                        className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80"
+                                        style={{
+                                          backgroundColor: `${techColor}20`,
+                                          borderLeft: `2px solid ${techColor}`,
+                                        }}
+                                      >
+                                        {formatTimeShort(apt.scheduled_start_time)} {apt.customer?.last_name}
+                                      </div>
+                                    );
+                                  })}
+                                  {dayAppointments.length > 3 && (
+                                    <p className="text-xs text-muted-foreground text-center">
+                                      +{dayAppointments.length - 3} more
+                                    </p>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -501,10 +520,10 @@ export default function CalendarPage() {
           <div key={tech.id} className="flex items-center gap-2">
             <div 
               className="h-3 w-3 rounded-full" 
-              style={{ backgroundColor: tech.color }}
+              style={{ backgroundColor: tech.color || '#F97316' }}
             />
             <span className="text-muted-foreground">
-              {tech.firstName} {tech.lastName}
+              {tech.first_name} {tech.last_name}
             </span>
           </div>
         ))}
