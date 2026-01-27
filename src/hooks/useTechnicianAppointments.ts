@@ -61,5 +61,6 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
 
 export function useTodayTechnicianAppointments() {
   const today = new Date().toISOString().split('T')[0];
-  return useTechnicianAppointments({ dateFrom: today, dateTo: today });
+  // Include today and future appointments
+  return useTechnicianAppointments({ dateFrom: today });
 }

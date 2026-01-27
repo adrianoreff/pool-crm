@@ -319,6 +319,7 @@ export default function Team() {
   const { data: pendingInvitations = [], isLoading: isLoadingInvitations } = useTeamInvitations();
   const [resendInvitationId, setResendInvitationId] = useState<string | null>(null);
   const today = new Date().toISOString().split('T')[0];
+  // Get today's appointments for counting jobs per technician
   const { data: todayAppointments = [] } = useAppointments({ dateFrom: today, dateTo: today });
   const { toast } = useToast();
   const queryClient = useQueryClient();

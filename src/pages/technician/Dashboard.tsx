@@ -66,11 +66,24 @@ export default function TechnicianDashboard() {
       })[0];
   }, [appointments]);
 
+  const today = new Date().toISOString().split('T')[0];
+  
   const todaySchedule = useMemo(() => {
     return appointments
-      .filter(a => a.status !== 'cancelled')
+      .filter(a => a.status !== 'cancelled' && a.scheduled_date === today)
       .sort((a, b) => a.scheduled_start_time.localeCompare(b.scheduled_start_time));
-  }, [appointments]);
+  }, [appointments, today]);
+  
+  const upcomingSchedule = useMemo(() => {
+    return appointments
+      .filter(a => a.status !== 'cancelled' && a.scheduled_date > today)
+      .sort((a, b) => {
+        if (a.scheduled_date !== b.scheduled_date) {
+          return a.scheduled_date.localeCompare(b.scheduled_date);
+        }
+        return a.scheduled_start_time.localeCompare(b.scheduled_start_time);
+      });
+  }, [appointments, today]);
 
   const handleNavigate = (appointment: typeof nextJob) => {
     if (!appointment) return;
@@ -277,6 +290,45 @@ export default function TechnicianDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Upcoming Schedule */}
+      {upcomingSchedule.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Upcoming Appointments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {upcomingSchedule.map((apt) => {
+                const statusBadge = getStatusBadge(apt.status);
+                const aptDate = new Date(apt.scheduled_date);
+                const dateStr = aptDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                
+                return (
+                  <div
+                    key={apt.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/technician/jobs/${apt.id}`)}
+                  >
+                    <div className="flex-shrink-0">
+                      <Circle className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">
+                        {dateStr} - {formatTimeShort(apt.scheduled_start_time)} - {apt.customer?.first_name} {apt.customer?.last_name}
+                      </div>
+                      <div className="text-sm text-muted-foreground">{apt.service?.name}</div>
+                    </div>
+                    <Badge className={cn('text-xs', statusBadge.color)}>
+                      {statusBadge.label}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
