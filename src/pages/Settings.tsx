@@ -422,22 +422,76 @@ export default function Settings() {
           <Card className="shadow-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Code className="h-5 w-5" />Booking Widget</CardTitle>
-              <CardDescription>Embed the booking widget on your website</CardDescription>
+              <CardDescription>Embed the booking widget on your website to accept appointments</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <Label>Widget Active</Label>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between py-2 border-b">
+                <div>
+                  <Label>Widget Active</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Enable or disable the booking widget</p>
+                </div>
                 <Switch defaultChecked={widgetConfig?.is_active ?? true} />
               </div>
+              
               <div className="space-y-2">
                 <Label>Embed Code</Label>
+                <p className="text-xs text-muted-foreground">Copy and paste this code into your website's HTML</p>
                 <Textarea 
                   readOnly 
-                  className="font-mono text-xs"
-                  value={`<script src="https://tradeflow.app/widget.js" data-id="${widgetConfig?.embed_code || business?.id || ''}"></script>`}
+                  className="font-mono text-xs h-20"
+                  value={`<script src="https://tradeflow-hub-87.lovable.app/widget-loader.js" data-id="${widgetConfig?.embed_code || ''}"></script>`}
                 />
               </div>
-              <Button variant="outline">Copy Code</Button>
+              
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    const code = `<script src="https://tradeflow-hub-87.lovable.app/widget-loader.js" data-id="${widgetConfig?.embed_code || ''}"></script>`;
+                    navigator.clipboard.writeText(code);
+                    // Show toast
+                    const event = new CustomEvent('toast', { detail: { message: 'Embed code copied to clipboard!' } });
+                    window.dispatchEvent(event);
+                  }}
+                >
+                  Copy Code
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => window.open(`/widget/${widgetConfig?.embed_code}`, '_blank')}
+                  disabled={!widgetConfig?.embed_code}
+                >
+                  Preview Widget
+                </Button>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">Widget Information</h4>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Embed Code</span>
+                    <span className="font-mono">{widgetConfig?.embed_code || 'Not generated'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Primary Color</span>
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-4 h-4 rounded border"
+                        style={{ backgroundColor: widgetConfig?.primary_color || '#F97316' }}
+                      />
+                      <span className="font-mono">{widgetConfig?.primary_color || '#F97316'}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Button Text</span>
+                    <span>{widgetConfig?.button_text || 'Book Now'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Position</span>
+                    <span className="capitalize">{(widgetConfig?.button_position || 'bottom-right').replace('-', ' ')}</span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
