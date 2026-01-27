@@ -269,6 +269,7 @@ export default function CalendarPage() {
   // Drag and drop handlers
   const handleDragStart = (apt: AppointmentWithRelations, e: React.DragEvent) => {
     e.stopPropagation();
+    console.log('handleDragStart:', apt.id, apt.customer?.first_name);
     setDraggingAppointment(apt);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', apt.id);
@@ -319,7 +320,9 @@ export default function CalendarPage() {
   const handleDrop = (date: string, time: string, e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('handleDrop called:', { date, time, hasAppointment: !!draggingAppointment });
     if (draggingAppointment) {
+      console.log('Setting reschedule target and opening dialog');
       setRescheduleTarget({ date, time });
       setShowRescheduleDialog(true);
       // Don't clear draggingAppointment here - we need it for confirmReschedule
@@ -328,6 +331,12 @@ export default function CalendarPage() {
   };
 
   const confirmReschedule = () => {
+    console.log('confirmReschedule called:', { 
+      hasAppointment: !!draggingAppointment, 
+      hasTarget: !!rescheduleTarget,
+      appointmentId: draggingAppointment?.id,
+      target: rescheduleTarget 
+    });
     if (draggingAppointment && rescheduleTarget) {
       // Calculate new end time based on original duration
       const [startH, startM] = draggingAppointment.scheduled_start_time.split(':').map(Number);
@@ -785,7 +794,11 @@ export default function CalendarPage() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={cancelReschedule}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={confirmReschedule}
+              onClick={(e) => {
+                e.preventDefault();
+                console.log('AlertDialogAction clicked');
+                confirmReschedule();
+              }}
               disabled={rescheduleAppointment.isPending}
             >
               {rescheduleAppointment.isPending ? (
