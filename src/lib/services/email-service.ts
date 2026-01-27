@@ -9,6 +9,14 @@ import {
   technicianEnRouteEmail,
   techNewAssignmentEmail,
   adminNewAppointmentEmail,
+  invoiceSentEmail,
+  followUpEmail,
+  techAssignmentChangedEmail,
+  techAssignmentCancelledEmail,
+  techDailyScheduleEmail,
+  adminAppointmentCancelledEmail,
+  adminDailySummaryEmail,
+  adminWeeklyReportEmail,
 } from '@/lib/email-templates';
 
 export type RecipientType = 'customer' | 'technician' | 'admin';
@@ -481,6 +489,273 @@ export const EmailService = {
       emailType: 'admin_new_appointment',
       recipientType: 'admin',
       appointmentId: appointment.id,
+    });
+  },
+
+  // Invoice Sent
+  async sendInvoiceSent(params: {
+    customerEmail: string;
+    customerName: string;
+    customerId: string;
+    invoiceNumber: string;
+    invoiceTotal: string;
+    dueDate?: string;
+    invoiceUrl?: string;
+    business: BusinessData;
+    appointmentId?: string;
+  }): Promise<EmailResult> {
+    const template = invoiceSentEmail({
+      customerName: params.customerName,
+      invoiceNumber: params.invoiceNumber,
+      invoiceTotal: params.invoiceTotal,
+      dueDate: params.dueDate,
+      invoiceUrl: params.invoiceUrl,
+      businessName: params.business.name,
+      businessPhone: params.business.phone || '',
+    });
+
+    return sendEmail({
+      to: params.customerEmail,
+      toName: params.customerName,
+      ...template,
+      businessId: params.business.id,
+      emailType: 'invoice_sent',
+      recipientType: 'customer',
+      appointmentId: params.appointmentId,
+      customerId: params.customerId,
+    });
+  },
+
+  // Follow-up
+  async sendFollowUp(
+    appointment: AppointmentData,
+    business: BusinessData,
+    reviewUrl?: string
+  ): Promise<EmailResult> {
+    if (!appointment.customer?.email) {
+      return { success: false, error: 'Customer has no email' };
+    }
+
+    const customerName = `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim();
+    const template = followUpEmail({
+      customerName,
+      serviceName: appointment.service?.name || 'Service',
+      completedDate: formatDate(appointment.scheduled_date),
+      businessName: business.name,
+      businessPhone: business.phone || '',
+      reviewUrl,
+    });
+
+    return sendEmail({
+      to: appointment.customer.email,
+      toName: customerName,
+      ...template,
+      businessId: business.id,
+      emailType: 'follow_up',
+      recipientType: 'customer',
+      appointmentId: appointment.id,
+      customerId: appointment.customer.id,
+    });
+  },
+
+  // Tech Assignment Changed
+  async sendTechAssignmentChanged(
+    appointment: AppointmentData,
+    business: BusinessData,
+    oldDate: string,
+    oldStartTime: string,
+    oldEndTime: string
+  ): Promise<EmailResult> {
+    if (!appointment.technician?.email) {
+      return { success: false, error: 'Technician has no email' };
+    }
+
+    const technicianName = `${appointment.technician.first_name || ''} ${appointment.technician.last_name || ''}`.trim();
+    const customerName = `${appointment.customer?.first_name || ''} ${appointment.customer?.last_name || ''}`.trim();
+
+    const template = techAssignmentChangedEmail({
+      technicianName,
+      customerName,
+      serviceName: appointment.service?.name || 'Service',
+      scheduledDate: formatDate(appointment.scheduled_date),
+      timeWindow: formatTimeWindow(appointment.scheduled_start_time, appointment.scheduled_end_time),
+      address: appointment.address,
+      referenceCode: appointment.ref_code || '',
+      businessName: business.name,
+    });
+
+    return sendEmail({
+      to: appointment.technician.email,
+      toName: technicianName,
+      ...template,
+      businessId: business.id,
+      emailType: 'tech_assignment_changed',
+      recipientType: 'technician',
+      appointmentId: appointment.id,
+      userId: appointment.technician.id,
+    });
+  },
+
+  // Tech Assignment Cancelled
+  async sendTechAssignmentCancelled(
+    appointment: AppointmentData,
+    business: BusinessData,
+    reason?: string
+  ): Promise<EmailResult> {
+    if (!appointment.technician?.email) {
+      return { success: false, error: 'Technician has no email' };
+    }
+
+    const technicianName = `${appointment.technician.first_name || ''} ${appointment.technician.last_name || ''}`.trim();
+    const customerName = `${appointment.customer?.first_name || ''} ${appointment.customer?.last_name || ''}`.trim();
+
+    const template = techAssignmentCancelledEmail({
+      technicianName,
+      customerName,
+      serviceName: appointment.service?.name || 'Service',
+      scheduledDate: formatDate(appointment.scheduled_date),
+      timeWindow: formatTimeWindow(appointment.scheduled_start_time, appointment.scheduled_end_time),
+      referenceCode: appointment.ref_code || '',
+      businessName: business.name,
+      reason,
+    });
+
+    return sendEmail({
+      to: appointment.technician.email,
+      toName: technicianName,
+      ...template,
+      businessId: business.id,
+      emailType: 'tech_assignment_cancelled',
+      recipientType: 'technician',
+      appointmentId: appointment.id,
+      userId: appointment.technician.id,
+    });
+  },
+
+  // Tech Daily Schedule
+  async sendTechDailySchedule(params: {
+    technicianEmail: string;
+    technicianName: string;
+    technicianId: string;
+    date: string;
+    items: Array<{
+      timeWindow: string;
+      customerName: string;
+      address: string;
+      serviceName: string;
+      referenceCode?: string;
+    }>;
+    business: BusinessData;
+  }): Promise<EmailResult> {
+    const template = techDailyScheduleEmail({
+      technicianName: params.technicianName,
+      date: params.date,
+      items: params.items,
+      businessName: params.business.name,
+    });
+
+    return sendEmail({
+      to: params.technicianEmail,
+      toName: params.technicianName,
+      ...template,
+      businessId: params.business.id,
+      emailType: 'tech_daily_schedule',
+      recipientType: 'technician',
+      userId: params.technicianId,
+    });
+  },
+
+  // Admin Appointment Cancelled
+  async sendAdminAppointmentCancelled(
+    appointment: AppointmentData,
+    business: BusinessData,
+    adminEmail: string,
+    adminName: string,
+    reason?: string
+  ): Promise<EmailResult> {
+    const customerName = `${appointment.customer?.first_name || ''} ${appointment.customer?.last_name || ''}`.trim();
+
+    const template = adminAppointmentCancelledEmail({
+      adminName,
+      customerName,
+      serviceName: appointment.service?.name || 'Service',
+      scheduledDate: formatDate(appointment.scheduled_date),
+      timeWindow: formatTimeWindow(appointment.scheduled_start_time, appointment.scheduled_end_time),
+      referenceCode: appointment.ref_code || '',
+      businessName: business.name,
+      reason,
+    });
+
+    return sendEmail({
+      to: adminEmail,
+      toName: adminName,
+      ...template,
+      businessId: business.id,
+      emailType: 'admin_appointment_cancelled',
+      recipientType: 'admin',
+      appointmentId: appointment.id,
+    });
+  },
+
+  // Admin Daily Summary
+  async sendAdminDailySummary(params: {
+    adminEmail: string;
+    adminName: string;
+    date: string;
+    newAppointments: number;
+    completedAppointments: number;
+    cancelledAppointments: number;
+    revenue?: string;
+    business: BusinessData;
+  }): Promise<EmailResult> {
+    const template = adminDailySummaryEmail({
+      adminName: params.adminName,
+      date: params.date,
+      newAppointments: params.newAppointments,
+      completedAppointments: params.completedAppointments,
+      cancelledAppointments: params.cancelledAppointments,
+      revenue: params.revenue,
+      businessName: params.business.name,
+    });
+
+    return sendEmail({
+      to: params.adminEmail,
+      toName: params.adminName,
+      ...template,
+      businessId: params.business.id,
+      emailType: 'admin_daily_summary',
+      recipientType: 'admin',
+    });
+  },
+
+  // Admin Weekly Report
+  async sendAdminWeeklyReport(params: {
+    adminEmail: string;
+    adminName: string;
+    weekRange: string;
+    newAppointments: number;
+    completedAppointments: number;
+    cancelledAppointments: number;
+    revenue?: string;
+    business: BusinessData;
+  }): Promise<EmailResult> {
+    const template = adminWeeklyReportEmail({
+      adminName: params.adminName,
+      weekRange: params.weekRange,
+      newAppointments: params.newAppointments,
+      completedAppointments: params.completedAppointments,
+      cancelledAppointments: params.cancelledAppointments,
+      revenue: params.revenue,
+      businessName: params.business.name,
+    });
+
+    return sendEmail({
+      to: params.adminEmail,
+      toName: params.adminName,
+      ...template,
+      businessId: params.business.id,
+      emailType: 'admin_weekly_report',
+      recipientType: 'admin',
     });
   },
 

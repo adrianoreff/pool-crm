@@ -47,6 +47,13 @@ type EmailTemplateType =
   | 'appointment_cancelled'
   | 'technician_en_route'
   | 'appointment_completed'
+  | 'invoice_sent'
+  | 'follow_up'
+  | 'tech_new_assignment'
+  | 'tech_assignment_changed'
+  | 'tech_assignment_cancelled'
+  | 'admin_new_appointment'
+  | 'admin_appointment_cancelled'
   | 'custom';
 
 interface EmailTemplate {
@@ -56,9 +63,20 @@ interface EmailTemplate {
   icon: React.ElementType;
   colorClassName: string;
   requiresAppointment: boolean;
+  category: 'customer' | 'technician' | 'admin';
 }
 
 const EMAIL_TEMPLATES: EmailTemplate[] = [
+  // Customer templates
+  {
+    id: 'appointment_request_received',
+    name: 'Request Received',
+    description: 'Confirm booking request was received',
+    icon: FileText,
+    colorClassName: 'text-muted-foreground bg-muted',
+    requiresAppointment: false,
+    category: 'customer',
+  },
   {
     id: 'appointment_confirmed',
     name: 'Appointment Confirmation',
@@ -66,6 +84,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: CheckCircle2,
     colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
     id: 'appointment_reminder_24h',
@@ -74,6 +93,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: Clock,
     colorClassName: 'text-accent-foreground bg-accent/40',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
     id: 'appointment_reminder_1h',
@@ -82,6 +102,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: Bell,
     colorClassName: 'text-accent-foreground bg-accent/40',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
     id: 'appointment_rescheduled',
@@ -90,6 +111,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: Calendar,
     colorClassName: 'text-secondary-foreground bg-secondary',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
     id: 'appointment_cancelled',
@@ -98,6 +120,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: XCircle,
     colorClassName: 'text-destructive bg-destructive/10',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
     id: 'technician_en_route',
@@ -106,6 +129,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: Truck,
     colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
     id: 'appointment_completed',
@@ -114,15 +138,72 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     icon: Star,
     colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: true,
+    category: 'customer',
   },
   {
-    id: 'appointment_request_received',
-    name: 'Request Received',
-    description: 'Confirm booking request was received',
+    id: 'invoice_sent',
+    name: 'Invoice Sent',
+    description: 'Send invoice to customer',
     icon: FileText,
-    colorClassName: 'text-muted-foreground bg-muted',
-    // IMPORTANT: this email is also useful for a lead/customer WITHOUT an appointment yet
+    colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: false,
+    category: 'customer',
+  },
+  {
+    id: 'follow_up',
+    name: 'Follow-up',
+    description: 'Check in after service (3-7 days later)',
+    icon: Mail,
+    colorClassName: 'text-muted-foreground bg-muted',
+    requiresAppointment: true,
+    category: 'customer',
+  },
+  // Technician templates
+  {
+    id: 'tech_new_assignment',
+    name: 'New Assignment',
+    description: 'Notify technician of new service assignment',
+    icon: Bell,
+    colorClassName: 'text-secondary-foreground bg-secondary',
+    requiresAppointment: true,
+    category: 'technician',
+  },
+  {
+    id: 'tech_assignment_changed',
+    name: 'Assignment Changed',
+    description: 'Notify technician of schedule change',
+    icon: Calendar,
+    colorClassName: 'text-accent-foreground bg-accent/40',
+    requiresAppointment: true,
+    category: 'technician',
+  },
+  {
+    id: 'tech_assignment_cancelled',
+    name: 'Assignment Cancelled',
+    description: 'Notify technician of cancelled service',
+    icon: XCircle,
+    colorClassName: 'text-destructive bg-destructive/10',
+    requiresAppointment: true,
+    category: 'technician',
+  },
+  // Admin templates
+  {
+    id: 'admin_new_appointment',
+    name: 'Admin: New Appointment',
+    description: 'Notify admin of new booking',
+    icon: Bell,
+    colorClassName: 'text-primary bg-primary/10',
+    requiresAppointment: true,
+    category: 'admin',
+  },
+  {
+    id: 'admin_appointment_cancelled',
+    name: 'Admin: Appointment Cancelled',
+    description: 'Notify admin of cancellation',
+    icon: XCircle,
+    colorClassName: 'text-destructive bg-destructive/10',
+    requiresAppointment: true,
+    category: 'admin',
   },
 ];
 
@@ -197,10 +278,19 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
     // Some templates can be sent without an appointment (e.g. lead/customer initial contact)
     const templateMeta = EMAIL_TEMPLATES.find((t) => t.id === selectedTemplate);
     const requiresAppointment = templateMeta?.requiresAppointment ?? true;
-    const canSendWithoutAppointment = selectedTemplate === 'appointment_request_received';
+    const canSendWithoutAppointment = selectedTemplate === 'appointment_request_received' || selectedTemplate === 'invoice_sent';
 
     if (!appointment && requiresAppointment && !canSendWithoutAppointment) {
       toast.error('This template requires an appointment.');
+      return;
+    }
+
+    // Check technician/admin templates have correct recipient
+    const isTechTemplate = templateMeta?.category === 'technician';
+    const isAdminTemplate = templateMeta?.category === 'admin';
+
+    if (isTechTemplate && !appointment?.technician?.email) {
+      toast.error('This appointment has no technician assigned.');
       return;
     }
 
@@ -215,6 +305,7 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
       };
 
       switch (selectedTemplate) {
+        // Customer templates
         case 'appointment_confirmed':
           result = await EmailService.sendAppointmentConfirmed(appointment, businessData);
           break;
@@ -225,7 +316,6 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
           result = await EmailService.sendAppointmentReminder(appointment, businessData, 1);
           break;
         case 'appointment_rescheduled':
-          // For resend, use current date as both old and new (user just wants to resend notification)
           result = await EmailService.sendAppointmentRescheduled(
             appointment, 
             appointment.scheduled_date,
@@ -252,7 +342,6 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
               setIsSending(false);
               return;
             }
-
             result = await EmailService.sendAppointmentRequestReceivedLead({
               to: recipient.email,
               toName: recipient.name,
@@ -262,6 +351,53 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
               business: businessData,
             });
           }
+          break;
+        case 'invoice_sent':
+          result = await EmailService.sendInvoiceSent({
+            customerEmail: recipient.email,
+            customerName: recipient.name,
+            customerId: recipient.id,
+            invoiceNumber: 'INV-PENDING',
+            invoiceTotal: '$0.00',
+            business: businessData,
+            appointmentId: appointment?.id,
+          });
+          break;
+        case 'follow_up':
+          result = await EmailService.sendFollowUp(appointment, businessData);
+          break;
+        // Technician templates
+        case 'tech_new_assignment':
+          result = await EmailService.sendTechNewAssignment(appointment, businessData);
+          break;
+        case 'tech_assignment_changed':
+          result = await EmailService.sendTechAssignmentChanged(
+            appointment,
+            businessData,
+            appointment.scheduled_date,
+            appointment.scheduled_start_time,
+            appointment.scheduled_end_time
+          );
+          break;
+        case 'tech_assignment_cancelled':
+          result = await EmailService.sendTechAssignmentCancelled(appointment, businessData);
+          break;
+        // Admin templates
+        case 'admin_new_appointment':
+          result = await EmailService.sendAdminNewAppointment(
+            appointment,
+            businessData,
+            business.email || recipient.email,
+            'Admin'
+          );
+          break;
+        case 'admin_appointment_cancelled':
+          result = await EmailService.sendAdminAppointmentCancelled(
+            appointment,
+            businessData,
+            business.email || recipient.email,
+            'Admin'
+          );
           break;
         default:
           throw new Error('Unknown template');
@@ -381,49 +517,124 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {templates.map((template) => {
-                    const Icon = template.icon;
-                    const isSelected = selectedTemplate === template.id;
-                    const isEnabled = !template.requiresAppointment || !!appointment;
+                <div className="space-y-4">
+                  {/* Customer Templates */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Customer Emails</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {templates.filter(t => t.category === 'customer').map((template) => {
+                        const Icon = template.icon;
+                        const isSelected = selectedTemplate === template.id;
+                        const isEnabled = !template.requiresAppointment || !!appointment;
 
-                    return (
-                      <Card
-                        key={template.id}
-                        className={`transition-all hover:border-primary ${
-                          isSelected ? 'border-primary ring-2 ring-primary/20' : ''
-                        } ${isEnabled ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
-                        onClick={() => {
-                          if (!isEnabled) return;
-                          setSelectedTemplate(template.id);
-                        }}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg ${template.colorClassName}`}>
-                              <Icon className="h-5 w-5" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <div className="font-medium text-sm">{template.name}</div>
-                                {!isEnabled && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    Requires appointment
-                                  </Badge>
-                                )}
+                        return (
+                          <Card
+                            key={template.id}
+                            className={`transition-all hover:border-primary ${
+                              isSelected ? 'border-primary ring-2 ring-primary/20' : ''
+                            } ${isEnabled ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                            onClick={() => {
+                              if (!isEnabled) return;
+                              setSelectedTemplate(template.id);
+                            }}
+                          >
+                            <CardContent className="p-3">
+                              <div className="flex items-start gap-2">
+                                <div className={`p-1.5 rounded-lg ${template.colorClassName}`}>
+                                  <Icon className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm">{template.name}</div>
+                                  <div className="text-xs text-muted-foreground">{template.description}</div>
+                                </div>
+                                {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
                               </div>
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                {template.description}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Technician Templates */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Technician Emails</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {templates.filter(t => t.category === 'technician').map((template) => {
+                        const Icon = template.icon;
+                        const isSelected = selectedTemplate === template.id;
+                        const hasTechnician = !!appointment?.technician?.email;
+                        const isEnabled = (!template.requiresAppointment || !!appointment) && hasTechnician;
+
+                        return (
+                          <Card
+                            key={template.id}
+                            className={`transition-all hover:border-primary ${
+                              isSelected ? 'border-primary ring-2 ring-primary/20' : ''
+                            } ${isEnabled ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                            onClick={() => {
+                              if (!isEnabled) return;
+                              setSelectedTemplate(template.id);
+                            }}
+                          >
+                            <CardContent className="p-3">
+                              <div className="flex items-start gap-2">
+                                <div className={`p-1.5 rounded-lg ${template.colorClassName}`}>
+                                  <Icon className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm">{template.name}</div>
+                                  <div className="text-xs text-muted-foreground">{template.description}</div>
+                                </div>
+                                {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
                               </div>
-                            </div>
-                            {isSelected && (
-                              <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                    {!appointment?.technician?.email && (
+                      <p className="text-xs text-muted-foreground mt-1">Technician templates require an assigned technician.</p>
+                    )}
+                  </div>
+
+                  {/* Admin Templates */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Admin Emails</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {templates.filter(t => t.category === 'admin').map((template) => {
+                        const Icon = template.icon;
+                        const isSelected = selectedTemplate === template.id;
+                        const isEnabled = !template.requiresAppointment || !!appointment;
+
+                        return (
+                          <Card
+                            key={template.id}
+                            className={`transition-all hover:border-primary ${
+                              isSelected ? 'border-primary ring-2 ring-primary/20' : ''
+                            } ${isEnabled ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                            onClick={() => {
+                              if (!isEnabled) return;
+                              setSelectedTemplate(template.id);
+                            }}
+                          >
+                            <CardContent className="p-3">
+                              <div className="flex items-start gap-2">
+                                <div className={`p-1.5 rounded-lg ${template.colorClassName}`}>
+                                  <Icon className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm">{template.name}</div>
+                                  <div className="text-xs text-muted-foreground">{template.description}</div>
+                                </div>
+                                {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   {/* Lead fields for Request Received when there is no appointment yet */}
                   {selectedTemplate === 'appointment_request_received' && !appointment && (
