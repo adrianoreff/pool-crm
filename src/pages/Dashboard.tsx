@@ -13,6 +13,12 @@ import {
   MapPin,
   ChevronRight,
   AlertCircle,
+  MoreVertical,
+  Mail,
+  MessageSquare,
+  Edit,
+  CalendarClock,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,13 +26,30 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTodayAppointments, usePendingAppointments } from '@/hooks/useAppointments';
+import { useTodayAppointments, usePendingAppointments, useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { useCallLogs } from '@/hooks/useCallLogs';
 import { AppointmentWithRelations } from '@/types/database';
-import { AddCustomerModal, NewAppointmentModal } from '@/components/modals';
+import { AddCustomerModal, NewAppointmentModal, AppointmentDetailModal } from '@/components/modals';
 
 // Get greeting based on time of day
 const getGreeting = () => {
@@ -105,10 +128,17 @@ export default function Dashboard() {
   const { data: pendingAppointments = [], isLoading: loadingPending } = usePendingAppointments();
   const { data: activityFeed = [], isLoading: loadingActivity } = useActivityFeed(10);
   const { data: callLogs = [] } = useCallLogs();
+  
+  const updateStatus = useUpdateAppointmentStatus();
+  const cancelAppointment = useCancelAppointment();
 
   // Modal states
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithRelations | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
 
   const pendingCount = pendingAppointments.length;
   const inProgressCount = todaysAppointments.filter(a => a.status === 'in_progress').length;
@@ -155,6 +185,42 @@ export default function Dashboard() {
       iconBg: 'bg-primary/10',
     },
   ];
+
+  // Handlers for pending appointments
+  const handleConfirm = (appointmentId: string) => {
+    updateStatus.mutate({ id: appointmentId, status: 'scheduled' });
+  };
+
+  const handleContact = (appointment: AppointmentWithRelations, type: 'phone' | 'email' | 'sms') => {
+    const customer = appointment.customer;
+    if (!customer) return;
+    
+    if (type === 'phone') {
+      window.open(`tel:${customer.phone}`);
+    } else if (type === 'email' && customer.email) {
+      window.open(`mailto:${customer.email}`);
+    } else if (type === 'sms') {
+      window.open(`sms:${customer.phone}`);
+    }
+  };
+
+  const handleViewDetails = (appointment: AppointmentWithRelations) => {
+    setSelectedAppointment(appointment);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCancelClick = (appointmentId: string) => {
+    setAppointmentToCancel(appointmentId);
+    setCancelDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (appointmentToCancel) {
+      cancelAppointment.mutate({ id: appointmentToCancel });
+    }
+    setCancelDialogOpen(false);
+    setAppointmentToCancel(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -259,7 +325,8 @@ export default function Dashboard() {
                       return (
                         <div
                           key={appointment.id}
-                          className="group flex gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                          className="group flex gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50 cursor-pointer"
+                          onClick={() => handleViewDetails(appointment)}
                         >
                           {/* Time Column */}
                           <div className="flex-shrink-0 text-center">
@@ -347,7 +414,7 @@ export default function Dashboard() {
                           key={appointment.id}
                           className="flex items-center justify-between rounded-lg bg-background p-3"
                         >
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm">
                               {customer?.first_name} {customer?.last_name}
                             </p>
@@ -355,13 +422,68 @@ export default function Dashboard() {
                               {service?.name} • {formatTime(appointment.scheduled_start_time)}
                             </p>
                           </div>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" className="h-8 text-xs">
-                              Contact
-                            </Button>
-                            <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary-hover">
+                          <div className="flex items-center gap-2">
+                            {/* Contact Dropdown */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline" className="h-8 text-xs">
+                                  Contact
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleContact(appointment, 'phone')}>
+                                  <Phone className="mr-2 h-4 w-4" />
+                                  Call
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleContact(appointment, 'sms')}>
+                                  <MessageSquare className="mr-2 h-4 w-4" />
+                                  SMS
+                                </DropdownMenuItem>
+                                {customer?.email && (
+                                  <DropdownMenuItem onClick={() => handleContact(appointment, 'email')}>
+                                    <Mail className="mr-2 h-4 w-4" />
+                                    Email
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            
+                            {/* Confirm Button */}
+                            <Button 
+                              size="sm" 
+                              className="h-8 text-xs bg-primary hover:bg-primary-hover"
+                              onClick={() => handleConfirm(appointment.id)}
+                              disabled={updateStatus.isPending}
+                            >
                               Confirm
                             </Button>
+                            
+                            {/* More Actions */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleViewDetails(appointment)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  View / Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewDetails(appointment)}>
+                                  <CalendarClock className="mr-2 h-4 w-4" />
+                                  Reschedule
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleCancelClick(appointment.id)}
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Cancel
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       );
@@ -449,6 +571,29 @@ export default function Dashboard() {
         open={isNewAppointmentOpen} 
         onOpenChange={setIsNewAppointmentOpen} 
       />
+      <AppointmentDetailModal
+        open={isDetailModalOpen}
+        onOpenChange={setIsDetailModalOpen}
+        appointment={selectedAppointment}
+      />
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this appointment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancel} className="bg-destructive hover:bg-destructive/90">
+              Cancel Appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

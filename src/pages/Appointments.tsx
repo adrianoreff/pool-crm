@@ -12,6 +12,10 @@ import {
   ChevronUp,
   Calendar,
   Clock,
+  Eye,
+  Pencil,
+  CalendarClock,
+  Trash,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,12 +45,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useAppointments, useTodayAppointments, usePendingAppointments, useCancelAppointment } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServiceCategories } from '@/hooks/useServices';
 import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
-import { NewAppointmentModal } from '@/components/modals';
+import { NewAppointmentModal, AppointmentDetailModal } from '@/components/modals';
 
 type SortField = 'date' | 'customer' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -114,6 +128,10 @@ export default function Appointments() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithRelations | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
 
   const { data: allAppointments = [], isLoading } = useAppointments(
     statusFilter !== 'all' ? { status: statusFilter as AppointmentStatus } : undefined
@@ -191,6 +209,25 @@ export default function Appointments() {
       setSortField(field);
       setSortDirection('desc');
     }
+  };
+
+  const handleViewDetails = (apt: AppointmentWithRelations) => {
+    setSelectedAppointment(apt);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCancelClick = (aptId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAppointmentToCancel(aptId);
+    setCancelDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (appointmentToCancel) {
+      cancelMutation.mutate({ id: appointmentToCancel });
+    }
+    setCancelDialogOpen(false);
+    setAppointmentToCancel(null);
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -351,132 +388,108 @@ export default function Appointments() {
                   const service = apt.service;
                   const category = categories.find(c => c.id === service?.category_id);
                   const SourceIcon = sourceIcons[apt.source] || User;
-                  const isExpanded = expandedRow === apt.id;
 
                   return (
-                    <>
-                      <TableRow 
-                        key={apt.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => setExpandedRow(isExpanded ? null : apt.id)}
-                      >
-                        <TableCell>{getStatusBadge(apt.status)}</TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{formatDate(apt.scheduled_date)}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {formatTime(apt.scheduled_start_time)} - {formatTime(apt.scheduled_end_time)}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">
-                              {customer?.first_name} {customer?.last_name}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {customer?.phone}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              variant="outline" 
-                              style={{ 
-                                borderColor: category?.color,
-                                color: category?.color,
-                              }}
-                            >
-                              {service?.name || 'Service'}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <p className="truncate max-w-[200px] text-sm text-muted-foreground">
-                            {apt.address}
+                    <TableRow 
+                      key={apt.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleViewDetails(apt)}
+                    >
+                      <TableCell>{getStatusBadge(apt.status)}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{formatDate(apt.scheduled_date)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatTime(apt.scheduled_start_time)} - {formatTime(apt.scheduled_end_time)}
                           </p>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {technician ? (
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-7 w-7">
-                                <AvatarFallback 
-                                  className="text-xs text-white"
-                                  style={{ backgroundColor: technician.color || '#888' }}
-                                >
-                                  {technician.first_name?.[0]}{technician.last_name?.[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm">
-                                {technician.first_name} {technician.last_name}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">Unassigned</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <SourceIcon className="h-4 w-4" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">
+                            {customer?.first_name} {customer?.last_name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {customer?.phone}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            style={{ 
+                              borderColor: category?.color,
+                              color: category?.color,
+                            }}
+                          >
+                            {service?.name || 'Service'}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <p className="truncate max-w-[200px] text-sm text-muted-foreground">
+                          {apt.address}
+                        </p>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        {technician ? (
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-7 w-7">
+                              <AvatarFallback 
+                                className="text-xs text-white"
+                                style={{ backgroundColor: technician.color || '#888' }}
+                              >
+                                {technician.first_name?.[0]}{technician.last_name?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm">
+                              {technician.first_name} {technician.last_name}
+                            </span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Edit</DropdownMenuItem>
-                              <DropdownMenuItem>Reschedule</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem>Create Invoice</DropdownMenuItem>
-                              <DropdownMenuSeparator />
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Unassigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <SourceIcon className="h-4 w-4" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(apt); }}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(apt); }}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(apt); }}>
+                              <CalendarClock className="mr-2 h-4 w-4" />
+                              Reschedule
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {apt.status !== 'cancelled' && apt.status !== 'completed' && (
                               <DropdownMenuItem 
                                 className="text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  cancelMutation.mutate({ id: apt.id });
-                                }}
+                                onClick={(e) => handleCancelClick(apt.id, e)}
                               >
+                                <Trash className="mr-2 h-4 w-4" />
                                 Cancel
                               </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-
-                      {/* Expanded Row Details */}
-                      {isExpanded && (
-                        <TableRow key={`${apt.id}-expanded`}>
-                          <TableCell colSpan={8} className="bg-muted/30 p-4">
-                            <div className="grid gap-4 md:grid-cols-3">
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">Full Address</p>
-                                <p className="text-sm flex items-start gap-1">
-                                  <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                                  {apt.address}
-                                  {apt.city && `, ${apt.city}`}
-                                  {apt.state && `, ${apt.state}`}
-                                  {apt.zip_code && ` ${apt.zip_code}`}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">Customer Notes</p>
-                                <p className="text-sm">{apt.customer_notes || 'No notes'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground mb-1">Internal Notes</p>
-                                <p className="text-sm">{apt.internal_notes || 'No notes'}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               )}
@@ -485,11 +498,34 @@ export default function Appointments() {
         </CardContent>
       </Card>
 
-      {/* New Appointment Modal */}
+      {/* Modals */}
       <NewAppointmentModal 
         open={isNewAppointmentOpen} 
         onOpenChange={setIsNewAppointmentOpen} 
       />
+      <AppointmentDetailModal
+        open={isDetailModalOpen}
+        onOpenChange={setIsDetailModalOpen}
+        appointment={selectedAppointment}
+      />
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this appointment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancel} className="bg-destructive hover:bg-destructive/90">
+              Cancel Appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

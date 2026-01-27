@@ -1,0 +1,501 @@
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  Calendar as CalendarIcon,
+  User,
+  Wrench,
+  Edit,
+  X,
+  Check,
+  Loader2,
+} from 'lucide-react';
+import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
+import { useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
+import { useTechnicians } from '@/hooks/useTeam';
+import { useServices } from '@/hooks/useServices';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
+
+interface AppointmentDetailModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  appointment: AppointmentWithRelations | null;
+}
+
+const formatTime = (time: string) => {
+  const [hours, minutes] = time.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+};
+
+const getStatusStyles = (status: string) => {
+  const styles = {
+    scheduled: 'bg-info/10 text-info border-info/20',
+    in_progress: 'bg-primary/10 text-primary border-primary/20',
+    completed: 'bg-success/10 text-success border-success/20',
+    cancelled: 'bg-destructive/10 text-destructive border-destructive/20',
+    pending_confirmation: 'bg-warning/10 text-warning border-warning/20',
+    no_show: 'bg-muted text-muted-foreground border-muted',
+  };
+  const labels = {
+    scheduled: 'Scheduled',
+    in_progress: 'In Progress',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    pending_confirmation: 'Pending',
+    no_show: 'No Show',
+  };
+  return { style: styles[status as keyof typeof styles], label: labels[status as keyof typeof labels] };
+};
+
+export function AppointmentDetailModal({ open, onOpenChange, appointment }: AppointmentDetailModalProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [editData, setEditData] = useState({
+    scheduled_date: '',
+    scheduled_start_time: '',
+    scheduled_end_time: '',
+    technician_id: '',
+    service_id: '',
+    address: '',
+    internal_notes: '',
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const updateStatus = useUpdateAppointmentStatus();
+  const cancelAppointment = useCancelAppointment();
+  const { data: technicians = [] } = useTechnicians();
+  const { data: services = [] } = useServices();
+
+  if (!appointment) return null;
+
+  const customer = appointment.customer;
+  const technician = appointment.technician;
+  const service = appointment.service;
+  const statusInfo = getStatusStyles(appointment.status);
+
+  const handleStartEdit = () => {
+    setEditData({
+      scheduled_date: appointment.scheduled_date,
+      scheduled_start_time: appointment.scheduled_start_time,
+      scheduled_end_time: appointment.scheduled_end_time,
+      technician_id: appointment.technician_id || '',
+      service_id: appointment.service_id || '',
+      address: appointment.address,
+      internal_notes: appointment.internal_notes || '',
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({
+          scheduled_date: editData.scheduled_date,
+          scheduled_start_time: editData.scheduled_start_time,
+          scheduled_end_time: editData.scheduled_end_time,
+          technician_id: editData.technician_id || null,
+          service_id: editData.service_id || null,
+          address: editData.address,
+          internal_notes: editData.internal_notes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', appointment.id);
+
+      if (error) throw error;
+      
+      toast({ title: 'Appointment updated successfully' });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({ title: 'Failed to update appointment', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    updateStatus.mutate({ id: appointment.id, status: 'scheduled' });
+  };
+
+  const handleCancel = () => {
+    cancelAppointment.mutate({ id: appointment.id, reason: cancelReason });
+    setShowCancelDialog(false);
+    setCancelReason('');
+    onOpenChange(false);
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    updateStatus.mutate({ id: appointment.id, status: newStatus as AppointmentStatus });
+  };
+
+  const handleContact = (type: 'phone' | 'email') => {
+    if (type === 'phone' && customer?.phone) {
+      window.open(`tel:${customer.phone}`);
+    } else if (type === 'email' && customer?.email) {
+      window.open(`mailto:${customer.email}`);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <DialogTitle className="text-xl">
+                  Appointment Details
+                </DialogTitle>
+                <Badge variant="outline" className={cn('font-medium', statusInfo.style)}>
+                  {statusInfo.label}
+                </Badge>
+              </div>
+              {appointment.ref_code && (
+                <span className="text-sm text-muted-foreground font-mono">
+                  {appointment.ref_code}
+                </span>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Customer Info */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Customer
+              </h3>
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {customer?.first_name} {customer?.last_name}
+                    </p>
+                    <div className="flex flex-col gap-1 mt-2 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-2">
+                        <Phone className="h-3 w-3" />
+                        {customer?.phone}
+                      </span>
+                      {customer?.email && (
+                        <span className="flex items-center gap-2">
+                          <Mail className="h-3 w-3" />
+                          {customer.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => handleContact('phone')}>
+                      <Phone className="h-4 w-4 mr-1" />
+                      Call
+                    </Button>
+                    {customer?.email && (
+                      <Button size="sm" variant="outline" onClick={() => handleContact('email')}>
+                        <Mail className="h-4 w-4 mr-1" />
+                        Email
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Appointment Details */}
+            {isEditing ? (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold">Edit Appointment</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Date</Label>
+                    <Input
+                      type="date"
+                      value={editData.scheduled_date}
+                      onChange={(e) => setEditData({ ...editData, scheduled_date: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Service</Label>
+                    <Select
+                      value={editData.service_id}
+                      onValueChange={(v) => setEditData({ ...editData, service_id: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select service" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Start Time</Label>
+                    <Input
+                      type="time"
+                      value={editData.scheduled_start_time}
+                      onChange={(e) => setEditData({ ...editData, scheduled_start_time: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>End Time</Label>
+                    <Input
+                      type="time"
+                      value={editData.scheduled_end_time}
+                      onChange={(e) => setEditData({ ...editData, scheduled_end_time: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Technician</Label>
+                  <Select
+                    value={editData.technician_id}
+                    onValueChange={(v) => setEditData({ ...editData, technician_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Assign technician" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {technicians.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.first_name} {t.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Input
+                    value={editData.address}
+                    onChange={(e) => setEditData({ ...editData, address: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Internal Notes</Label>
+                  <Textarea
+                    value={editData.internal_notes}
+                    onChange={(e) => setEditData({ ...editData, internal_notes: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setIsEditing(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveEdit} disabled={isSaving}>
+                    {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4" />
+                    Schedule
+                  </h3>
+                  <Button size="sm" variant="ghost" onClick={handleStartEdit}>
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Date</p>
+                    <p className="font-medium">
+                      {new Date(appointment.scheduled_date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Time</p>
+                    <p className="font-medium">
+                      {formatTime(appointment.scheduled_start_time)} - {formatTime(appointment.scheduled_end_time)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">Address</p>
+                  <p className="font-medium flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    {appointment.address}
+                    {appointment.city && `, ${appointment.city}`}
+                    {appointment.state && `, ${appointment.state}`}
+                    {appointment.zip_code && ` ${appointment.zip_code}`}
+                  </p>
+                </div>
+
+                {service && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Service</p>
+                    <p className="font-medium flex items-center gap-2">
+                      <Wrench className="h-4 w-4 text-muted-foreground" />
+                      {service.name}
+                    </p>
+                  </div>
+                )}
+
+                {technician && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Technician</p>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback
+                          className="text-xs text-white"
+                          style={{ backgroundColor: technician.color || '#888' }}
+                        >
+                          {technician.first_name?.[0]}{technician.last_name?.[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">
+                        {technician.first_name} {technician.last_name}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {appointment.internal_notes && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Internal Notes</p>
+                    <p className="text-sm">{appointment.internal_notes}</p>
+                  </div>
+                )}
+
+                {appointment.customer_notes && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Customer Notes</p>
+                    <p className="text-sm">{appointment.customer_notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {appointment.status === 'pending_confirmation' && (
+              <Button 
+                onClick={handleConfirm} 
+                disabled={updateStatus.isPending}
+                className="bg-success hover:bg-success/90"
+              >
+                {updateStatus.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                Confirm Appointment
+              </Button>
+            )}
+            
+            {appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+              <Select onValueChange={handleStatusChange} value={appointment.status}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Change Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending_confirmation">Pending</SelectItem>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="no_show">No Show</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
+            {appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowCancelDialog(true)}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel Appointment
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this appointment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="cancel-reason">Reason (optional)</Label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Enter reason for cancellation..."
+              className="mt-2"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancel} className="bg-destructive hover:bg-destructive/90">
+              Cancel Appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
