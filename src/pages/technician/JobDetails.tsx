@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAppointment } from '@/hooks/useAppointments';
 import { useUpdateJobStatus } from '@/hooks/useUpdateJobStatus';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,8 +25,25 @@ export default function JobDetails() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { data: business } = useBusiness();
-  const { data: appointment, isLoading } = useAppointment(id || '');
+  const { data: appointment, isLoading, error } = useAppointment(id || '');
   const updateStatus = useUpdateJobStatus();
+
+  // Debug logging
+  useEffect(() => {
+    if (appointment) {
+      console.log('JobDetails - Appointment loaded:', {
+        id: appointment.id,
+        hasCustomer: !!appointment.customer,
+        customerName: appointment.customer ? `${appointment.customer.first_name} ${appointment.customer.last_name}` : 'No customer',
+        hasService: !!appointment.service,
+        serviceName: appointment.service?.name || 'No service',
+        address: appointment.address,
+      });
+    }
+    if (error) {
+      console.error('JobDetails - Error loading appointment:', error);
+    }
+  }, [appointment, error]);
 
   if (isLoading) {
     return (
