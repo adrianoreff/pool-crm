@@ -1520,6 +1520,18 @@ export type Database = {
         }
         Returns: string
       }
+      get_available_slots: {
+        Args: {
+          p_business_id: string
+          p_date: string
+          p_duration_minutes?: number
+        }
+        Returns: {
+          is_available: boolean
+          slot_time: string
+          technicians_available: string[]
+        }[]
+      }
       get_user_business_id: { Args: never; Returns: string }
       has_role: {
         Args: { required_role: Database["public"]["Enums"]["user_role"] }
