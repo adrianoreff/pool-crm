@@ -162,7 +162,7 @@ export function InviteTeamModal({ open, onOpenChange, onSuccess }: InviteTeamMod
       // If password is set, create user in Auth via Edge Function
       if (data.setPassword && data.password) {
         try {
-          const { error: createUserError } = await supabase.functions.invoke('create-team-user', {
+          const { data: createUserData, error: createUserError } = await supabase.functions.invoke('create-team-user', {
             body: {
               email: data.email.toLowerCase().trim(),
               password: data.password,
@@ -172,18 +172,26 @@ export function InviteTeamModal({ open, onOpenChange, onSuccess }: InviteTeamMod
 
           if (createUserError) {
             console.error('Error creating user:', createUserError);
-            toast({
-              title: 'Warning',
-              description: 'Invitation created but user account setup had issues. You may need to create the account manually.',
-              variant: 'destructive',
-            });
+            // Check if it's a user already exists error
+            if (createUserError.message?.includes('already registered') || createUserError.message?.includes('already exists')) {
+              // User exists, password was updated - this is OK
+              console.log('User already exists, password updated');
+            } else {
+              toast({
+                title: 'Warning',
+                description: `Invitation created but user account setup had issues: ${createUserError.message}. The user may need to use "Forgot Password" to set their password.`,
+                variant: 'destructive',
+              });
+            }
+          } else {
+            console.log('User created/updated successfully:', createUserData);
           }
         } catch (authError: any) {
           console.error('Auth error:', authError);
           // Continue with invitation even if auth creation fails
           toast({
             title: 'Warning',
-            description: 'Invitation created but user account setup had issues. You may need to create the account manually.',
+            description: `Invitation created but user account setup had issues: ${authError.message || 'Unknown error'}. The user may need to use "Forgot Password" to set their password.`,
             variant: 'destructive',
           });
         }
