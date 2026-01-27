@@ -90,19 +90,127 @@ export function useAppointment(id: string) {
 export function useUpdateAppointmentStatus() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { profile } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: AppointmentStatus }) => {
+    mutationFn: async ({ id, status, sendNotification = true }: { id: string; status: AppointmentStatus; sendNotification?: boolean }) => {
+      // Get the current appointment data first for notifications
+      const { data: appointment } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          customer:customers(id, first_name, last_name, email, phone),
+          service:services(name)
+        `)
+        .eq('id', id)
+        .single();
+
+      // Update the status
+      const updateData: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Add confirmation data if confirming
+      if (status === 'scheduled' && appointment?.status === 'pending_confirmation') {
+        updateData.confirmed_at = new Date().toISOString();
+        updateData.confirmed_by = profile?.id;
+      }
+
       const { error } = await supabase
         .from('appointments')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', id);
 
       if (error) throw error;
+
+      // Send appropriate notification based on status change
+      if (sendNotification && appointment) {
+        try {
+          // Customer confirmation email
+          if (status === 'scheduled' && appointment.status === 'pending_confirmation') {
+            await supabase.functions.invoke('send-notification', {
+              body: { type: 'appointment_confirmation', appointmentId: id },
+            });
+            console.log('Confirmation email sent to customer');
+          }
+
+          // Completed email
+          if (status === 'completed') {
+            await supabase.functions.invoke('send-notification', {
+              body: {
+                type: 'custom_email',
+                to: appointment.customer?.email,
+                toName: `${appointment.customer?.first_name} ${appointment.customer?.last_name || ''}`.trim(),
+                subject: `Service Completed - Thank You!`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: #16A34A; color: white; padding: 20px; text-align: center;">
+                      <h1 style="margin: 0;">✓ Service Completed</h1>
+                    </div>
+                    <div style="padding: 20px; background: #fff;">
+                      <p>Hi ${appointment.customer?.first_name},</p>
+                      <p>Thank you for choosing us! Your service has been completed.</p>
+                      <p>If you have any questions or need further assistance, please don't hesitate to contact us.</p>
+                      <p>We'd love to hear your feedback!</p>
+                    </div>
+                  </div>
+                `,
+                businessId: profile?.business_id,
+                emailType: 'appointment_completed',
+                recipientType: 'customer',
+                appointmentId: id,
+                customerId: appointment.customer?.id,
+              },
+            });
+            console.log('Completion email sent to customer');
+          }
+
+          // No-show notification
+          if (status === 'no_show') {
+            await supabase.functions.invoke('send-notification', {
+              body: {
+                type: 'custom_email',
+                to: appointment.customer?.email,
+                toName: `${appointment.customer?.first_name} ${appointment.customer?.last_name || ''}`.trim(),
+                subject: `Missed Appointment - Let's Reschedule`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: #6B7280; color: white; padding: 20px; text-align: center;">
+                      <h1 style="margin: 0;">Missed Appointment</h1>
+                    </div>
+                    <div style="padding: 20px; background: #fff;">
+                      <p>Hi ${appointment.customer?.first_name},</p>
+                      <p>We're sorry we missed you for your scheduled appointment on ${appointment.scheduled_date}.</p>
+                      <p>Please contact us to reschedule at your earliest convenience.</p>
+                    </div>
+                  </div>
+                `,
+                businessId: profile?.business_id,
+                emailType: 'appointment_no_show',
+                recipientType: 'customer',
+                appointmentId: id,
+                customerId: appointment.customer?.id,
+              },
+            });
+            console.log('No-show email sent to customer');
+          }
+        } catch (emailError) {
+          console.error('Failed to send status notification:', emailError);
+        }
+      }
+
+      return { id, status };
     },
-    onSuccess: () => {
+    onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
-      toast({ title: 'Status updated successfully' });
+      const statusLabels: Record<string, string> = {
+        scheduled: 'Appointment confirmed',
+        in_progress: 'Appointment in progress',
+        completed: 'Appointment completed',
+        no_show: 'Marked as no-show',
+      };
+      toast({ title: statusLabels[status] || 'Status updated successfully' });
     },
     onError: (error) => {
       toast({ title: 'Failed to update status', description: error.message, variant: 'destructive' });
@@ -117,6 +225,18 @@ export function useCancelAppointment() {
 
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      // Get appointment data first for notifications
+      const { data: appointment } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          customer:customers(id, first_name, last_name, email, phone),
+          service:services(name),
+          business:businesses(id, name, phone, email)
+        `)
+        .eq('id', id)
+        .single();
+
       const { error } = await supabase
         .from('appointments')
         .update({ 
@@ -129,6 +249,61 @@ export function useCancelAppointment() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Send cancellation emails
+      if (appointment) {
+        try {
+          // Customer cancellation email
+          await supabase.functions.invoke('send-notification', {
+            body: { type: 'appointment_cancelled', appointmentId: id },
+          });
+          console.log('Cancellation email sent to customer');
+
+          // Admin cancellation notification
+          const { data: recipients } = await supabase
+            .from('notification_recipients')
+            .select('email, name')
+            .eq('business_id', profile?.business_id)
+            .eq('is_active', true)
+            .eq('notify_cancellation', true);
+
+          if (recipients && recipients.length > 0) {
+            for (const recipient of recipients) {
+              await supabase.functions.invoke('send-notification', {
+                body: {
+                  type: 'custom_email',
+                  to: recipient.email,
+                  toName: recipient.name || 'Admin',
+                  subject: `Appointment Cancelled - ${appointment.ref_code || id}`,
+                  html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                      <div style="background: #DC2626; color: white; padding: 20px; text-align: center;">
+                        <h1 style="margin: 0;">❌ Appointment Cancelled</h1>
+                      </div>
+                      <div style="padding: 20px; background: #fff;">
+                        <p><strong>Customer:</strong> ${appointment.customer?.first_name} ${appointment.customer?.last_name || ''}</p>
+                        <p><strong>Phone:</strong> ${appointment.customer?.phone || 'N/A'}</p>
+                        <p><strong>Reference:</strong> ${appointment.ref_code || 'N/A'}</p>
+                        <p><strong>Service:</strong> ${appointment.service?.name || 'N/A'}</p>
+                        <p><strong>Date:</strong> ${appointment.scheduled_date}</p>
+                        <p><strong>Time:</strong> ${appointment.scheduled_start_time} - ${appointment.scheduled_end_time}</p>
+                        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                      </div>
+                    </div>
+                  `,
+                  businessId: profile?.business_id,
+                  emailType: 'admin_appointment_cancelled',
+                  recipientType: 'admin',
+                  appointmentId: id,
+                },
+              });
+            }
+            console.log('Cancellation notifications sent to admins');
+          }
+        } catch (emailError) {
+          console.error('Failed to send cancellation emails:', emailError);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });

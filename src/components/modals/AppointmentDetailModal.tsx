@@ -130,13 +130,20 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
   const handleSaveEdit = async () => {
     setIsSaving(true);
     try {
+      // Store old values for email notifications
+      const oldDate = appointment.scheduled_date;
+      const oldStartTime = appointment.scheduled_start_time;
+      const oldEndTime = appointment.scheduled_end_time;
+      const dateChanged = editData.scheduled_date !== oldDate;
+      const timeChanged = editData.scheduled_start_time !== oldStartTime || editData.scheduled_end_time !== oldEndTime;
+      
       const { error } = await supabase
         .from('appointments')
         .update({
           scheduled_date: editData.scheduled_date,
           scheduled_start_time: editData.scheduled_start_time,
           scheduled_end_time: editData.scheduled_end_time,
-          technician_id: editData.technician_id || null,
+          technician_id: editData.technician_id === 'none' ? null : (editData.technician_id || null),
           service_id: editData.service_id || null,
           address: editData.address,
           internal_notes: editData.internal_notes,
@@ -146,7 +153,65 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
 
       if (error) throw error;
       
-      toast({ title: 'Appointment updated successfully' });
+      // Send reschedule notifications if date or time changed
+      if (dateChanged || timeChanged) {
+        try {
+          // Send reschedule email to customer
+          await supabase.functions.invoke('send-notification', {
+            body: { type: 'appointment_rescheduled', appointmentId: appointment.id },
+          });
+          console.log('Reschedule email sent to customer');
+
+          // Send admin notification for reschedule
+          const { data: recipients } = await supabase
+            .from('notification_recipients')
+            .select('email, name')
+            .eq('business_id', appointment.business_id)
+            .eq('is_active', true);
+
+          if (recipients && recipients.length > 0) {
+            for (const recipient of recipients) {
+              await supabase.functions.invoke('send-notification', {
+                body: {
+                  type: 'custom_email',
+                  to: recipient.email,
+                  toName: recipient.name || 'Admin',
+                  subject: `Appointment Rescheduled - ${appointment.ref_code || appointment.id}`,
+                  html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                      <div style="background: #2563EB; color: white; padding: 20px; text-align: center;">
+                        <h1 style="margin: 0;">📅 Appointment Rescheduled</h1>
+                      </div>
+                      <div style="padding: 20px; background: #fff;">
+                        <p><strong>Customer:</strong> ${appointment.customer?.first_name} ${appointment.customer?.last_name || ''}</p>
+                        <p><strong>Reference:</strong> ${appointment.ref_code || 'N/A'}</p>
+                        <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                          <p style="margin: 0;"><strong>Previous:</strong> ${oldDate} at ${oldStartTime} - ${oldEndTime}</p>
+                        </div>
+                        <div style="background: #D1FAE5; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                          <p style="margin: 0;"><strong>New:</strong> ${editData.scheduled_date} at ${editData.scheduled_start_time} - ${editData.scheduled_end_time}</p>
+                        </div>
+                      </div>
+                    </div>
+                  `,
+                  businessId: appointment.business_id,
+                  emailType: 'admin_appointment_rescheduled',
+                  recipientType: 'admin',
+                  appointmentId: appointment.id,
+                },
+              });
+            }
+            console.log('Reschedule notifications sent to admins');
+          }
+        } catch (emailError) {
+          console.error('Failed to send reschedule notifications:', emailError);
+        }
+        
+        toast({ title: 'Appointment rescheduled and notifications sent' });
+      } else {
+        toast({ title: 'Appointment updated successfully' });
+      }
+      
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       setIsEditing(false);
     } catch (error: any) {
