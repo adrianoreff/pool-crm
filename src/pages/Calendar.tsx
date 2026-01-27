@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -123,9 +124,19 @@ function calculateOverlaps(appointments: AppointmentWithRelations[]): Map<string
 }
 
 export default function CalendarPage() {
+  const [searchParams] = useSearchParams();
+  const technicianIdFromUrl = searchParams.get('technicianId');
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<ViewType>('week');
-  const [selectedTechnician, setSelectedTechnician] = useState<string>('all');
+  const [selectedTechnician, setSelectedTechnician] = useState<string>(technicianIdFromUrl || 'all');
+  
+  // Update selectedTechnician when URL param changes
+  useEffect(() => {
+    if (technicianIdFromUrl) {
+      setSelectedTechnician(technicianIdFromUrl);
+    }
+  }, [technicianIdFromUrl]);
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithRelations | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);

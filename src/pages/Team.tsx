@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Plus, 
   MoreHorizontal,
@@ -11,6 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -169,6 +170,45 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
 }
 
 function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserType | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (member) {
+      setFirstName(member.first_name || '');
+      setLastName(member.last_name || '');
+      setPhone(member.phone || '');
+    }
+  }, [member]);
+
+  const handleSave = async () => {
+    if (!member) return;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          first_name: firstName.trim() || null,
+          last_name: lastName.trim() || null,
+          phone: phone.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', member.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Success', description: 'Profile updated successfully' });
+      setIsEditing(false);
+      queryClient.invalidateQueries({ queryKey: ['team'] });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
   if (!member) return null;
 
   return (
@@ -187,27 +227,77 @@ function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserTy
                 {getInitials(member.first_name, member.last_name)}
               </AvatarFallback>
             </Avatar>
-            <div>
-              <h2 className="text-xl font-semibold">{member.first_name} {member.last_name}</h2>
-              <Badge variant="outline" className={cn('capitalize', roleStyles[member.role])}>
-                {member.role}
-              </Badge>
+            <div className="flex-1">
+              {isEditing ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="First Name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Last Name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <h2 className="text-xl font-semibold">{member.first_name || ''} {member.last_name || ''}</h2>
+                  <Badge variant="outline" className={cn('capitalize mt-1', roleStyles[member.role])}>
+                    {member.role}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
           
           <div className="space-y-4">
             <div>
-              <h3 className="text-sm font-semibold mb-2">Contact Information</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold">Contact Information</h3>
+                {!isEditing ? (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setIsEditing(false);
+                      setFirstName(member.first_name || '');
+                      setLastName(member.last_name || '');
+                      setPhone(member.phone || '');
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave}>
+                      Save
+                    </Button>
+                  </div>
+                )}
+              </div>
               <Card>
-                <CardContent className="p-4 space-y-2">
-                  <p className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    {member.email}
-                  </p>
-                  <p className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    {member.phone || 'No phone'}
-                  </p>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm">{member.email}</span>
+                  </div>
+                  {isEditing ? (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <Input
+                        placeholder="Phone number"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm">{member.phone || 'No phone'}</span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -233,10 +323,11 @@ export default function Team() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Count jobs per technician
+  // Count jobs per technician - include all statuses except cancelled
   const jobsByTechnician = todayAppointments.reduce((acc, apt) => {
     if (apt.technician_id && apt.status !== 'cancelled') {
-      acc[apt.technician_id] = (acc[apt.technician_id] || 0) + 1;
+      const techId = apt.technician_id;
+      acc[techId] = (acc[techId] || 0) + 1;
     }
     return acc;
   }, {} as Record<string, number>);
@@ -263,7 +354,7 @@ export default function Team() {
 
   const handleViewSchedule = (member: UserType) => {
     // Navigate to calendar filtered by this technician
-    toast({ title: 'View Schedule', description: `Viewing schedule for ${member.first_name}` });
+    window.location.href = `/calendar?technicianId=${member.id}`;
   };
 
   const handleDeactivate = async () => {

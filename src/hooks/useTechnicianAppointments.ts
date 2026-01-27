@@ -42,7 +42,17 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching technician appointments:', error);
+        throw error;
+      }
+      
+      console.log('Technician appointments fetched:', {
+        technicianId,
+        count: data?.length || 0,
+        appointments: data?.map(a => ({ id: a.id, date: a.scheduled_date, status: a.status }))
+      });
+      
       return data as AppointmentWithRelations[];
     },
     enabled: !!technicianId,
