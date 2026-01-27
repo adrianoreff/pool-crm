@@ -136,31 +136,61 @@ Deno.serve(async (req: Request) => {
     }
 
     switch (message.type) {
-      case "call-start": {
+      case "call-start":
+      case "call-started": {
+        console.log("Processing call-started event");
+        const call = message.call || payload.call;
+        const callId = call?.id;
+        const callerPhone = call?.customer?.number || call?.phoneNumber?.number || "unknown";
+        
+        if (!callId) {
+          console.error("No call ID found in call-started event");
+          return new Response(JSON.stringify({ success: false, error: "No call ID" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Check if call log already exists
+        const { data: existingLog } = await supabase
+          .from("call_logs")
+          .select("id")
+          .eq("vapi_call_id", callId)
+          .maybeSingle();
+
+        if (existingLog) {
+          console.log("Call log already exists for:", callId);
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const { data: callLog, error } = await supabase
           .from("call_logs")
           .insert({
             business_id: businessId,
-            vapi_call_id: message.call!.id,
-            vapi_assistant_id: message.call!.assistantId,
-            caller_phone: message.call!.customer?.number || "unknown",
-            started_at: message.call!.startedAt || new Date().toISOString(),
+            vapi_call_id: callId,
+            vapi_assistant_id: assistantId,
+            caller_phone: callerPhone,
+            started_at: call?.startedAt || new Date().toISOString(),
+            vapi_data: call,
           })
           .select()
           .single();
 
         if (error) {
           console.error("Error creating call log:", error);
+        } else {
+          console.log("Created call log:", callLog?.id);
         }
 
         // Try to match existing customer
-        if (callLog && message.call!.customer?.number) {
+        if (callLog && callerPhone !== "unknown") {
           const { data: customer } = await supabase
             .from("customers")
             .select("id")
             .eq("business_id", businessId)
-            .eq("phone", message.call!.customer.number)
-            .single();
+            .eq("phone", callerPhone)
+            .maybeSingle();
 
           if (customer) {
             await supabase
@@ -175,26 +205,90 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      case "call-end": {
-        const call = message.call!;
-        const durationSeconds = call.endedAt && call.startedAt
+      case "call-end":
+      case "end-of-call-report": {
+        console.log("Processing end-of-call-report event");
+        
+        // VAPI sends end-of-call-report with different structure
+        const call = message.call || payload.call;
+        const callId = call?.id;
+        
+        if (!callId) {
+          console.error("No call ID found in end-of-call-report");
+          return new Response(JSON.stringify({ success: false, error: "No call ID" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Extract data from the report
+        const artifact = message.artifact || {};
+        const analysis = message.analysis || {};
+        const durationSeconds = call?.endedAt && call?.startedAt
           ? Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000)
-          : null;
+          : (message.durationSeconds || message.duration || null);
 
-        const { error } = await supabase
+        // Determine outcome
+        let outcome: string = "no_action";
+        const summary = (artifact.summary || message.summary || "").toLowerCase();
+        const successEval = analysis.successEvaluation?.toLowerCase();
+        
+        if (successEval === "true" || summary.includes("booked") || summary.includes("scheduled")) {
+          outcome = "booked";
+        } else if (summary.includes("reschedule")) {
+          outcome = "rescheduled";
+        } else if (summary.includes("cancel")) {
+          outcome = "cancelled";
+        } else if (summary.includes("question") || summary.includes("inquiry") || summary.includes("info")) {
+          outcome = "faq_answered";
+        }
+
+        // Check if call log exists, create if not (VAPI might not send call-started)
+        const { data: existingLog } = await supabase
           .from("call_logs")
-          .update({
-            ended_at: call.endedAt || new Date().toISOString(),
-            duration_seconds: durationSeconds,
-            transcript: call.transcript,
-            summary: call.summary,
-            recording_url: call.recordingUrl,
-            processed_at: new Date().toISOString(),
-          })
-          .eq("vapi_call_id", call.id);
+          .select("id")
+          .eq("vapi_call_id", callId)
+          .maybeSingle();
 
-        if (error) {
-          console.error("Error updating call log:", error);
+        if (!existingLog) {
+          console.log("Creating call log from end-of-call-report:", callId);
+          const callerPhone = call?.customer?.number || call?.phoneNumber?.number || "unknown";
+          
+          await supabase.from("call_logs").insert({
+            business_id: businessId,
+            vapi_call_id: callId,
+            vapi_assistant_id: assistantId,
+            caller_phone: callerPhone,
+            started_at: call?.startedAt || new Date().toISOString(),
+            ended_at: call?.endedAt || new Date().toISOString(),
+            duration_seconds: durationSeconds,
+            transcript: artifact.transcript || message.transcript,
+            summary: artifact.summary || message.summary,
+            recording_url: artifact.recordingUrl || message.recordingUrl,
+            outcome: outcome,
+            processed_at: new Date().toISOString(),
+            vapi_data: { call, artifact, analysis },
+          });
+        } else {
+          // Update existing log
+          const { error } = await supabase
+            .from("call_logs")
+            .update({
+              ended_at: call?.endedAt || new Date().toISOString(),
+              duration_seconds: durationSeconds,
+              transcript: artifact.transcript || message.transcript,
+              summary: artifact.summary || message.summary,
+              recording_url: artifact.recordingUrl || message.recordingUrl,
+              outcome: outcome,
+              processed_at: new Date().toISOString(),
+              vapi_data: { call, artifact, analysis },
+            })
+            .eq("vapi_call_id", callId);
+
+          if (error) {
+            console.error("Error updating call log:", error);
+          } else {
+            console.log("Updated call log for:", callId);
+          }
         }
 
         return new Response(JSON.stringify({ success: true }), {
@@ -342,17 +436,42 @@ async function handleBookAppointment(
   params: Record<string, any>
 ): Promise<Record<string, any>> {
   try {
+    console.log("handleBookAppointment called with params:", params);
+    
     // Find or create customer
     let customerId: string;
     const { data: existingCustomer } = await supabase
       .from("customers")
-      .select("id")
+      .select("id, email")
       .eq("business_id", businessId)
       .eq("phone", params.customer_phone)
-      .single();
+      .maybeSingle();
 
     if (existingCustomer) {
       customerId = existingCustomer.id;
+      
+      // Update customer email if provided and not already set
+      if (params.customer_email && !existingCustomer.email) {
+        console.log("Updating customer email:", params.customer_email);
+        await supabase
+          .from("customers")
+          .update({ 
+            email: params.customer_email,
+            address: params.address || undefined,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", customerId);
+      } else if (params.customer_email && existingCustomer.email !== params.customer_email) {
+        // Update if email changed
+        console.log("Updating customer email from", existingCustomer.email, "to", params.customer_email);
+        await supabase
+          .from("customers")
+          .update({ 
+            email: params.customer_email,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", customerId);
+      }
     } else {
       const nameParts = (params.customer_name || "").split(" ");
       const firstName = nameParts[0] || "Unknown";
@@ -373,9 +492,11 @@ async function handleBookAppointment(
         .single();
 
       if (customerError || !newCustomer) {
+        console.error("Customer creation error:", customerError);
         return { success: false, message: "Failed to create customer record" };
       }
       customerId = newCustomer.id;
+      console.log("Created new customer:", customerId);
     }
 
     // Find service
@@ -384,7 +505,7 @@ async function handleBookAppointment(
       .select("id, duration_max")
       .eq("business_id", businessId)
       .ilike("name", `%${params.service_name}%`)
-      .single();
+      .maybeSingle();
 
     // Calculate end time
     const duration = service?.duration_max ?? 60;
@@ -398,7 +519,28 @@ async function handleBookAppointment(
       .from("call_logs")
       .select("id")
       .eq("vapi_call_id", callId)
-      .single();
+      .maybeSingle();
+
+    // Check for existing appointment to prevent duplicates
+    const { data: existingAppointment } = await supabase
+      .from("appointments")
+      .select("id, ref_code")
+      .eq("business_id", businessId)
+      .eq("customer_id", customerId)
+      .eq("scheduled_date", params.date)
+      .eq("scheduled_start_time", startTime)
+      .neq("status", "cancelled")
+      .maybeSingle();
+
+    if (existingAppointment) {
+      console.log("Appointment already exists:", existingAppointment.ref_code);
+      return {
+        success: true,
+        message: `You already have an appointment scheduled. Your reference number is ${existingAppointment.ref_code}.`,
+        reference_code: existingAppointment.ref_code,
+        already_exists: true,
+      };
+    }
 
     // Create appointment
     const { data: appointment, error: appointmentError } = await supabase
@@ -423,6 +565,8 @@ async function handleBookAppointment(
       console.error("Appointment creation error:", appointmentError);
       return { success: false, message: "Failed to create appointment" };
     }
+    
+    console.log("Created appointment:", appointment.ref_code);
 
     // Update call log with outcome
     if (callLog) {
