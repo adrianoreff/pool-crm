@@ -59,7 +59,7 @@ import { cn } from '@/lib/utils';
 import { useCustomers, useCustomerAppointments, useDeleteCustomer } from '@/hooks/useCustomers';
 import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
 import { CustomerWithAddresses } from '@/types/database';
-import { AddCustomerModal, EditCustomerModal } from '@/components/modals';
+import { AddCustomerModal, EditCustomerModal, SendEmailModal } from '@/components/modals';
 import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 
 const formatCurrency = (amount: number | null) => {
@@ -83,17 +83,13 @@ const getInitials = (firstName: string, lastName: string | null) => {
   return `${firstName[0]}${lastName?.[0] || ''}`.toUpperCase();
 };
 
-function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: CustomerWithAddresses; onClose: () => void; onEdit: () => void }) {
+function CustomerDetailPanel({ customer, onClose, onEdit, onSendEmail }: { customer: CustomerWithAddresses; onClose: () => void; onEdit: () => void; onSendEmail: () => void }) {
   const { data: appointments = [], isLoading } = useCustomerAppointments(customer.id);
   const { data: emailLogs = [], isLoading: emailsLoading } = useCustomerEmailLogs(customer.id);
   const primaryAddress = customer.customer_addresses?.find(a => a.is_primary) || customer.customer_addresses?.[0];
 
-  const handleContact = (type: 'phone' | 'email') => {
-    if (type === 'phone') {
-      window.open(`tel:${customer.phone}`);
-    } else if (type === 'email' && customer.email) {
-      window.open(`mailto:${customer.email}`);
-    }
+  const handleCall = () => {
+    window.open(`tel:${customer.phone}`);
   };
 
   const formatEmailDate = (dateStr: string | null) => {
@@ -207,7 +203,7 @@ function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: Customer
                         <Phone className="h-4 w-4 text-muted-foreground" />
                         <span>{customer.phone}</span>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleContact('phone')}>Call</Button>
+                      <Button variant="ghost" size="sm" onClick={handleCall}>Call</Button>
                     </div>
                     <Separator />
                     <div className="flex items-center justify-between">
@@ -215,16 +211,36 @@ function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: Customer
                         <Mail className="h-4 w-4 text-muted-foreground" />
                         <span className="truncate">{customer.email || 'No email'}</span>
                       </div>
-                      <Button variant="ghost" size="sm" disabled={!customer.email} onClick={() => handleContact('email')}>Email</Button>
+                      <Button variant="ghost" size="sm" disabled={!customer.email} onClick={onSendEmail}>Email</Button>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Addresses */}
+              {/* Address - Direct from customer record */}
+              {(customer.address || customer.city || customer.state || customer.zip_code) && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3">Primary Address</h3>
+                  <Card className="shadow-card">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          {customer.address && <p className="font-medium">{customer.address}</p>}
+                          <p className="text-sm text-muted-foreground">
+                            {[customer.city, customer.state, customer.zip_code].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Additional Addresses - From customer_addresses table */}
               {customer.customer_addresses && customer.customer_addresses.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold mb-3">Addresses</h3>
+                  <h3 className="text-sm font-semibold mb-3">Service Addresses</h3>
                   <div className="space-y-2">
                     {customer.customer_addresses.map((address) => (
                       <Card key={address.id} className="shadow-card">
@@ -369,6 +385,8 @@ export default function Customers() {
   const [customerToEdit, setCustomerToEdit] = useState<CustomerWithAddresses | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState<{ id: string; name: string; email: string } | null>(null);
 
   const { data: customers = [], isLoading } = useCustomers({
     search: searchQuery,
@@ -397,13 +415,20 @@ export default function Customers() {
     setSelectedCustomer(null);
   };
 
-  const handleContact = (customer: CustomerWithAddresses, type: 'phone' | 'email', e: React.MouseEvent) => {
+  const handleSendEmail = (customer: CustomerWithAddresses, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!customer.email) return;
+    setEmailRecipient({
+      id: customer.id,
+      name: `${customer.first_name} ${customer.last_name || ''}`.trim(),
+      email: customer.email,
+    });
+    setIsEmailModalOpen(true);
+  };
+
+  const handleCall = (customer: CustomerWithAddresses, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (type === 'phone') {
-      window.open(`tel:${customer.phone}`);
-    } else if (type === 'email' && customer.email) {
-      window.open(`mailto:${customer.email}`);
-    }
+    window.open(`tel:${customer.phone}`);
   };
 
   return (
@@ -564,12 +589,12 @@ export default function Customers() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={(e) => handleContact(customer, 'phone', e)}>
+                            <DropdownMenuItem onClick={(e) => handleCall(customer, e)}>
                               <Phone className="mr-2 h-4 w-4" />
                               Call
                             </DropdownMenuItem>
                             {customer.email && (
-                              <DropdownMenuItem onClick={(e) => handleContact(customer, 'email', e)}>
+                              <DropdownMenuItem onClick={(e) => handleSendEmail(customer, e)}>
                                 <Mail className="mr-2 h-4 w-4" />
                                 Email
                               </DropdownMenuItem>
@@ -611,6 +636,7 @@ export default function Customers() {
               customer={selectedCustomer} 
               onClose={() => setSelectedCustomer(null)}
               onEdit={() => handleEditCustomer(selectedCustomer)}
+              onSendEmail={() => handleSendEmail(selectedCustomer)}
             />
           )}
         </SheetContent>
@@ -626,6 +652,18 @@ export default function Customers() {
         onOpenChange={setIsEditCustomerOpen}
         customer={customerToEdit}
       />
+
+      {/* Email Modal */}
+      {emailRecipient && (
+        <SendEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => {
+            setIsEmailModalOpen(false);
+            setEmailRecipient(null);
+          }}
+          recipient={emailRecipient}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

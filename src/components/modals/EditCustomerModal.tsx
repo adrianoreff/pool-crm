@@ -27,6 +27,10 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
     phone: '',
     email: '',
     notes: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
   });
 
   const updateCustomer = useUpdateCustomer();
@@ -39,6 +43,10 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
         phone: customer.phone || '',
         email: customer.email || '',
         notes: customer.notes || '',
+        address: customer.address || '',
+        city: customer.city || '',
+        state: customer.state || '',
+        zip_code: customer.zip_code || '',
       });
     }
   }, [customer]);
@@ -106,6 +114,47 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="address">Address</Label>
+            <Input
+              id="address"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="123 Main St"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                placeholder="San Diego"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                value={formData.state}
+                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                placeholder="CA"
+                maxLength={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="zip_code">ZIP Code</Label>
+              <Input
+                id="zip_code"
+                value={formData.zip_code}
+                onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                placeholder="92101"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
