@@ -7,3 +7,4 @@ export { AddServiceAreaModal } from './AddServiceAreaModal';
 export { AppointmentDetailModal } from './AppointmentDetailModal';
 export { EditCustomerModal } from './EditCustomerModal';
 export { EditServiceAreaModal } from './EditServiceAreaModal';
+export { SendEmailModal } from './SendEmailModal';

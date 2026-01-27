@@ -693,6 +693,110 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          appointment_id: string | null
+          bounced_at: string | null
+          business_id: string
+          clicked_at: string | null
+          created_at: string | null
+          customer_id: string | null
+          delivered_at: string | null
+          email_type: string
+          error_message: string | null
+          failed_at: string | null
+          id: string
+          metadata: Json | null
+          opened_at: string | null
+          recipient_email: string
+          recipient_name: string | null
+          recipient_type: string
+          resend_id: string | null
+          sent_at: string | null
+          status: string | null
+          subject: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          appointment_id?: string | null
+          bounced_at?: string | null
+          business_id: string
+          clicked_at?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          delivered_at?: string | null
+          email_type: string
+          error_message?: string | null
+          failed_at?: string | null
+          id?: string
+          metadata?: Json | null
+          opened_at?: string | null
+          recipient_email: string
+          recipient_name?: string | null
+          recipient_type: string
+          resend_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          appointment_id?: string | null
+          bounced_at?: string | null
+          business_id?: string
+          clicked_at?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          delivered_at?: string | null
+          email_type?: string
+          error_message?: string | null
+          failed_at?: string | null
+          id?: string
+          metadata?: Json | null
+          opened_at?: string | null
+          recipient_email?: string
+          recipient_name?: string | null
+          recipient_type?: string
+          resend_id?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_items: {
         Row: {
           description: string
