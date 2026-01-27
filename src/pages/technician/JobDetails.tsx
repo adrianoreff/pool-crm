@@ -215,31 +215,37 @@ export default function JobDetails() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="font-semibold text-lg">
-            {appointment.customer?.first_name} {appointment.customer?.last_name}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {appointment.customer?.phone && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(`tel:${appointment.customer?.phone}`, '_self')}
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                {appointment.customer.phone}
-              </Button>
-            )}
-            {appointment.customer?.email && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(`mailto:${appointment.customer?.email}`, '_self')}
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Email
-              </Button>
-            )}
-          </div>
+          {appointment.customer ? (
+            <>
+              <div className="font-semibold text-lg">
+                {appointment.customer.first_name || ''} {appointment.customer.last_name || ''}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {appointment.customer.phone && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`tel:${appointment.customer?.phone}`, '_self')}
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    {appointment.customer.phone}
+                  </Button>
+                )}
+                {appointment.customer.email && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`mailto:${appointment.customer?.email}`, '_self')}
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Email
+                  </Button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="text-muted-foreground">Customer information not available</div>
+          )}
         </CardContent>
       </Card>
 
@@ -253,10 +259,12 @@ export default function JobDetails() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <div>{appointment.address}</div>
-            <div className="text-sm text-muted-foreground">
-              {appointment.city}, {appointment.state} {appointment.zip_code}
-            </div>
+            <div className="font-medium">{appointment.address || 'Address not provided'}</div>
+            {(appointment.city || appointment.state || appointment.zip_code) && (
+              <div className="text-sm text-muted-foreground">
+                {appointment.city}{appointment.city && appointment.state ? ', ' : ''} {appointment.state} {appointment.zip_code}
+              </div>
+            )}
           </div>
           <Button
             variant="outline"
