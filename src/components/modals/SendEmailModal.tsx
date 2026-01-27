@@ -54,7 +54,7 @@ interface EmailTemplate {
   name: string;
   description: string;
   icon: React.ElementType;
-  color: string;
+  colorClassName: string;
   requiresAppointment: boolean;
 }
 
@@ -64,7 +64,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Appointment Confirmation',
     description: 'Confirm appointment details with the customer',
     icon: CheckCircle2,
-    color: 'text-green-600 bg-green-50',
+    colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: true,
   },
   {
@@ -72,7 +72,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Reminder (24 hours)',
     description: 'Remind customer about appointment tomorrow',
     icon: Clock,
-    color: 'text-blue-600 bg-blue-50',
+    colorClassName: 'text-accent-foreground bg-accent/40',
     requiresAppointment: true,
   },
   {
@@ -80,7 +80,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Reminder (1 hour)',
     description: 'Final reminder before appointment',
     icon: Bell,
-    color: 'text-blue-600 bg-blue-50',
+    colorClassName: 'text-accent-foreground bg-accent/40',
     requiresAppointment: true,
   },
   {
@@ -88,7 +88,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Appointment Rescheduled',
     description: 'Notify about appointment date/time change',
     icon: Calendar,
-    color: 'text-orange-600 bg-orange-50',
+    colorClassName: 'text-secondary-foreground bg-secondary',
     requiresAppointment: true,
   },
   {
@@ -96,7 +96,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Appointment Cancelled',
     description: 'Confirm appointment cancellation',
     icon: XCircle,
-    color: 'text-red-600 bg-red-50',
+    colorClassName: 'text-destructive bg-destructive/10',
     requiresAppointment: true,
   },
   {
@@ -104,7 +104,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Technician En Route',
     description: 'Let customer know technician is on the way',
     icon: Truck,
-    color: 'text-green-600 bg-green-50',
+    colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: true,
   },
   {
@@ -112,7 +112,7 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Service Completed',
     description: 'Thank customer after service completion',
     icon: Star,
-    color: 'text-yellow-600 bg-yellow-50',
+    colorClassName: 'text-primary bg-primary/10',
     requiresAppointment: true,
   },
   {
@@ -120,8 +120,9 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     name: 'Request Received',
     description: 'Confirm booking request was received',
     icon: FileText,
-    color: 'text-purple-600 bg-purple-50',
-    requiresAppointment: true,
+    colorClassName: 'text-muted-foreground bg-muted',
+    // IMPORTANT: this email is also useful for a lead/customer WITHOUT an appointment yet
+    requiresAppointment: false,
   },
 ];
 
@@ -134,6 +135,8 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
   const [isSending, setIsSending] = useState(false);
   const [appointment, setAppointment] = useState<any>(null);
   const [loadingAppointment, setLoadingAppointment] = useState(false);
+  const [leadServiceName, setLeadServiceName] = useState('');
+  const [leadRequestedDate, setLeadRequestedDate] = useState('');
 
   // Load appointment data - if appointmentId is provided, use it; otherwise fetch latest for customer
   useEffect(() => {
@@ -146,7 +149,7 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
             *,
             customer:customers(*),
             service:services(*),
-            technician:users(*)
+            technician:users!appointments_technician_id_fkey(*)
           `);
 
         if (appointmentId) {
@@ -191,8 +194,13 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
       return;
     }
 
-    if (!appointment) {
-      toast.error('Appointment data not loaded. Please try again.');
+    // Some templates can be sent without an appointment (e.g. lead/customer initial contact)
+    const templateMeta = EMAIL_TEMPLATES.find((t) => t.id === selectedTemplate);
+    const requiresAppointment = templateMeta?.requiresAppointment ?? true;
+    const canSendWithoutAppointment = selectedTemplate === 'appointment_request_received';
+
+    if (!appointment && requiresAppointment && !canSendWithoutAppointment) {
+      toast.error('This template requires an appointment.');
       return;
     }
 
@@ -236,7 +244,24 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
           result = await EmailService.sendAppointmentCompleted(appointment, businessData);
           break;
         case 'appointment_request_received':
-          result = await EmailService.sendAppointmentRequestReceived(appointment, businessData);
+          if (appointment) {
+            result = await EmailService.sendAppointmentRequestReceived(appointment, businessData);
+          } else {
+            if (!leadServiceName.trim() || !leadRequestedDate.trim()) {
+              toast.error('Please fill service and requested date');
+              setIsSending(false);
+              return;
+            }
+
+            result = await EmailService.sendAppointmentRequestReceivedLead({
+              to: recipient.email,
+              toName: recipient.name,
+              customerId: recipient.id,
+              serviceName: leadServiceName.trim(),
+              requestedDate: leadRequestedDate.trim(),
+              business: businessData,
+            });
+          }
           break;
         default:
           throw new Error('Unknown template');
@@ -302,19 +327,12 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
       setSubject('');
       setMessage('');
       setActiveTab('templates');
+      setLeadServiceName('');
+      setLeadRequestedDate('');
     }
   };
 
-  // Filter templates based on whether we have appointment data
-  const availableTemplates = EMAIL_TEMPLATES.filter(template => {
-    if (template.requiresAppointment && !appointment) {
-      return false;
-    }
-    return true;
-  });
-
-  // Templates are available if we have an appointment (either passed or fetched for customer)
-  const hasAppointmentTemplates = !!appointment && availableTemplates.length > 0;
+  const templates = EMAIL_TEMPLATES;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -347,7 +365,7 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
 
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="templates" disabled={!hasAppointmentTemplates}>
+              <TabsTrigger value="templates">
                 <FileText className="h-4 w-4 mr-2" />
                 Email Templates
               </TabsTrigger>
@@ -362,27 +380,38 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : hasAppointmentTemplates ? (
+              ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {availableTemplates.map((template) => {
+                  {templates.map((template) => {
                     const Icon = template.icon;
                     const isSelected = selectedTemplate === template.id;
-                    
+                    const isEnabled = !template.requiresAppointment || !!appointment;
+
                     return (
                       <Card
                         key={template.id}
-                        className={`cursor-pointer transition-all hover:border-primary ${
+                        className={`transition-all hover:border-primary ${
                           isSelected ? 'border-primary ring-2 ring-primary/20' : ''
-                        }`}
-                        onClick={() => setSelectedTemplate(template.id)}
+                        } ${isEnabled ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                        onClick={() => {
+                          if (!isEnabled) return;
+                          setSelectedTemplate(template.id);
+                        }}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg ${template.color}`}>
+                            <div className={`p-2 rounded-lg ${template.colorClassName}`}>
                               <Icon className="h-5 w-5" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm">{template.name}</div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-medium text-sm">{template.name}</div>
+                                {!isEnabled && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Requires appointment
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {template.description}
                               </div>
@@ -395,25 +424,44 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
                       </Card>
                     );
                   })}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {loadingAppointment 
-                      ? 'Loading appointment data...' 
-                      : 'No appointments found for this customer.'}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Templates require an appointment. You can write a custom email instead.
-                  </p>
-                  <Button 
-                    variant="outline" 
-                    className="mt-4"
-                    onClick={() => setActiveTab('custom')}
-                  >
-                    Write Custom Email
-                  </Button>
+
+                  {/* Lead fields for Request Received when there is no appointment yet */}
+                  {selectedTemplate === 'appointment_request_received' && !appointment && (
+                    <div className="md:col-span-2 mt-2 p-4 border rounded-lg bg-muted/40">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="leadService">Service</Label>
+                          <Input
+                            id="leadService"
+                            placeholder="e.g. Plumbing / Electrical"
+                            value={leadServiceName}
+                            onChange={(e) => setLeadServiceName(e.target.value)}
+                            disabled={isSending}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="leadDate">Preferred date/time</Label>
+                          <Input
+                            id="leadDate"
+                            placeholder="e.g. Tomorrow morning"
+                            value={leadRequestedDate}
+                            onChange={(e) => setLeadRequestedDate(e.target.value)}
+                            disabled={isSending}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3">
+                        This template can be sent even without an appointment.
+                      </p>
+                    </div>
+                  )}
+
+                  {!appointment && (
+                    <div className="md:col-span-2 text-xs text-muted-foreground">
+                      Tip: Appointment-based templates are disabled because this customer has no appointment yet.
+                      You can still send “Request Received” or use “Custom Email”.
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -455,7 +503,12 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
           {activeTab === 'templates' ? (
             <Button 
               onClick={handleSendTemplate} 
-              disabled={isSending || !selectedTemplate}
+              disabled={
+                isSending ||
+                !selectedTemplate ||
+                (EMAIL_TEMPLATES.find((t) => t.id === selectedTemplate)?.requiresAppointment && !appointment) ||
+                (selectedTemplate === 'appointment_request_received' && !appointment && (!leadServiceName.trim() || !leadRequestedDate.trim()))
+              }
             >
               {isSending ? (
                 <>

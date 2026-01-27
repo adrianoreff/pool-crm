@@ -163,6 +163,34 @@ export const EmailService = {
     });
   },
 
+  // Lead / customer without appointment yet
+  async sendAppointmentRequestReceivedLead(params: {
+    to: string;
+    toName: string;
+    customerId?: string;
+    serviceName: string;
+    requestedDate: string;
+    business: BusinessData;
+  }): Promise<EmailResult> {
+    const template = appointmentRequestReceivedEmail({
+      customerName: params.toName,
+      serviceName: params.serviceName,
+      requestedDate: params.requestedDate,
+      businessName: params.business.name,
+      businessPhone: params.business.phone || '',
+    });
+
+    return sendEmail({
+      to: params.to,
+      toName: params.toName,
+      ...template,
+      businessId: params.business.id,
+      emailType: 'appointment_request_received',
+      recipientType: 'customer',
+      customerId: params.customerId,
+    });
+  },
+
   async sendAppointmentConfirmed(
     appointment: AppointmentData,
     business: BusinessData

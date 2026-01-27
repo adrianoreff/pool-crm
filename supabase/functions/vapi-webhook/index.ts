@@ -436,14 +436,17 @@ async function handleBookAppointment(
         .eq("id", callLog.id);
     }
 
-    // Send confirmation email (fire and forget)
+    // Send "request received" + notify admins (fire and forget)
     supabase.functions.invoke("send-notification", {
-      body: { type: "appointment_confirmation", appointmentId: appointment.id },
+      body: { type: "appointment_request_received", appointmentId: appointment.id },
+    });
+    supabase.functions.invoke("send-notification", {
+      body: { type: "admin_new_appointment", appointmentId: appointment.id },
     });
 
     return {
       success: true,
-      message: `Appointment booked successfully! Your reference number is ${appointment.ref_code}. You will receive a confirmation shortly.`,
+      message: `Appointment booked successfully! Your reference number is ${appointment.ref_code}. You will receive an email shortly.`,
       reference_code: appointment.ref_code,
     };
   } catch (error) {
