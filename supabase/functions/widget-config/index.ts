@@ -81,6 +81,8 @@ Deno.serve(async (req: Request) => {
         description,
         duration_min,
         duration_max,
+        base_price_min,
+        base_price_max,
         category:service_categories(name)
       `)
       .eq("business_id", businessId)
