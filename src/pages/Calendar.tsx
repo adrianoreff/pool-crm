@@ -279,8 +279,10 @@ export default function CalendarPage() {
   const handleDragEnd = (e: React.DragEvent) => {
     e.stopPropagation();
     // Only clear if drop didn't happen (no dragOverSlot means no drop)
+    // If dragOverSlot exists, the drop handler will handle it
     if (!dragOverSlot) {
       setDraggingAppointment(null);
+      setDragOverSlot(null);
     }
   };
 
@@ -320,9 +322,8 @@ export default function CalendarPage() {
     if (draggingAppointment) {
       setRescheduleTarget({ date, time });
       setShowRescheduleDialog(true);
+      // Don't clear draggingAppointment here - we need it for confirmReschedule
     }
-    // Clear drag state after drop
-    setDraggingAppointment(null);
     setDragOverSlot(null);
   };
 
@@ -333,22 +334,49 @@ export default function CalendarPage() {
       const [endH, endM] = draggingAppointment.scheduled_end_time.split(':').map(Number);
       const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
       
-      const [newStartH, newStartM] = rescheduleTarget.time.split(':').map(Number);
+      // Ensure time is in HH:MM format (time slots are in HH:00 format)
+      const [newStartH, newStartM = 0] = rescheduleTarget.time.split(':').map(Number);
+      const newStartTime = `${String(newStartH).padStart(2, '0')}:${String(newStartM).padStart(2, '0')}`;
+      
       const newEndMinutes = newStartH * 60 + newStartM + durationMinutes;
       const newEndH = Math.floor(newEndMinutes / 60);
       const newEndM = newEndMinutes % 60;
       const newEndTime = `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}`;
 
-      rescheduleAppointment.mutate({
-        appointment: draggingAppointment,
+      console.log('Rescheduling appointment:', {
+        appointmentId: draggingAppointment.id,
+        oldDate: draggingAppointment.scheduled_date,
+        oldTime: `${draggingAppointment.scheduled_start_time} - ${draggingAppointment.scheduled_end_time}`,
         newDate: rescheduleTarget.date,
-        newStartTime: rescheduleTarget.time,
-        newEndTime: newEndTime,
+        newTime: `${newStartTime} - ${newEndTime}`,
       });
+
+      rescheduleAppointment.mutate(
+        {
+          appointment: draggingAppointment,
+          newDate: rescheduleTarget.date,
+          newStartTime: newStartTime,
+          newEndTime: newEndTime,
+        },
+        {
+          onSuccess: () => {
+            // Only clear state after successful mutation
+            setShowRescheduleDialog(false);
+            setDraggingAppointment(null);
+            setRescheduleTarget(null);
+          },
+          onError: () => {
+            // Keep dialog open on error so user can try again
+            // State will be cleared when dialog is closed manually
+          },
+        }
+      );
+    } else {
+      // If no appointment or target, just close dialog
+      setShowRescheduleDialog(false);
+      setDraggingAppointment(null);
+      setRescheduleTarget(null);
     }
-    setShowRescheduleDialog(false);
-    setDraggingAppointment(null);
-    setRescheduleTarget(null);
   };
 
   const cancelReschedule = () => {

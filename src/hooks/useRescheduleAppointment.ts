@@ -23,7 +23,14 @@ export function useRescheduleAppointment() {
       const oldEndTime = appointment.scheduled_end_time;
       
       // Update the appointment
-      const { error } = await supabase
+      console.log('Updating appointment:', {
+        id: appointment.id,
+        newDate,
+        newStartTime,
+        newEndTime,
+      });
+
+      const { data, error } = await supabase
         .from('appointments')
         .update({
           scheduled_date: newDate,
@@ -31,9 +38,30 @@ export function useRescheduleAppointment() {
           scheduled_end_time: newEndTime,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', appointment.id);
+        .eq('id', appointment.id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating appointment:', error);
+        throw error;
+      }
+
+      console.log('Appointment updated successfully:', data);
+
+      // Log activity
+      try {
+        await supabase.from('appointment_activity').insert({
+          appointment_id: appointment.id,
+          action: 'rescheduled',
+          description: `Rescheduled from ${oldDate} ${oldStartTime} to ${newDate} ${newStartTime}`,
+          old_value: { date: oldDate, start_time: oldStartTime, end_time: oldEndTime },
+          new_value: { date: newDate, start_time: newStartTime, end_time: newEndTime },
+          performed_by: profile?.id,
+        });
+      } catch (activityError) {
+        console.error('Failed to log activity:', activityError);
+        // Don't throw - activity logging is not critical
+      }
 
       // Send reschedule email to customer via edge function
       try {
