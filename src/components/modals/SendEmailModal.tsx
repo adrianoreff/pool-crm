@@ -135,45 +135,64 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
   const [appointment, setAppointment] = useState<any>(null);
   const [loadingAppointment, setLoadingAppointment] = useState(false);
 
-  // Load appointment data if appointmentId is provided
+  // Load appointment data - if appointmentId is provided, use it; otherwise fetch latest for customer
   useEffect(() => {
     async function loadAppointment() {
-      if (!appointmentId) {
-        setAppointment(null);
-        return;
-      }
-
       setLoadingAppointment(true);
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('appointments')
           .select(`
             *,
             customer:customers(*),
             service:services(*),
             technician:users(*)
-          `)
-          .eq('id', appointmentId)
-          .single();
+          `);
+
+        if (appointmentId) {
+          // Fetch specific appointment
+          query = query.eq('id', appointmentId);
+        } else {
+          // Fetch latest appointment for this customer
+          query = query
+            .eq('customer_id', recipient.id)
+            .order('scheduled_date', { ascending: false })
+            .limit(1);
+        }
+
+        const { data, error } = await query.maybeSingle();
 
         if (!error && data) {
           setAppointment(data);
+        } else {
+          setAppointment(null);
         }
       } catch (err) {
         console.error('Error loading appointment:', err);
+        setAppointment(null);
       } finally {
         setLoadingAppointment(false);
       }
     }
 
-    if (isOpen) {
+    if (isOpen && recipient?.id) {
       loadAppointment();
     }
-  }, [appointmentId, isOpen]);
+  }, [appointmentId, recipient?.id, isOpen]);
 
   const handleSendTemplate = async () => {
-    if (!selectedTemplate || !business || !appointment) {
+    if (!selectedTemplate) {
       toast.error('Please select a template');
+      return;
+    }
+    
+    if (!business) {
+      toast.error('Business information not available');
+      return;
+    }
+
+    if (!appointment) {
+      toast.error('Appointment data not loaded. Please try again.');
       return;
     }
 
@@ -286,14 +305,16 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
     }
   };
 
+  // Filter templates based on whether we have appointment data
   const availableTemplates = EMAIL_TEMPLATES.filter(template => {
-    if (template.requiresAppointment && !appointmentId) {
+    if (template.requiresAppointment && !appointment) {
       return false;
     }
     return true;
   });
 
-  const hasAppointmentTemplates = appointmentId && availableTemplates.length > 0;
+  // Templates are available if we have an appointment (either passed or fetched for customer)
+  const hasAppointmentTemplates = !!appointment && availableTemplates.length > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -379,10 +400,12 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
                 <div className="text-center py-8">
                   <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground">
-                    Email templates require an appointment context.
+                    {loadingAppointment 
+                      ? 'Loading appointment data...' 
+                      : 'No appointments found for this customer.'}
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Open this modal from an appointment to use templates, or write a custom email.
+                    Templates require an appointment. You can write a custom email instead.
                   </p>
                   <Button 
                     variant="outline" 
