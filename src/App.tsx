@@ -98,12 +98,12 @@ const App = () => (
               }
             >
               <Route path="/technician/dashboard" element={<TechnicianDashboard />} />
-              <Route path="/technician/jobs" element={<div>Jobs List</div>} />
-              <Route path="/technician/jobs/:id" element={<div>Job Details</div>} />
+              <Route path="/technician/jobs" element={<JobsList />} />
+              <Route path="/technician/jobs/:id" element={<JobDetails />} />
               <Route path="/technician/jobs/:id/checklist" element={<JobChecklist />} />
               <Route path="/technician/jobs/:id/complete" element={<CompleteJob />} />
-              <Route path="/technician/history" element={<div>History</div>} />
-              <Route path="/technician/profile" element={<div>Profile</div>} />
+              <Route path="/technician/history" element={<History />} />
+              <Route path="/technician/profile" element={<Profile />} />
             </Route>
             
             {/* Catch-all */}
