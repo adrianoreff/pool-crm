@@ -69,14 +69,75 @@ export function InviteTeamModal({ open, onOpenChange, onSuccess }: InviteTeamMod
 
     setIsSubmitting(true);
     try {
+      // Check if user already exists in the team
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name')
+        .eq('business_id', profile.business_id)
+        .eq('email', data.email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (existingUser) {
+        toast({ 
+          title: 'User Already Exists', 
+          description: `${data.email} is already a member of your team.`, 
+          variant: 'destructive' 
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Check if there's a pending invitation
+      const { data: existingInvitation } = await supabase
+        .from('team_invitations')
+        .select('id, email, expires_at, accepted_at')
+        .eq('business_id', profile.business_id)
+        .eq('email', data.email.toLowerCase().trim())
+        .is('accepted_at', null)
+        .maybeSingle();
+
+      if (existingInvitation) {
+        const expiresAt = new Date(existingInvitation.expires_at);
+        const isExpired = expiresAt < new Date();
+        
+        if (isExpired) {
+          // Delete expired invitation and create a new one
+          await supabase
+            .from('team_invitations')
+            .delete()
+            .eq('id', existingInvitation.id);
+        } else {
+          toast({ 
+            title: 'Invitation Already Sent', 
+            description: `An invitation has already been sent to ${data.email}. It expires on ${expiresAt.toLocaleDateString()}.`, 
+            variant: 'destructive' 
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Create new invitation
       const { error } = await supabase.from('team_invitations').insert({
         business_id: profile.business_id,
-        email: data.email,
+        email: data.email.toLowerCase().trim(),
         role: data.role,
         invited_by: user.id,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific error codes
+        if (error.code === '23505') { // Unique violation
+          toast({ 
+            title: 'Invitation Already Exists', 
+            description: `An invitation for ${data.email} already exists. Please wait or delete the existing invitation first.`, 
+            variant: 'destructive' 
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
 
       toast({ 
         title: 'Invitation Sent', 
