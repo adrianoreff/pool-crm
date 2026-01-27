@@ -60,19 +60,49 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const payload = await req.json();
-    const { message } = payload;
+    // Get raw body text first for debugging
+    const rawBody = await req.text();
+    console.log("Raw request body length:", rawBody.length);
+    console.log("Raw request body preview:", rawBody.substring(0, 500));
+    
+    // Parse JSON - handle empty body
+    let payload: any = {};
+    if (rawBody && rawBody.trim()) {
+      try {
+        payload = JSON.parse(rawBody);
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        return new Response(JSON.stringify({ error: "Invalid JSON", raw: rawBody.substring(0, 200) }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      console.error("Empty request body received");
+      return new Response(JSON.stringify({ error: "Empty request body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    // VAPI can send payload in different formats:
+    // Format 1: { message: { type: "...", call: {...} } }
+    // Format 2: Direct payload { type: "...", call: {...} }
+    // Format 3: Server URL format where payload itself is the message
+    let message = payload.message || payload;
+    
+    console.log("VAPI Webhook received type:", message?.type);
+    console.log("Full payload keys:", Object.keys(payload));
+    console.log("Message keys:", message ? Object.keys(message) : "no message");
 
-    console.log("VAPI Webhook received:", message?.type);
-    console.log("Full payload structure:", JSON.stringify(payload, null, 2));
-
-    // Try multiple locations for assistantId - VAPI sends it in different places depending on message type
+    // Try multiple locations for assistantId - VAPI sends it in different places
     const assistantId = 
       message?.call?.assistantId || 
       payload.call?.assistantId ||
       message?.assistant?.id ||
       payload.assistant?.id ||
-      payload.assistantId;
+      payload.assistantId ||
+      message?.assistantId;
 
     console.log("Extracted assistantId:", assistantId);
 
@@ -93,8 +123,13 @@ Deno.serve(async (req: Request) => {
 
     if (!businessId) {
       console.error("Business not found for assistant:", assistantId);
-      console.error("Available in payload - message.call:", message?.call, "payload.call:", payload.call);
-      return new Response(JSON.stringify({ error: "Business not found", extractedAssistantId: assistantId }), {
+      console.log("Full payload for debugging:", JSON.stringify(payload, null, 2));
+      return new Response(JSON.stringify({ 
+        error: "Business not found", 
+        extractedAssistantId: assistantId,
+        payloadKeys: Object.keys(payload),
+        messageType: message?.type
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
