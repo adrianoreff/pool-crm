@@ -561,13 +561,15 @@ export default function Customers() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {primaryAddress && (
+                        {(customer.address || customer.city) ? (
                           <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
                             <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
                             <span className="truncate max-w-[200px]">
-                              {primaryAddress.address}, {primaryAddress.city}
+                              {[customer.address, customer.city, customer.state].filter(Boolean).join(', ')}
                             </span>
                           </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-center hidden sm:table-cell">
