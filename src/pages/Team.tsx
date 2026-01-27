@@ -55,6 +55,9 @@ import { InviteTeamModal } from '@/components/modals';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTeamInvitations } from '@/hooks/useTeamInvitations';
+import { ResendInvitationModal } from '@/components/modals/ResendInvitationModal';
+import { Mail, Clock, RefreshCw, X } from 'lucide-react';
 
 type ViewMode = 'grid' | 'list';
 
@@ -223,6 +226,8 @@ export default function Team() {
   const [memberToDeactivate, setMemberToDeactivate] = useState<UserType | null>(null);
   
   const { data: team = [], isLoading } = useTeam();
+  const { data: pendingInvitations = [], isLoading: isLoadingInvitations } = useTeamInvitations();
+  const [resendInvitationId, setResendInvitationId] = useState<string | null>(null);
   const today = new Date().toISOString().split('T')[0];
   const { data: todayAppointments = [] } = useAppointments({ dateFrom: today, dateTo: today });
   const { toast } = useToast();
@@ -306,6 +311,79 @@ export default function Team() {
           </Card>
         ))}
       </div>
+
+      {/* Pending Invitations */}
+      {pendingInvitations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending Invitations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingInvitations.map((invitation) => {
+                const expiresAt = invitation.expires_at ? new Date(invitation.expires_at) : null;
+                const isExpired = expiresAt ? expiresAt < new Date() : false;
+                
+                return (
+                  <div
+                    key={invitation.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <Mail className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex-1">
+                        <div className="font-medium">{invitation.email}</div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Badge variant="outline" className="text-xs">
+                            {invitation.role}
+                          </Badge>
+                          {expiresAt && (
+                            <>
+                              <Clock className="h-3 w-3" />
+                              <span>
+                                {isExpired ? 'Expired' : `Expires ${expiresAt.toLocaleDateString()}`}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResendInvitationId(invitation.id)}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Resend
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          const { error } = await supabase
+                            .from('team_invitations')
+                            .delete()
+                            .eq('id', invitation.id);
+                          
+                          if (error) {
+                            toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                          } else {
+                            toast({ title: 'Invitation cancelled' });
+                            queryClient.invalidateQueries({ queryKey: ['team-invitations'] });
+                          }
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* View Toggle */}
       <div className="flex justify-end">
@@ -487,6 +565,19 @@ export default function Team() {
         open={isInviteOpen} 
         onOpenChange={setIsInviteOpen} 
       />
+      
+      {resendInvitationId && (() => {
+        const invitation = pendingInvitations.find(i => i.id === resendInvitationId);
+        return invitation ? (
+          <ResendInvitationModal
+            open={!!resendInvitationId}
+            onOpenChange={(open) => !open && setResendInvitationId(null)}
+            invitationId={invitation.id}
+            email={invitation.email}
+            role={invitation.role}
+          />
+        ) : null;
+      })()}
 
       <TeamMemberProfileSheet 
         member={selectedMember} 
