@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -135,6 +135,9 @@ export default function CalendarPage() {
   const [dragOverSlot, setDragOverSlot] = useState<{ date: string; time: string } | null>(null);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [rescheduleTarget, setRescheduleTarget] = useState<{ date: string; time: string } | null>(null);
+  
+  // Use ref to keep appointment available even when state changes
+  const draggingAppointmentRef = useRef<AppointmentWithRelations | null>(null);
 
   const rescheduleAppointment = useRescheduleAppointment();
 
@@ -271,6 +274,7 @@ export default function CalendarPage() {
     e.stopPropagation();
     console.log('handleDragStart:', apt.id, apt.customer?.first_name);
     setDraggingAppointment(apt);
+    draggingAppointmentRef.current = apt; // Store in ref for reliable access
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', apt.id);
     // Allow drop on any element
@@ -279,12 +283,10 @@ export default function CalendarPage() {
 
   const handleDragEnd = (e: React.DragEvent) => {
     e.stopPropagation();
-    // Only clear if drop didn't happen (no dragOverSlot means no drop)
-    // If dragOverSlot exists, the drop handler will handle it
-    if (!dragOverSlot) {
-      setDraggingAppointment(null);
-      setDragOverSlot(null);
-    }
+    console.log('handleDragEnd called');
+    // Don't clear the ref - we need it for the dialog
+    // Only clear drag visual state
+    setDragOverSlot(null);
   };
 
   const handleDragOver = (date: string, time: string, e: React.DragEvent) => {
@@ -331,16 +333,20 @@ export default function CalendarPage() {
   };
 
   const confirmReschedule = () => {
+    // Use ref which is more reliable than state (state may be stale due to closures)
+    const appointment = draggingAppointmentRef.current;
+    
     console.log('confirmReschedule called:', { 
-      hasAppointment: !!draggingAppointment, 
+      hasAppointment: !!appointment, 
       hasTarget: !!rescheduleTarget,
-      appointmentId: draggingAppointment?.id,
+      appointmentId: appointment?.id,
       target: rescheduleTarget 
     });
-    if (draggingAppointment && rescheduleTarget) {
+    
+    if (appointment && rescheduleTarget) {
       // Calculate new end time based on original duration
-      const [startH, startM] = draggingAppointment.scheduled_start_time.split(':').map(Number);
-      const [endH, endM] = draggingAppointment.scheduled_end_time.split(':').map(Number);
+      const [startH, startM] = appointment.scheduled_start_time.split(':').map(Number);
+      const [endH, endM] = appointment.scheduled_end_time.split(':').map(Number);
       const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
       
       // Ensure time is in HH:MM format (time slots are in HH:00 format)
@@ -353,16 +359,16 @@ export default function CalendarPage() {
       const newEndTime = `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}`;
 
       console.log('Rescheduling appointment:', {
-        appointmentId: draggingAppointment.id,
-        oldDate: draggingAppointment.scheduled_date,
-        oldTime: `${draggingAppointment.scheduled_start_time} - ${draggingAppointment.scheduled_end_time}`,
+        appointmentId: appointment.id,
+        oldDate: appointment.scheduled_date,
+        oldTime: `${appointment.scheduled_start_time} - ${appointment.scheduled_end_time}`,
         newDate: rescheduleTarget.date,
         newTime: `${newStartTime} - ${newEndTime}`,
       });
 
       rescheduleAppointment.mutate(
         {
-          appointment: draggingAppointment,
+          appointment: appointment,
           newDate: rescheduleTarget.date,
           newStartTime: newStartTime,
           newEndTime: newEndTime,
@@ -372,6 +378,7 @@ export default function CalendarPage() {
             // Only clear state after successful mutation
             setShowRescheduleDialog(false);
             setDraggingAppointment(null);
+            draggingAppointmentRef.current = null;
             setRescheduleTarget(null);
           },
           onError: () => {
@@ -384,6 +391,7 @@ export default function CalendarPage() {
       // If no appointment or target, just close dialog
       setShowRescheduleDialog(false);
       setDraggingAppointment(null);
+      draggingAppointmentRef.current = null;
       setRescheduleTarget(null);
     }
   };
@@ -391,6 +399,7 @@ export default function CalendarPage() {
   const cancelReschedule = () => {
     setShowRescheduleDialog(false);
     setDraggingAppointment(null);
+    draggingAppointmentRef.current = null;
     setRescheduleTarget(null);
   };
 
