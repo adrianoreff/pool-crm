@@ -12,6 +12,8 @@ import {
   Edit,
   Trash,
   ChevronRight,
+  Clock,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,12 +52,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useCustomers, useCustomerAppointments, useDeleteCustomer } from '@/hooks/useCustomers';
+import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
 import { CustomerWithAddresses } from '@/types/database';
 import { AddCustomerModal, EditCustomerModal } from '@/components/modals';
+import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 
 const formatCurrency = (amount: number | null) => {
   return new Intl.NumberFormat('en-US', {
@@ -80,6 +85,7 @@ const getInitials = (firstName: string, lastName: string | null) => {
 
 function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: CustomerWithAddresses; onClose: () => void; onEdit: () => void }) {
   const { data: appointments = [], isLoading } = useCustomerAppointments(customer.id);
+  const { data: emailLogs = [], isLoading: emailsLoading } = useCustomerEmailLogs(customer.id);
   const primaryAddress = customer.customer_addresses?.find(a => a.is_primary) || customer.customer_addresses?.[0];
 
   const handleContact = (type: 'phone' | 'email') => {
@@ -88,6 +94,31 @@ function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: Customer
     } else if (type === 'email' && customer.email) {
       window.open(`mailto:${customer.email}`);
     }
+  };
+
+  const formatEmailDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const getEmailTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      'appointment_confirmation': 'Confirmation',
+      'appointment_reminder': 'Reminder',
+      'appointment_rescheduled': 'Rescheduled',
+      'appointment_cancelled': 'Cancelled',
+      'appointment_completed': 'Completed',
+      'technician_en_route': 'Tech En Route',
+      'custom_email': 'Manual Email',
+    };
+    return labels[type] || type.replace(/_/g, ' ');
   };
 
   return (
@@ -116,145 +147,215 @@ function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: Customer
         </div>
       </SheetHeader>
 
-      <ScrollArea className="h-[calc(100vh-180px)] mt-6 -mx-6 px-6">
-        <div className="space-y-6">
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="shadow-card">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <Calendar className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{customer.total_appointments || 0}</p>
-                    <p className="text-xs text-muted-foreground">Appointments</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-card">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-success/10 p-2">
-                    <DollarSign className="h-4 w-4 text-success" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{formatCurrency(customer.total_spent)}</p>
-                    <p className="text-xs text-muted-foreground">Total Spent</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+      <Tabs defaultValue="overview" className="mt-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="overview" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="emails" className="gap-2">
+            <Mail className="h-4 w-4" />
+            Email History
+            {emailLogs.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">
+                {emailLogs.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Contact Info */}
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Contact Information</h3>
-            <Card className="shadow-card">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{customer.phone}</span>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleContact('phone')}>Call</Button>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="truncate">{customer.email || 'No email'}</span>
-                  </div>
-                  <Button variant="ghost" size="sm" disabled={!customer.email} onClick={() => handleContact('email')}>Email</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Addresses */}
-          {customer.customer_addresses && customer.customer_addresses.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Addresses</h3>
-              <div className="space-y-2">
-                {customer.customer_addresses.map((address) => (
-                  <Card key={address.id} className="shadow-card">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                          <div>
-                            <p className="font-medium">{address.address}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {address.city}, {address.state} {address.zip_code}
-                            </p>
-                          </div>
-                        </div>
-                        {address.is_primary && (
-                          <Badge variant="secondary" className="text-xs">Primary</Badge>
-                        )}
+        <TabsContent value="overview" className="mt-4">
+          <ScrollArea className="h-[calc(100vh-280px)] -mx-6 px-6">
+            <div className="space-y-6">
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="shadow-card">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2">
+                        <Calendar className="h-4 w-4 text-primary" />
                       </div>
+                      <div>
+                        <p className="text-2xl font-bold">{customer.total_appointments || 0}</p>
+                        <p className="text-xs text-muted-foreground">Appointments</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="shadow-card">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-success/10 p-2">
+                        <DollarSign className="h-4 w-4 text-success" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold">{formatCurrency(customer.total_spent)}</p>
+                        <p className="text-xs text-muted-foreground">Total Spent</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Contact Info */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3">Contact Information</h3>
+                <Card className="shadow-card">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span>{customer.phone}</span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleContact('phone')}>Call</Button>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span className="truncate">{customer.email || 'No email'}</span>
+                      </div>
+                      <Button variant="ghost" size="sm" disabled={!customer.email} onClick={() => handleContact('email')}>Email</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Addresses */}
+              {customer.customer_addresses && customer.customer_addresses.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3">Addresses</h3>
+                  <div className="space-y-2">
+                    {customer.customer_addresses.map((address) => (
+                      <Card key={address.id} className="shadow-card">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-3">
+                              <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                              <div>
+                                <p className="font-medium">{address.address}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {address.city}, {address.state} {address.zip_code}
+                                </p>
+                              </div>
+                            </div>
+                            {address.is_primary && (
+                              <Badge variant="secondary" className="text-xs">Primary</Badge>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {customer.notes && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3">Notes</h3>
+                  <Card className="shadow-card">
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">{customer.notes}</p>
                     </CardContent>
                   </Card>
-                ))}
+                </div>
+              )}
+
+              {/* Appointment History */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3">Appointment History</h3>
+                <div className="space-y-2">
+                  {isLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} className="shadow-card">
+                        <CardContent className="p-4">
+                          <Skeleton className="h-4 w-32 mb-2" />
+                          <Skeleton className="h-3 w-24" />
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : appointments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No appointments yet</p>
+                  ) : (
+                    appointments.slice(0, 5).map((apt) => (
+                      <Card key={apt.id} className="shadow-card hover:shadow-elevated cursor-pointer transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm">{apt.service?.name || 'Service'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDate(apt.scheduled_date)}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className={cn(
+                              apt.status === 'completed' && 'bg-success/10 text-success',
+                              apt.status === 'cancelled' && 'bg-destructive/10 text-destructive',
+                              apt.status === 'scheduled' && 'bg-info/10 text-info',
+                            )}>
+                              {apt.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          )}
+          </ScrollArea>
+        </TabsContent>
 
-          {/* Notes */}
-          {customer.notes && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Notes</h3>
-              <Card className="shadow-card">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">{customer.notes}</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Appointment History */}
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Appointment History</h3>
-            <div className="space-y-2">
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
+        <TabsContent value="emails" className="mt-4">
+          <ScrollArea className="h-[calc(100vh-280px)] -mx-6 px-6">
+            <div className="space-y-3">
+              {emailsLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
                   <Card key={i} className="shadow-card">
                     <CardContent className="p-4">
-                      <Skeleton className="h-4 w-32 mb-2" />
-                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-4 w-48 mb-2" />
+                      <Skeleton className="h-3 w-32 mb-2" />
+                      <Skeleton className="h-5 w-20" />
                     </CardContent>
                   </Card>
                 ))
-              ) : appointments.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No appointments yet</p>
+              ) : emailLogs.length === 0 ? (
+                <div className="text-center py-8">
+                  <Mail className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                  <p className="text-muted-foreground">No emails sent to this customer yet</p>
+                </div>
               ) : (
-                appointments.slice(0, 5).map((apt) => (
-                  <Card key={apt.id} className="shadow-card hover:shadow-elevated cursor-pointer transition-shadow">
+                emailLogs.map((email) => (
+                  <Card key={email.id} className="shadow-card">
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm">{apt.service?.name || 'Service'}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(apt.scheduled_date)}
-                          </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{email.subject}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {getEmailTypeLabel(email.email_type)}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>{formatEmailDate(email.sent_at || email.created_at)}</span>
+                          </div>
                         </div>
-                        <Badge variant="outline" className={cn(
-                          apt.status === 'completed' && 'bg-success/10 text-success',
-                          apt.status === 'cancelled' && 'bg-destructive/10 text-destructive',
-                          apt.status === 'scheduled' && 'bg-info/10 text-info',
-                        )}>
-                          {apt.status.replace('_', ' ')}
-                        </Badge>
+                        <EmailStatusBadge status={email.status as 'queued' | 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed'} />
                       </div>
+                      {email.error_message && (
+                        <div className="mt-2 p-2 bg-destructive/10 rounded text-xs text-destructive">
+                          {email.error_message}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))
               )}
             </div>
-          </div>
-        </div>
-      </ScrollArea>
+          </ScrollArea>
+        </TabsContent>
+      </Tabs>
     </>
   );
 }

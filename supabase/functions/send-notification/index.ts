@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
       
       // Send email via Resend
       const { data: emailData, error: emailError } = await resend.emails.send({
-        from: `${businessName} <onboarding@resend.dev>`,
+        from: `${businessName} <promo@metricflow.space>`,
         to: [to],
         subject,
         html,
@@ -345,7 +345,7 @@ Deno.serve(async (req: Request) => {
 
     // Send email via Resend
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: `${businessName} <onboarding@resend.dev>`,
+      from: `${businessName} <promo@metricflow.space>`,
       to: appointment.customer.email,
       subject,
       html: htmlContent,
