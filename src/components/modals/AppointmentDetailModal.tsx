@@ -48,6 +48,7 @@ import { useServices } from '@/hooks/useServices';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { SendEmailModal } from './SendEmailModal';
 
 interface AppointmentDetailModalProps {
   open: boolean;
@@ -87,6 +88,7 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [editData, setEditData] = useState({
     scheduled_date: '',
     scheduled_start_time: '',
@@ -169,11 +171,15 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
     updateStatus.mutate({ id: appointment.id, status: newStatus as AppointmentStatus });
   };
 
-  const handleContact = (type: 'phone' | 'email') => {
-    if (type === 'phone' && customer?.phone) {
+  const handleCall = () => {
+    if (customer?.phone) {
       window.open(`tel:${customer.phone}`);
-    } else if (type === 'email' && customer?.email) {
-      window.open(`mailto:${customer.email}`);
+    }
+  };
+
+  const handleEmail = () => {
+    if (customer?.email) {
+      setIsEmailModalOpen(true);
     }
   };
 
@@ -226,12 +232,12 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => handleContact('phone')}>
+                    <Button size="sm" variant="outline" onClick={handleCall}>
                       <Phone className="h-4 w-4 mr-1" />
                       Call
                     </Button>
                     {customer?.email && (
-                      <Button size="sm" variant="outline" onClick={() => handleContact('email')}>
+                      <Button size="sm" variant="outline" onClick={handleEmail}>
                         <Mail className="h-4 w-4 mr-1" />
                         Email
                       </Button>
@@ -496,6 +502,20 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Email Modal */}
+      {customer && (
+        <SendEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => setIsEmailModalOpen(false)}
+          recipient={{
+            id: customer.id,
+            name: `${customer.first_name} ${customer.last_name || ''}`.trim(),
+            email: customer.email || '',
+          }}
+          appointmentId={appointment.id}
+        />
+      )}
     </>
   );
 }

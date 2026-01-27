@@ -49,7 +49,7 @@ import { useTodayAppointments, usePendingAppointments, useUpdateAppointmentStatu
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { useCallLogs } from '@/hooks/useCallLogs';
 import { AppointmentWithRelations } from '@/types/database';
-import { AddCustomerModal, NewAppointmentModal, AppointmentDetailModal } from '@/components/modals';
+import { AddCustomerModal, NewAppointmentModal, AppointmentDetailModal, SendEmailModal } from '@/components/modals';
 
 // Get greeting based on time of day
 const getGreeting = () => {
@@ -139,6 +139,9 @@ export default function Dashboard() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [emailAppointmentId, setEmailAppointmentId] = useState<string | undefined>(undefined);
 
   const pendingCount = pendingAppointments.length;
   const inProgressCount = todaysAppointments.filter(a => a.status === 'in_progress').length;
@@ -198,7 +201,13 @@ export default function Dashboard() {
     if (type === 'phone') {
       window.open(`tel:${customer.phone}`);
     } else if (type === 'email' && customer.email) {
-      window.open(`mailto:${customer.email}`);
+      setEmailRecipient({
+        id: customer.id,
+        name: `${customer.first_name} ${customer.last_name || ''}`.trim(),
+        email: customer.email,
+      });
+      setEmailAppointmentId(appointment.id);
+      setIsEmailModalOpen(true);
     } else if (type === 'sms') {
       window.open(`sms:${customer.phone}`);
     }
@@ -576,6 +585,20 @@ export default function Dashboard() {
         onOpenChange={setIsDetailModalOpen}
         appointment={selectedAppointment}
       />
+
+      {/* Email Modal */}
+      {emailRecipient && (
+        <SendEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => {
+            setIsEmailModalOpen(false);
+            setEmailRecipient(null);
+            setEmailAppointmentId(undefined);
+          }}
+          recipient={emailRecipient}
+          appointmentId={emailAppointmentId}
+        />
+      )}
 
       {/* Cancel Confirmation Dialog */}
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
