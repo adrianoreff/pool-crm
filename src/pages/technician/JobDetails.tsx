@@ -27,10 +27,27 @@ export default function JobDetails() {
   const { data: appointment, isLoading } = useAppointment(id || '');
   const updateStatus = useUpdateJobStatus();
 
-  if (isLoading || !appointment) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!appointment) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <AlertCircle className="h-12 w-12 text-muted-foreground" />
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Appointment not found</h2>
+          <p className="text-muted-foreground mt-2">
+            The appointment you're looking for doesn't exist or you don't have access to it.
+          </p>
+          <Button onClick={() => navigate('/technician/jobs')} className="mt-4">
+            Back to Jobs
+          </Button>
+        </div>
       </div>
     );
   }

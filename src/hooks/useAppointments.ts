@@ -69,6 +69,13 @@ export function useAppointment(id: string) {
   return useQuery({
     queryKey: ['appointment', id],
     queryFn: async () => {
+      if (!id) {
+        console.error('useAppointment: No ID provided');
+        throw new Error('Appointment ID is required');
+      }
+
+      console.log('Fetching appointment:', { id, businessId, profileId: profile?.id });
+
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -80,7 +87,19 @@ export function useAppointment(id: string) {
         .eq('id', id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching appointment:', error);
+        throw error;
+      }
+
+      console.log('Appointment fetched:', {
+        id: data?.id,
+        hasCustomer: !!data?.customer,
+        hasService: !!data?.service,
+        customerName: data?.customer ? `${data.customer.first_name} ${data.customer.last_name}` : 'No customer',
+        address: data?.address,
+      });
+
       return data as AppointmentWithRelations;
     },
     enabled: !!businessId && !!id,
