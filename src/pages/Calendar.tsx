@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -272,19 +272,16 @@ export default function CalendarPage() {
     setDraggingAppointment(apt);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', apt.id);
-    // Set drag image to be invisible to avoid visual glitches
-    const dragImage = document.createElement('div');
-    dragImage.style.position = 'absolute';
-    dragImage.style.top = '-9999px';
-    document.body.appendChild(dragImage);
-    e.dataTransfer.setDragImage(dragImage, 0, 0);
-    setTimeout(() => document.body.removeChild(dragImage), 0);
+    // Allow drop on any element
+    e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDragEnd = (e: React.DragEvent) => {
     e.stopPropagation();
-    setDraggingAppointment(null);
-    setDragOverSlot(null);
+    // Only clear if drop didn't happen (no dragOverSlot means no drop)
+    if (!dragOverSlot) {
+      setDraggingAppointment(null);
+    }
   };
 
   const handleDragOver = (date: string, time: string, e: React.DragEvent) => {
@@ -301,8 +298,19 @@ export default function CalendarPage() {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX;
     const y = e.clientY;
+    
+    // Check if mouse is actually outside the element
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setDragOverSlot(null);
+      // Use a small delay to avoid flickering when moving between time slots
+      setTimeout(() => {
+        setDragOverSlot(prev => {
+          // Only clear if we're still not over any slot
+          if (prev) {
+            return null;
+          }
+          return prev;
+        });
+      }, 100);
     }
   };
 
@@ -313,6 +321,8 @@ export default function CalendarPage() {
       setRescheduleTarget({ date, time });
       setShowRescheduleDialog(true);
     }
+    // Clear drag state after drop
+    setDraggingAppointment(null);
     setDragOverSlot(null);
   };
 
@@ -509,18 +519,18 @@ export default function CalendarPage() {
                                   overlapInfo
                                 );
                                 const techColor = apt.technician?.color || '#F97316';
-                                const isDragging = draggingAppointment?.id === apt.id;
+                                const isAppointmentDragging = draggingAppointment?.id === apt.id;
 
                                 return (
                                   <div
                                     key={apt.id}
-                                    draggable
+                                    draggable={true}
                                     onDragStart={(e) => handleDragStart(apt, e)}
                                     onDragEnd={(e) => handleDragEnd(e)}
                                     className={cn(
-                                      "absolute rounded-md p-1.5 cursor-grab transition-all overflow-hidden group",
-                                      isDragging && "opacity-50 cursor-grabbing shadow-lg scale-105",
-                                      !isDragging && "hover:shadow-md hover:z-10"
+                                      "absolute rounded-md p-1.5 transition-all overflow-hidden group select-none",
+                                      isAppointmentDragging && "opacity-50 cursor-grabbing shadow-lg scale-105 z-50",
+                                      !isAppointmentDragging && "cursor-grab hover:shadow-md hover:z-10"
                                     )}
                                     style={{
                                       top: `${top}px`,
@@ -529,8 +539,12 @@ export default function CalendarPage() {
                                       width: `calc(${widthPercent}% - 4px)`,
                                       backgroundColor: `${techColor}20`,
                                       borderLeft: `3px solid ${techColor}`,
+                                      userSelect: 'none',
+                                      WebkitUserSelect: 'none',
+                                      touchAction: 'none',
                                     }}
                                     onClick={(e) => {
+                                      // Only handle click if not dragging
                                       if (!draggingAppointment) {
                                         handleEventClick(apt, e);
                                       }
@@ -618,18 +632,18 @@ export default function CalendarPage() {
                           overlapInfo
                         );
                         const techColor = apt.technician?.color || '#F97316';
-                        const isDragging = draggingAppointment?.id === apt.id;
+                        const isAppointmentDragging = draggingAppointment?.id === apt.id;
 
                         return (
                           <div
                             key={apt.id}
-                            draggable
+                            draggable={true}
                             onDragStart={(e) => handleDragStart(apt, e)}
                             onDragEnd={(e) => handleDragEnd(e)}
                             className={cn(
-                              "absolute rounded-lg p-3 cursor-grab transition-all group",
-                              isDragging && "opacity-50 cursor-grabbing shadow-lg",
-                              !isDragging && "hover:shadow-md hover:scale-[1.01]"
+                              "absolute rounded-lg p-3 transition-all group select-none",
+                              isAppointmentDragging && "opacity-50 cursor-grabbing shadow-lg z-50",
+                              !isAppointmentDragging && "cursor-grab hover:shadow-md hover:scale-[1.01]"
                             )}
                             style={{
                               top: `${top}px`,
@@ -638,8 +652,12 @@ export default function CalendarPage() {
                               width: `calc(${widthPercent}% - 16px)`,
                               backgroundColor: `${techColor}15`,
                               borderLeft: `4px solid ${techColor}`,
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              touchAction: 'none',
                             }}
                             onClick={(e) => {
+                              // Only handle click if not dragging
                               if (!draggingAppointment) {
                                 handleEventClick(apt, e);
                               }
