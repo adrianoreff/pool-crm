@@ -308,6 +308,46 @@ Deno.serve(async (req: Request) => {
           });
         }
 
+        // Extract call ID from the message
+        const vapiCallId = message.call?.id || payload.call?.id;
+        const callerPhone = message.call?.customer?.number || message.customer?.number || message.phoneNumber?.number || "unknown";
+        
+        // IMPORTANT: Create call log if it doesn't exist yet
+        // VAPI may not send call-started event, so we create the log on first tool-call
+        let callLogId: string | null = null;
+        if (vapiCallId && businessId) {
+          const { data: existingLog } = await supabase
+            .from("call_logs")
+            .select("id")
+            .eq("vapi_call_id", vapiCallId)
+            .maybeSingle();
+
+          if (!existingLog) {
+            console.log("Creating call log from tool-calls:", vapiCallId);
+            const { data: newLog, error: logError } = await supabase
+              .from("call_logs")
+              .insert({
+                business_id: businessId,
+                vapi_call_id: vapiCallId,
+                vapi_assistant_id: assistantId,
+                caller_phone: callerPhone,
+                started_at: new Date().toISOString(),
+                vapi_data: { call: message.call, phoneNumber: message.phoneNumber },
+              })
+              .select("id")
+              .single();
+
+            if (logError) {
+              console.error("Error creating call log:", logError);
+            } else {
+              callLogId = newLog?.id;
+              console.log("Created call log:", callLogId);
+            }
+          } else {
+            callLogId = existingLog.id;
+          }
+        }
+
         // Process each tool call and collect results
         const results = [];
         
@@ -325,7 +365,7 @@ Deno.serve(async (req: Request) => {
 
           switch (functionName) {
             case "book_appointment":
-              result = await handleBookAppointment(supabase, businessId, message.call?.id || toolCall.id, params);
+              result = await handleBookAppointment(supabase, businessId, vapiCallId || toolCall.id, params);
               break;
             case "cancel_appointment":
               result = await handleCancelAppointment(supabase, businessId, params);
