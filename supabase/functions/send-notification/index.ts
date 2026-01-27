@@ -12,7 +12,13 @@ const corsHeaders = {
 
 // Types
 interface StandardNotificationRequest {
-  type: "appointment_confirmation" | "appointment_rescheduled" | "appointment_cancelled" | "appointment_reminder";
+  type:
+    | "appointment_request_received"
+    | "appointment_confirmation"
+    | "appointment_rescheduled"
+    | "appointment_cancelled"
+    | "appointment_reminder"
+    | "admin_new_appointment";
   appointmentId: string;
 }
 
@@ -117,7 +123,7 @@ Deno.serve(async (req: Request) => {
         *,
         customer:customers(id, first_name, last_name, email, phone),
         service:services(name),
-        technician:users(id, first_name, last_name, email, phone),
+        technician:users!appointments_technician_id_fkey(id, first_name, last_name, email, phone),
         business:businesses(id, name, phone, email, address, city, state)
       `)
       .eq("id", appointmentId)
@@ -131,9 +137,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!appointment.customer?.email) {
-      console.log("Customer has no email, skipping notification");
-      return new Response(JSON.stringify({ success: true, message: "No email to send to" }), {
+    // Admin notifications don't require customer email
+    if (type !== "admin_new_appointment" && !appointment.customer?.email) {
+      console.log("Customer has no email, skipping customer notification");
+      return new Response(JSON.stringify({ success: true, message: "No customer email" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -180,7 +187,149 @@ Deno.serve(async (req: Request) => {
       .reference { font-size: 24px; font-weight: bold; color: #F97316; letter-spacing: 2px; }
     `;
 
+    // Admin notification: send to configured recipients
+    if (type === "admin_new_appointment") {
+      const { data: recipients, error: recipientsError } = await supabase
+        .from("notification_recipients")
+        .select("email, name")
+        .eq("business_id", appointment.business_id)
+        .eq("is_active", true)
+        .eq("notify_new_appointment", true);
+
+      if (recipientsError) {
+        console.error("Error fetching notification recipients:", recipientsError);
+      }
+
+      const fallback = appointment.business.email
+        ? [{ email: appointment.business.email, name: appointment.business.name }]
+        : [];
+
+      const toRecipients = (recipients && recipients.length > 0) ? recipients : fallback;
+
+      if (toRecipients.length === 0) {
+        return new Response(JSON.stringify({ success: true, message: "No admin recipients configured" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      subject = `New appointment request - ${appointment.ref_code || ""} ${businessName}`.trim();
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head><style>${baseStyles}</style></head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin:0;">📬 New Appointment</h1>
+            </div>
+            <div class="content">
+              <p><strong>Customer:</strong> ${customerName}</p>
+              <p><strong>Phone:</strong> ${appointment.customer?.phone || ""}</p>
+              <p><strong>Email:</strong> ${appointment.customer?.email || ""}</p>
+              <div class="details-box">
+                <div class="detail-row"><strong>Reference:</strong> ${appointment.ref_code || "N/A"}</div>
+                <div class="detail-row"><strong>Date:</strong> ${dateFormatted}</div>
+                <div class="detail-row"><strong>Time:</strong> ${timeWindow}</div>
+                <div class="detail-row"><strong>Service:</strong> ${serviceName}</div>
+                <div class="detail-row"><strong>Address:</strong> ${appointment.address}</div>
+                <div class="detail-row"><strong>Source:</strong> ${appointment.source || "manual"}</div>
+              </div>
+              <p>Open the dashboard to confirm and assign a technician.</p>
+            </div>
+            <div class="footer">
+              <p>${businessName} | ${appointment.business.phone || ""}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const emailIds: string[] = [];
+      let failed = 0;
+
+      for (const r of toRecipients) {
+        const { data: emailData, error: emailError } = await resend.emails.send({
+          from: `${businessName} <promo@metricflow.space>`,
+          to: [r.email],
+          subject,
+          html: htmlContent,
+        });
+
+        if (emailError) {
+          failed++;
+          console.error("Admin email send error:", emailError);
+          await supabase.from("email_logs").insert({
+            business_id: appointment.business_id,
+            email_type: "admin_new_appointment",
+            recipient_type: "admin",
+            recipient_email: r.email,
+            recipient_name: r.name,
+            subject,
+            appointment_id: appointmentId,
+            customer_id: appointment.customer?.id,
+            status: "failed",
+            failed_at: new Date().toISOString(),
+            error_message: emailError.message,
+          });
+          continue;
+        }
+
+        if (emailData?.id) emailIds.push(emailData.id);
+
+        await supabase.from("email_logs").insert({
+          business_id: appointment.business_id,
+          email_type: "admin_new_appointment",
+          recipient_type: "admin",
+          recipient_email: r.email,
+          recipient_name: r.name,
+          subject,
+          appointment_id: appointmentId,
+          customer_id: appointment.customer?.id,
+          resend_id: emailData?.id,
+          status: "sent",
+          sent_at: new Date().toISOString(),
+        });
+      }
+
+      return new Response(JSON.stringify({ success: failed < toRecipients.length, emailIds, failed }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     switch (type) {
+      case "appointment_request_received":
+        subject = `We received your service request - ${businessName}`;
+        htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head><style>${baseStyles}</style></head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1 style="margin:0;">Request Received 📋</h1>
+              </div>
+              <div class="content">
+                <p>Hi ${customerName},</p>
+                <p>Thanks for contacting <strong>${businessName}</strong>. We received your request and we are reviewing it now.</p>
+
+                <div class="details-box">
+                  <div class="detail-row"><strong>Service:</strong> ${serviceName}</div>
+                  <div class="detail-row"><strong>Preferred:</strong> ${dateFormatted} (${timeWindow})</div>
+                  <div class="detail-row"><strong>Reference:</strong> ${appointment.ref_code || "N/A"}</div>
+                </div>
+
+                <p>During business hours, this usually takes just a few minutes.</p>
+                <p>Questions? Call us at <strong>${appointment.business.phone || ""}</strong>.</p>
+              </div>
+              <div class="footer">
+                <p>${businessName}<br>${appointment.business.phone || ""}</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+        break;
+
       case "appointment_confirmation":
         subject = `Appointment Confirmed ✓ ${dateFormatted} - ${businessName}`;
         htmlContent = `
