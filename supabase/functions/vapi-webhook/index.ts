@@ -246,7 +246,7 @@ Deno.serve(async (req: Request) => {
               result = await getBusinessInfo(supabase, businessId);
               break;
             case "get_services":
-              result = await getServices(supabase, businessId);
+              result = await getServices(supabase, businessId, params);
               break;
             default:
               console.log(`Unknown function: ${functionName}`);
@@ -288,7 +288,7 @@ Deno.serve(async (req: Request) => {
             result = await getBusinessInfo(supabase, businessId);
             break;
           case "get_services":
-            result = await getServices(supabase, businessId);
+            result = await getServices(supabase, businessId, params);
             break;
         }
 
@@ -600,10 +600,25 @@ async function handleCheckAvailability(
   params: Record<string, any>
 ): Promise<Record<string, any>> {
   try {
+    // Get service duration if service_name provided
+    let duration = 60; // Default 1 hour
+    if (params.service_name) {
+      const { data: service } = await supabase
+        .from("services")
+        .select("duration_max")
+        .eq("business_id", businessId)
+        .ilike("name", `%${params.service_name}%`)
+        .single();
+      
+      if (service?.duration_max) {
+        duration = service.duration_max;
+      }
+    }
+
     const { data: slots, error } = await supabase.rpc("get_available_slots", {
       p_business_id: businessId,
       p_date: params.date,
-      p_duration_minutes: 60,
+      p_duration_minutes: duration,
     });
 
     if (error) {
@@ -685,15 +700,39 @@ async function getBusinessInfo(
 
 async function getServices(
   supabase: SupabaseClient<any, any, any>,
-  businessId: string
+  businessId: string,
+  params: Record<string, any> = {}
 ): Promise<Record<string, any>> {
   try {
-    const { data: services, error } = await supabase
+    let query = supabase
       .from("services")
-      .select("name, description, duration_min, duration_max, base_price_min, base_price_max")
+      .select(`
+        name, 
+        description, 
+        duration_min, 
+        duration_max, 
+        base_price_min, 
+        base_price_max,
+        category:service_categories(name)
+      `)
       .eq("business_id", businessId)
-      .eq("is_active", true)
-      .order("sort_order");
+      .eq("is_active", true);
+
+    // Filter by category if provided
+    if (params.category) {
+      const { data: category } = await supabase
+        .from("service_categories")
+        .select("id")
+        .eq("business_id", businessId)
+        .ilike("name", `%${params.category}%`)
+        .single();
+
+      if (category) {
+        query = query.eq("category_id", category.id);
+      }
+    }
+
+    const { data: services, error } = await query.order("sort_order");
 
     if (error) {
       return { success: false, message: "Unable to retrieve services" };
@@ -703,6 +742,7 @@ async function getServices(
     const serviceList = servicesArray.map((s) => ({
       name: s.name,
       description: s.description,
+      category: s.category?.name || "General",
       duration: s.duration_min === s.duration_max
         ? `${s.duration_min} minutes`
         : `${s.duration_min}-${s.duration_max} minutes`,
