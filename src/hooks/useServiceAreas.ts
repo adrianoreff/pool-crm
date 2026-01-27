@@ -50,3 +50,26 @@ export function useToggleServiceAreaActive() {
     },
   });
 }
+
+export function useDeleteServiceArea() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('service_areas')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-areas'] });
+      toast({ title: 'Service area deleted successfully' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to delete service area', description: error.message, variant: 'destructive' });
+    },
+  });
+}

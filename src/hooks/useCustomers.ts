@@ -179,3 +179,26 @@ export function useUpdateCustomer() {
     },
   });
 }
+
+export function useDeleteCustomer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      toast({ title: 'Customer deleted successfully' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to delete customer', description: error.message, variant: 'destructive' });
+    },
+  });
+}

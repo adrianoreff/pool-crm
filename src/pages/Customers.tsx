@@ -40,12 +40,22 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { useCustomers, useCustomerAppointments } from '@/hooks/useCustomers';
+import { useCustomers, useCustomerAppointments, useDeleteCustomer } from '@/hooks/useCustomers';
 import { CustomerWithAddresses } from '@/types/database';
-import { AddCustomerModal } from '@/components/modals';
+import { AddCustomerModal, EditCustomerModal } from '@/components/modals';
 
 const formatCurrency = (amount: number | null) => {
   return new Intl.NumberFormat('en-US', {
@@ -68,9 +78,17 @@ const getInitials = (firstName: string, lastName: string | null) => {
   return `${firstName[0]}${lastName?.[0] || ''}`.toUpperCase();
 };
 
-function CustomerDetailPanel({ customer, onClose }: { customer: CustomerWithAddresses; onClose: () => void }) {
+function CustomerDetailPanel({ customer, onClose, onEdit }: { customer: CustomerWithAddresses; onClose: () => void; onEdit: () => void }) {
   const { data: appointments = [], isLoading } = useCustomerAppointments(customer.id);
   const primaryAddress = customer.customer_addresses?.find(a => a.is_primary) || customer.customer_addresses?.[0];
+
+  const handleContact = (type: 'phone' | 'email') => {
+    if (type === 'phone') {
+      window.open(`tel:${customer.phone}`);
+    } else if (type === 'email' && customer.email) {
+      window.open(`mailto:${customer.email}`);
+    }
+  };
 
   return (
     <>
@@ -91,6 +109,10 @@ function CustomerDetailPanel({ customer, onClose }: { customer: CustomerWithAddr
               </p>
             </div>
           </div>
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Edit className="h-4 w-4 mr-1" />
+            Edit
+          </Button>
         </div>
       </SheetHeader>
 
@@ -136,7 +158,7 @@ function CustomerDetailPanel({ customer, onClose }: { customer: CustomerWithAddr
                     <Phone className="h-4 w-4 text-muted-foreground" />
                     <span>{customer.phone}</span>
                   </div>
-                  <Button variant="ghost" size="sm">Call</Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleContact('phone')}>Call</Button>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
@@ -144,7 +166,7 @@ function CustomerDetailPanel({ customer, onClose }: { customer: CustomerWithAddr
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <span className="truncate">{customer.email || 'No email'}</span>
                   </div>
-                  <Button variant="ghost" size="sm" disabled={!customer.email}>Email</Button>
+                  <Button variant="ghost" size="sm" disabled={!customer.email} onClick={() => handleContact('email')}>Email</Button>
                 </div>
               </CardContent>
             </Card>
@@ -242,11 +264,46 @@ export default function Customers() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithAddresses | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'appointments' | 'spent'>('name');
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState<CustomerWithAddresses | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
 
   const { data: customers = [], isLoading } = useCustomers({
     search: searchQuery,
     sortBy,
   });
+  const deleteCustomer = useDeleteCustomer();
+
+  const handleEditCustomer = (customer: CustomerWithAddresses) => {
+    setCustomerToEdit(customer);
+    setIsEditCustomerOpen(true);
+    setSelectedCustomer(null);
+  };
+
+  const handleDeleteClick = (customerId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCustomerToDelete(customerId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (customerToDelete) {
+      deleteCustomer.mutate(customerToDelete);
+    }
+    setDeleteDialogOpen(false);
+    setCustomerToDelete(null);
+    setSelectedCustomer(null);
+  };
+
+  const handleContact = (customer: CustomerWithAddresses, type: 'phone' | 'email', e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (type === 'phone') {
+      window.open(`tel:${customer.phone}`);
+    } else if (type === 'email' && customer.email) {
+      window.open(`mailto:${customer.email}`);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -406,20 +463,30 @@ export default function Customers() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => handleContact(customer, 'phone', e)}>
                               <Phone className="mr-2 h-4 w-4" />
                               Call
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Mail className="mr-2 h-4 w-4" />
-                              Email
-                            </DropdownMenuItem>
+                            {customer.email && (
+                              <DropdownMenuItem onClick={(e) => handleContact(customer, 'email', e)}>
+                                <Mail className="mr-2 h-4 w-4" />
+                                Email
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedCustomer(customer); }}>
+                              <ChevronRight className="mr-2 h-4 w-4" />
+                              View Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditCustomer(customer); }}>
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={(e) => handleDeleteClick(customer.id, e)}
+                            >
                               <Trash className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
@@ -436,22 +503,46 @@ export default function Customers() {
       </Card>
 
       {/* Customer Detail Sheet */}
-      <Sheet open={!!selectedCustomer} onOpenChange={() => setSelectedCustomer(null)}>
+      <Sheet open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
         <SheetContent className="w-full sm:max-w-lg">
           {selectedCustomer && (
             <CustomerDetailPanel 
               customer={selectedCustomer} 
-              onClose={() => setSelectedCustomer(null)} 
+              onClose={() => setSelectedCustomer(null)}
+              onEdit={() => handleEditCustomer(selectedCustomer)}
             />
           )}
         </SheetContent>
       </Sheet>
 
-      {/* Add Customer Modal */}
+      {/* Modals */}
       <AddCustomerModal 
         open={isAddCustomerOpen} 
         onOpenChange={setIsAddCustomerOpen} 
       />
+      <EditCustomerModal
+        open={isEditCustomerOpen}
+        onOpenChange={setIsEditCustomerOpen}
+        customer={customerToEdit}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this customer? This action cannot be undone and will remove all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete Customer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

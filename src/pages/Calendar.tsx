@@ -24,7 +24,8 @@ import { cn } from '@/lib/utils';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { Skeleton } from '@/components/ui/skeleton';
-import { NewAppointmentModal } from '@/components/modals';
+import { NewAppointmentModal, AppointmentDetailModal } from '@/components/modals';
+import { AppointmentWithRelations } from '@/types/database';
 
 type ViewType = 'day' | 'week' | 'month';
 
@@ -54,6 +55,8 @@ export default function CalendarPage() {
   const [view, setView] = useState<ViewType>('week');
   const [selectedTechnician, setSelectedTechnician] = useState<string>('all');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithRelations | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   // Get week dates for filtering
   const getWeekDates = () => {
@@ -166,6 +169,12 @@ export default function CalendarPage() {
     } else {
       return currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
     }
+  };
+
+  const handleEventClick = (apt: AppointmentWithRelations, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedAppointment(apt);
+    setIsDetailModalOpen(true);
   };
 
   const isLoading = isLoadingAppointments || isLoadingTechnicians;
@@ -315,13 +324,14 @@ export default function CalendarPage() {
                                 return (
                                   <div
                                     key={apt.id}
-                                    className="absolute left-1 right-1 rounded-md p-1.5 cursor-pointer transition-all hover:shadow-md overflow-hidden"
+                                    className="absolute left-1 right-1 rounded-md p-1.5 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] overflow-hidden"
                                     style={{
                                       top: `${top}px`,
                                       height: `${height}px`,
                                       backgroundColor: `${techColor}20`,
                                       borderLeft: `3px solid ${techColor}`,
                                     }}
+                                    onClick={(e) => handleEventClick(apt, e)}
                                   >
                                     <p className="text-xs font-medium truncate">
                                       {apt.customer?.first_name} {apt.customer?.last_name}
@@ -380,13 +390,14 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={apt.id}
-                          className="absolute left-2 right-2 rounded-lg p-3 cursor-pointer transition-all hover:shadow-md"
+                          className="absolute left-2 right-2 rounded-lg p-3 cursor-pointer transition-all hover:shadow-md hover:scale-[1.01]"
                           style={{
                             top: `${top}px`,
                             height: `${height}px`,
                             backgroundColor: `${techColor}15`,
                             borderLeft: `4px solid ${techColor}`,
                           }}
+                          onClick={(e) => handleEventClick(apt, e)}
                         >
                           <div className="flex items-start justify-between">
                             <div>
@@ -434,88 +445,128 @@ export default function CalendarPage() {
               )}
 
               {view === 'month' && (
-                <div className="p-4">
-                  {/* Month View Grid */}
-                  <div className="grid grid-cols-7 gap-1">
-                    {/* Day headers */}
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                      <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
-                        {day}
-                      </div>
-                    ))}
-                    
-                    {/* Calendar days */}
-                    {(() => {
-                      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-                      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-                      const startOffset = firstDay.getDay();
-                      const days = [];
-
-                      // Empty cells for days before the first day of the month
-                      for (let i = 0; i < startOffset; i++) {
-                        days.push(<div key={`empty-${i}`} className="p-2 min-h-[100px]" />);
-                      }
-
-                      // Days of the month
-                      for (let day = 1; day <= lastDay.getDate(); day++) {
-                        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-                        const isToday = date.toDateString() === today.toDateString();
-                        const dayAppointments = getAppointmentsForDate(date);
-
-                        days.push(
-                          <div
-                            key={day}
-                            className={cn(
-                              'p-2 min-h-[100px] border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors',
-                              isToday && 'bg-primary/5 border-primary/20'
-                            )}
-                            onClick={() => setIsNewAppointmentOpen(true)}
-                          >
-                            <p className={cn(
-                              'text-sm font-medium mb-1',
-                              isToday && 'text-primary'
-                            )}>
-                              {day}
-                            </p>
-                            <div className="space-y-1">
-                              {dayAppointments.slice(0, 3).map((apt) => (
-                                <div
-                                  key={apt.id}
-                                  className="text-xs p-1 rounded truncate"
-                                  style={{
-                                    backgroundColor: `${apt.technician?.color || '#F97316'}20`,
-                                    borderLeft: `2px solid ${apt.technician?.color || '#F97316'}`,
-                                  }}
-                                >
-                                  {apt.customer?.first_name}
-                                </div>
-                              ))}
-                              {dayAppointments.length > 3 && (
-                                <p className="text-xs text-muted-foreground">
-                                  +{dayAppointments.length - 3} more
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return days;
-                    })()}
-                  </div>
-                </div>
+                <MonthView 
+                  currentDate={currentDate} 
+                  appointments={filteredAppointments}
+                  onEventClick={handleEventClick}
+                />
               )}
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* New Appointment Modal */}
+      {/* Modals */}
       <NewAppointmentModal 
         open={isNewAppointmentOpen} 
-        onOpenChange={setIsNewAppointmentOpen}
-        preselectedDate={currentDate}
+        onOpenChange={setIsNewAppointmentOpen} 
       />
+      <AppointmentDetailModal
+        open={isDetailModalOpen}
+        onOpenChange={setIsDetailModalOpen}
+        appointment={selectedAppointment}
+      />
+    </div>
+  );
+}
+
+// Month View Component
+function MonthView({ 
+  currentDate, 
+  appointments,
+  onEventClick,
+}: { 
+  currentDate: Date; 
+  appointments: AppointmentWithRelations[];
+  onEventClick: (apt: AppointmentWithRelations, e: React.MouseEvent) => void;
+}) {
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+  const startDate = new Date(firstDayOfMonth);
+  startDate.setDate(startDate.getDate() - startDate.getDay());
+  
+  const weeks: Date[][] = [];
+  let currentWeek: Date[] = [];
+  let d = new Date(startDate);
+  
+  while (d <= lastDayOfMonth || currentWeek.length > 0) {
+    currentWeek.push(new Date(d));
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+      if (d > lastDayOfMonth) break;
+    }
+    d.setDate(d.getDate() + 1);
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const getAppointmentsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return appointments.filter(apt => apt.scheduled_date === dateStr);
+  };
+
+  return (
+    <div>
+      {/* Day Headers */}
+      <div className="grid grid-cols-7 border-b">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar Grid */}
+      {weeks.map((week, weekIndex) => (
+        <div key={weekIndex} className="grid grid-cols-7 border-b last:border-b-0">
+          {week.map((date) => {
+            const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+            const isToday = date.toDateString() === today.toDateString();
+            const dayAppointments = getAppointmentsForDate(date);
+
+            return (
+              <div 
+                key={date.toISOString()} 
+                className={cn(
+                  'min-h-[100px] border-r last:border-r-0 p-1',
+                  !isCurrentMonth && 'bg-muted/30',
+                  isToday && 'bg-primary/5'
+                )}
+              >
+                <p className={cn(
+                  'text-sm font-medium text-center mb-1',
+                  !isCurrentMonth && 'text-muted-foreground',
+                  isToday && 'text-primary'
+                )}>
+                  {date.getDate()}
+                </p>
+                <div className="space-y-1">
+                  {dayAppointments.slice(0, 3).map((apt) => (
+                    <div
+                      key={apt.id}
+                      className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80"
+                      style={{
+                        backgroundColor: `${apt.technician?.color || '#F97316'}20`,
+                        color: apt.technician?.color || '#F97316',
+                      }}
+                      onClick={(e) => onEventClick(apt, e)}
+                    >
+                      {apt.customer?.first_name}
+                    </div>
+                  ))}
+                  {dayAppointments.length > 3 && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      +{dayAppointments.length - 3} more
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

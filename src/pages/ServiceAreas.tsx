@@ -19,12 +19,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { useServiceAreas, useToggleServiceAreaActive } from '@/hooks/useServiceAreas';
+import { useServiceAreas, useToggleServiceAreaActive, useDeleteServiceArea } from '@/hooks/useServiceAreas';
 import { ServiceAreaWithTechnician } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AddServiceAreaModal } from '@/components/modals';
+import { AddServiceAreaModal, EditServiceAreaModal } from '@/components/modals';
 
 // Generate a color based on index for visual differentiation
 const areaColors = ['#3B82F6', '#10B981', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4'];
@@ -93,7 +103,17 @@ function MapPlaceholder({ areas }: { areas: ServiceAreaWithTechnician[] }) {
   );
 }
 
-function ServiceAreaCard({ area, colorIndex }: { area: ServiceAreaWithTechnician; colorIndex: number }) {
+function ServiceAreaCard({ 
+  area, 
+  colorIndex, 
+  onEdit, 
+  onDelete 
+}: { 
+  area: ServiceAreaWithTechnician; 
+  colorIndex: number;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const toggleActive = useToggleServiceAreaActive();
   const color = areaColors[colorIndex % areaColors.length];
 
@@ -131,7 +151,7 @@ function ServiceAreaCard({ area, colorIndex }: { area: ServiceAreaWithTechnician
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={onEdit}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Zone
                 </DropdownMenuItem>
@@ -140,7 +160,7 @@ function ServiceAreaCard({ area, colorIndex }: { area: ServiceAreaWithTechnician
                   Draw on Map
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem className="text-destructive" onClick={onDelete}>
                   <Trash className="mr-2 h-4 w-4" />
                   Delete
                 </DropdownMenuItem>
@@ -201,8 +221,32 @@ function ServiceAreaCard({ area, colorIndex }: { area: ServiceAreaWithTechnician
 
 export default function ServiceAreas() {
   const { data: serviceAreas = [], isLoading } = useServiceAreas();
+  const deleteServiceArea = useDeleteServiceArea();
   const activeAreas = serviceAreas.filter(a => a.is_active).length;
+  
   const [isAddServiceAreaOpen, setIsAddServiceAreaOpen] = useState(false);
+  const [isEditServiceAreaOpen, setIsEditServiceAreaOpen] = useState(false);
+  const [serviceAreaToEdit, setServiceAreaToEdit] = useState<ServiceAreaWithTechnician | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
+
+  const handleEdit = (area: ServiceAreaWithTechnician) => {
+    setServiceAreaToEdit(area);
+    setIsEditServiceAreaOpen(true);
+  };
+
+  const handleDeleteClick = (areaId: string) => {
+    setAreaToDelete(areaId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (areaToDelete) {
+      deleteServiceArea.mutate(areaToDelete);
+    }
+    setDeleteDialogOpen(false);
+    setAreaToDelete(null);
+  };
 
   if (isLoading) {
     return (
@@ -273,7 +317,13 @@ export default function ServiceAreas() {
             ) : (
               <div className="space-y-4">
                 {serviceAreas.map((area, idx) => (
-                  <ServiceAreaCard key={area.id} area={area} colorIndex={idx} />
+                  <ServiceAreaCard 
+                    key={area.id} 
+                    area={area} 
+                    colorIndex={idx}
+                    onEdit={() => handleEdit(area)}
+                    onDelete={() => handleDeleteClick(area.id)}
+                  />
                 ))}
               </div>
             )}
@@ -281,11 +331,34 @@ export default function ServiceAreas() {
         </div>
       </div>
 
-      {/* Add Service Area Modal */}
+      {/* Modals */}
       <AddServiceAreaModal 
         open={isAddServiceAreaOpen} 
         onOpenChange={setIsAddServiceAreaOpen} 
       />
+      <EditServiceAreaModal
+        open={isEditServiceAreaOpen}
+        onOpenChange={setIsEditServiceAreaOpen}
+        serviceArea={serviceAreaToEdit}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Service Area</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this service area? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

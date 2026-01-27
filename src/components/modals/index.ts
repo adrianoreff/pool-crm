@@ -4,3 +4,6 @@ export { InviteTeamModal } from './InviteTeamModal';
 export { AddServiceModal } from './AddServiceModal';
 export { AddCategoryModal } from './AddCategoryModal';
 export { AddServiceAreaModal } from './AddServiceAreaModal';
+export { AppointmentDetailModal } from './AppointmentDetailModal';
+export { EditCustomerModal } from './EditCustomerModal';
+export { EditServiceAreaModal } from './EditServiceAreaModal';
