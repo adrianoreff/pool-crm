@@ -16,6 +16,7 @@ import {
   Pencil,
   CalendarClock,
   Trash,
+  Mail,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,8 +60,10 @@ import { cn } from '@/lib/utils';
 import { useAppointments, useTodayAppointments, usePendingAppointments, useCancelAppointment } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServiceCategories } from '@/hooks/useServices';
+import { useAppointmentsLatestEmailStatus } from '@/hooks/useLatestEmailStatus';
 import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
 import { NewAppointmentModal, AppointmentDetailModal } from '@/components/modals';
+import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 
 type SortField = 'date' | 'customer' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -141,6 +144,10 @@ export default function Appointments() {
   const { data: technicians = [] } = useTechnicians();
   const { data: categories = [] } = useServiceCategories();
   const cancelMutation = useCancelAppointment();
+
+  // Get appointment IDs for email status lookup
+  const appointmentIds = allAppointments.map(a => a.id);
+  const { data: emailStatusMap = {} } = useAppointmentsLatestEmailStatus(appointmentIds);
 
   const todaysCount = todaysAppointments.length;
   const pendingCount = pendingAppointments.length;
@@ -352,6 +359,7 @@ export default function Appointments() {
                 <TableHead>Service</TableHead>
                 <TableHead className="hidden md:table-cell">Address</TableHead>
                 <TableHead className="hidden lg:table-cell">Technician</TableHead>
+                <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead className="hidden sm:table-cell">Source</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
@@ -449,6 +457,13 @@ export default function Appointments() {
                           </div>
                         ) : (
                           <span className="text-sm text-muted-foreground">Unassigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {emailStatusMap[apt.id] ? (
+                          <EmailStatusBadge status={emailStatusMap[apt.id].status as any} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
