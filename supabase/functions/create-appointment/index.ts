@@ -206,9 +206,14 @@ Deno.serve(async (req: Request) => {
       metadata: { serviceId, date, time },
     });
 
-    // Send confirmation email (fire and forget)
+    // Send confirmation email to customer (fire and forget)
     supabase.functions.invoke("send-notification", {
       body: { type: "appointment_confirmation", appointmentId: appointment.id },
+    });
+
+    // Send notification to admin about new appointment (fire and forget)
+    supabase.functions.invoke("send-notification", {
+      body: { type: "admin_new_appointment", appointmentId: appointment.id },
     });
 
     return new Response(
