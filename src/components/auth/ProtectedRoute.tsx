@@ -5,10 +5,11 @@ import { Loader2 } from 'lucide-react';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiresOnboarding?: boolean;
+  allowedRoles?: string[];
 }
 
-export function ProtectedRoute({ children, requiresOnboarding = true }: ProtectedRouteProps) {
-  const { user, loading, needsOnboarding } = useAuth();
+export function ProtectedRoute({ children, requiresOnboarding = true, allowedRoles }: ProtectedRouteProps) {
+  const { user, loading, needsOnboarding, profile } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -24,6 +25,22 @@ export function ProtectedRoute({ children, requiresOnboarding = true }: Protecte
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Role-based access control
+  if (allowedRoles && profile) {
+    if (!allowedRoles.includes(profile.role)) {
+      // If technician tries to access admin routes, redirect to technician dashboard
+      if (profile.role === 'technician') {
+        return <Navigate to="/technician/dashboard" replace />;
+      }
+      // If admin tries to access technician login, redirect to admin dashboard
+      if (location.pathname === '/technician/login' && profile.role !== 'technician') {
+        return <Navigate to="/dashboard" replace />;
+      }
+      // Otherwise redirect to appropriate dashboard
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   // If user needs onboarding and we require it, redirect to onboarding

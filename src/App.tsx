@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { TechnicianRouteGuard } from "./components/auth/TechnicianRouteGuard";
 import { AppShell } from "./components/layout/AppShell";
+import { TechnicianLayout } from "./components/layout/TechnicianLayout";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
 import Appointments from "./pages/Appointments";
@@ -24,6 +26,14 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Onboarding from "./pages/Onboarding";
 import BookingWidget from "./pages/BookingWidget";
 import NotFound from "./pages/NotFound";
+import TechnicianLogin from "./pages/technician/Login";
+import TechnicianDashboard from "./pages/technician/Dashboard";
+import JobsList from "./pages/technician/JobsList";
+import JobDetails from "./pages/technician/JobDetails";
+import JobChecklist from "./pages/technician/JobChecklist";
+import CompleteJob from "./pages/technician/CompleteJob";
+import History from "./pages/technician/History";
+import Profile from "./pages/technician/Profile";
 
 const queryClient = new QueryClient();
 
@@ -56,7 +66,7 @@ const App = () => (
             {/* Protected Routes (require auth + business) */}
             <Route 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['owner', 'admin', 'dispatcher']}>
                   <AppShell />
                 </ProtectedRoute>
               }
@@ -74,6 +84,24 @@ const App = () => (
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
+            </Route>
+
+            {/* Technician Routes */}
+            <Route path="/technician/login" element={<TechnicianLogin />} />
+            <Route 
+              element={
+                <TechnicianRouteGuard>
+                  <TechnicianLayout />
+                </TechnicianRouteGuard>
+              }
+            >
+              <Route path="/technician/dashboard" element={<TechnicianDashboard />} />
+              <Route path="/technician/jobs" element={<div>Jobs List</div>} />
+              <Route path="/technician/jobs/:id" element={<div>Job Details</div>} />
+              <Route path="/technician/jobs/:id/checklist" element={<JobChecklist />} />
+              <Route path="/technician/jobs/:id/complete" element={<CompleteJob />} />
+              <Route path="/technician/history" element={<div>History</div>} />
+              <Route path="/technician/profile" element={<div>Profile</div>} />
             </Route>
             
             {/* Catch-all */}
