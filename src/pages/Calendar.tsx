@@ -203,7 +203,8 @@ export default function CalendarPage() {
     const durationMinutes = endMinutes - startMinutes;
     
     const top = (startMinutes / 60) * 64; // 64px per hour
-    const height = Math.max((durationMinutes / 60) * 64, 32);
+    // Limit height to maximum 1 slot (64px) to prevent appointments from taking multiple slots
+    const height = Math.min(Math.max((durationMinutes / 60) * 64, 40), 64);
     
     // Calculate width and left position for overlapping appointments
     const total = overlapInfo?.total || 1;
@@ -267,28 +268,47 @@ export default function CalendarPage() {
 
   // Drag and drop handlers
   const handleDragStart = (apt: AppointmentWithRelations, e: React.DragEvent) => {
+    e.stopPropagation();
     setDraggingAppointment(apt);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', apt.id);
+    // Set drag image to be invisible to avoid visual glitches
+    const dragImage = document.createElement('div');
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-9999px';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.stopPropagation();
     setDraggingAppointment(null);
     setDragOverSlot(null);
   };
 
   const handleDragOver = (date: string, time: string, e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setDragOverSlot({ date, time });
   };
 
-  const handleDragLeave = () => {
-    setDragOverSlot(null);
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear if we're actually leaving the drop zone
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDragOverSlot(null);
+    }
   };
 
   const handleDrop = (date: string, time: string, e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (draggingAppointment) {
       setRescheduleTarget({ date, time });
       setShowRescheduleDialog(true);
@@ -468,9 +488,13 @@ export default function CalendarPage() {
                                       isDragOver && 'bg-primary/20 ring-2 ring-primary ring-inset',
                                       !isDragOver && 'hover:bg-muted/30'
                                     )}
-                                    onClick={() => setIsNewAppointmentOpen(true)}
+                                    onClick={(e) => {
+                                      if (!draggingAppointment) {
+                                        setIsNewAppointmentOpen(true);
+                                      }
+                                    }}
                                     onDragOver={(e) => handleDragOver(dateStr, time, e)}
-                                    onDragLeave={handleDragLeave}
+                                    onDragLeave={(e) => handleDragLeave(e)}
                                     onDrop={(e) => handleDrop(dateStr, time, e)}
                                   />
                                 );
@@ -492,7 +516,7 @@ export default function CalendarPage() {
                                     key={apt.id}
                                     draggable
                                     onDragStart={(e) => handleDragStart(apt, e)}
-                                    onDragEnd={handleDragEnd}
+                                    onDragEnd={(e) => handleDragEnd(e)}
                                     className={cn(
                                       "absolute rounded-md p-1.5 cursor-grab transition-all overflow-hidden group",
                                       isDragging && "opacity-50 cursor-grabbing shadow-lg scale-105",
@@ -506,7 +530,11 @@ export default function CalendarPage() {
                                       backgroundColor: `${techColor}20`,
                                       borderLeft: `3px solid ${techColor}`,
                                     }}
-                                    onClick={(e) => handleEventClick(apt, e)}
+                                    onClick={(e) => {
+                                      if (!draggingAppointment) {
+                                        handleEventClick(apt, e);
+                                      }
+                                    }}
                                   >
                                     <div className="flex items-start gap-1">
                                       <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-50 flex-shrink-0 mt-0.5" />
@@ -565,9 +593,13 @@ export default function CalendarPage() {
                             isDragOver && 'bg-primary/20 ring-2 ring-primary ring-inset',
                             !isDragOver && 'hover:bg-muted/30'
                           )}
-                          onClick={() => setIsNewAppointmentOpen(true)}
+                          onClick={(e) => {
+                            if (!draggingAppointment) {
+                              setIsNewAppointmentOpen(true);
+                            }
+                          }}
                           onDragOver={(e) => handleDragOver(dateStr, time, e)}
-                          onDragLeave={handleDragLeave}
+                          onDragLeave={(e) => handleDragLeave(e)}
                           onDrop={(e) => handleDrop(dateStr, time, e)}
                         />
                       );
@@ -593,7 +625,7 @@ export default function CalendarPage() {
                             key={apt.id}
                             draggable
                             onDragStart={(e) => handleDragStart(apt, e)}
-                            onDragEnd={handleDragEnd}
+                            onDragEnd={(e) => handleDragEnd(e)}
                             className={cn(
                               "absolute rounded-lg p-3 cursor-grab transition-all group",
                               isDragging && "opacity-50 cursor-grabbing shadow-lg",
@@ -607,7 +639,11 @@ export default function CalendarPage() {
                               backgroundColor: `${techColor}15`,
                               borderLeft: `4px solid ${techColor}`,
                             }}
-                            onClick={(e) => handleEventClick(apt, e)}
+                            onClick={(e) => {
+                              if (!draggingAppointment) {
+                                handleEventClick(apt, e);
+                              }
+                            }}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex items-start gap-2">
