@@ -58,6 +58,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useCustomers, useCustomerAppointments, useDeleteCustomer } from '@/hooks/useCustomers';
 import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
+import { useCustomersLatestEmailStatus } from '@/hooks/useLatestEmailStatus';
 import { CustomerWithAddresses } from '@/types/database';
 import { AddCustomerModal, EditCustomerModal, SendEmailModal } from '@/components/modals';
 import { EmailStatusBadge } from '@/components/ui/email-status-badge';
@@ -394,6 +395,10 @@ export default function Customers() {
   });
   const deleteCustomer = useDeleteCustomer();
 
+  // Get customer IDs for email status lookup
+  const customerIds = customers.map(c => c.id);
+  const { data: emailStatusMap = {} } = useCustomersLatestEmailStatus(customerIds);
+
   const handleEditCustomer = (customer: CustomerWithAddresses) => {
     setCustomerToEdit(customer);
     setIsEditCustomerOpen(true);
@@ -491,6 +496,7 @@ export default function Customers() {
                 <TableHead className="hidden md:table-cell">Address</TableHead>
                 <TableHead className="text-center hidden sm:table-cell">Appointments</TableHead>
                 <TableHead className="hidden lg:table-cell">Last Service</TableHead>
+                <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead className="text-right hidden sm:table-cell">Total Spent</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
@@ -579,6 +585,13 @@ export default function Customers() {
                         <span className="text-sm text-muted-foreground">
                           {formatDate(customer.last_appointment_at)}
                         </span>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {emailStatusMap[customer.id] ? (
+                          <EmailStatusBadge status={emailStatusMap[customer.id].status as any} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No emails</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right hidden sm:table-cell">
                         <span className="font-medium">{formatCurrency(customer.total_spent)}</span>
