@@ -30,6 +30,14 @@ export default function JobDetails() {
 
   // Debug logging
   useEffect(() => {
+    console.log('JobDetails - Component state:', {
+      id,
+      isLoading,
+      hasAppointment: !!appointment,
+      hasError: !!error,
+      errorMessage: error?.message,
+    });
+
     if (appointment) {
       console.log('JobDetails - Appointment loaded:', {
         id: appointment.id,
@@ -38,21 +46,43 @@ export default function JobDetails() {
         hasService: !!appointment.service,
         serviceName: appointment.service?.name || 'No service',
         address: appointment.address,
+        customer: appointment.customer,
+        service: appointment.service,
       });
     }
     if (error) {
       console.error('JobDetails - Error loading appointment:', error);
     }
-  }, [appointment, error]);
+  }, [id, appointment, isLoading, error]);
 
+  // Show loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Loading job details...</p>
+        <p className="text-xs text-muted-foreground">ID: {id}</p>
       </div>
     );
   }
 
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <AlertCircle className="h-12 w-12 text-destructive" />
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Error loading appointment</h2>
+          <p className="text-muted-foreground mt-2">{error.message}</p>
+          <Button onClick={() => navigate('/technician/jobs')} className="mt-4">
+            Back to Jobs
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show not found state
   if (!appointment) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
@@ -62,6 +92,7 @@ export default function JobDetails() {
           <p className="text-muted-foreground mt-2">
             The appointment you're looking for doesn't exist or you don't have access to it.
           </p>
+          <p className="text-xs text-muted-foreground mt-2">ID: {id}</p>
           <Button onClick={() => navigate('/technician/jobs')} className="mt-4">
             Back to Jobs
           </Button>
