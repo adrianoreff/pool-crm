@@ -259,47 +259,64 @@ export function useCancelAppointment() {
           });
           console.log('Cancellation email sent to customer');
 
-          // Admin cancellation notification
+          // Admin cancellation notification - send to notification_recipients AND business email
+          const adminEmails: { email: string; name: string }[] = [];
+          
+          // Get configured notification recipients
           const { data: recipients } = await supabase
             .from('notification_recipients')
             .select('email, name')
             .eq('business_id', profile?.business_id)
             .eq('is_active', true)
             .eq('notify_cancellation', true);
-
+          
           if (recipients && recipients.length > 0) {
-            for (const recipient of recipients) {
-              await supabase.functions.invoke('send-notification', {
-                body: {
-                  type: 'custom_email',
-                  to: recipient.email,
-                  toName: recipient.name || 'Admin',
-                  subject: `Appointment Cancelled - ${appointment.ref_code || id}`,
-                  html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                      <div style="background: #DC2626; color: white; padding: 20px; text-align: center;">
-                        <h1 style="margin: 0;">❌ Appointment Cancelled</h1>
-                      </div>
-                      <div style="padding: 20px; background: #fff;">
-                        <p><strong>Customer:</strong> ${appointment.customer?.first_name} ${appointment.customer?.last_name || ''}</p>
-                        <p><strong>Phone:</strong> ${appointment.customer?.phone || 'N/A'}</p>
-                        <p><strong>Reference:</strong> ${appointment.ref_code || 'N/A'}</p>
-                        <p><strong>Service:</strong> ${appointment.service?.name || 'N/A'}</p>
-                        <p><strong>Date:</strong> ${appointment.scheduled_date}</p>
-                        <p><strong>Time:</strong> ${appointment.scheduled_start_time} - ${appointment.scheduled_end_time}</p>
-                        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-                      </div>
-                    </div>
-                  `,
-                  businessId: profile?.business_id,
-                  emailType: 'admin_appointment_cancelled',
-                  recipientType: 'admin',
-                  appointmentId: id,
-                },
-              });
-            }
-            console.log('Cancellation notifications sent to admins');
+            adminEmails.push(...recipients.map(r => ({ email: r.email, name: r.name || 'Admin' })));
           }
+          
+          // Also get business email as fallback
+          const { data: business } = await supabase
+            .from('businesses')
+            .select('email, name')
+            .eq('id', profile?.business_id)
+            .single();
+          
+          if (business?.email && !adminEmails.some(a => a.email === business.email)) {
+            adminEmails.push({ email: business.email, name: business.name || 'Admin' });
+          }
+          
+          // Send to all admin emails
+          for (const admin of adminEmails) {
+            await supabase.functions.invoke('send-notification', {
+              body: {
+                type: 'custom_email',
+                to: admin.email,
+                toName: admin.name,
+                subject: `Appointment Cancelled - ${appointment.ref_code || id}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: #DC2626; color: white; padding: 20px; text-align: center;">
+                      <h1 style="margin: 0;">❌ Appointment Cancelled</h1>
+                    </div>
+                    <div style="padding: 20px; background: #fff;">
+                      <p><strong>Customer:</strong> ${appointment.customer?.first_name} ${appointment.customer?.last_name || ''}</p>
+                      <p><strong>Phone:</strong> ${appointment.customer?.phone || 'N/A'}</p>
+                      <p><strong>Reference:</strong> ${appointment.ref_code || 'N/A'}</p>
+                      <p><strong>Service:</strong> ${appointment.service?.name || 'N/A'}</p>
+                      <p><strong>Date:</strong> ${appointment.scheduled_date}</p>
+                      <p><strong>Time:</strong> ${appointment.scheduled_start_time} - ${appointment.scheduled_end_time}</p>
+                      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                    </div>
+                  </div>
+                `,
+                businessId: profile?.business_id,
+                emailType: 'admin_appointment_cancelled',
+                recipientType: 'admin',
+                appointmentId: id,
+              },
+            });
+          }
+          console.log(`Cancellation notifications sent to ${adminEmails.length} admins`);
         } catch (emailError) {
           console.error('Failed to send cancellation emails:', emailError);
         }
