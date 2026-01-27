@@ -14,6 +14,8 @@ import Team from "./pages/Team";
 import Services from "./pages/Services";
 import ServiceAreas from "./pages/ServiceAreas";
 import CallLogs from "./pages/CallLogs";
+import Messages from "./pages/Messages";
+import Invoices from "./pages/Invoices";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
@@ -68,6 +70,8 @@ const App = () => (
               <Route path="/services" element={<Services />} />
               <Route path="/service-areas" element={<ServiceAreas />} />
               <Route path="/calls" element={<CallLogs />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/invoices" element={<Invoices />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

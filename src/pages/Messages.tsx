@@ -1,0 +1,266 @@
+import { useState, useMemo } from 'react';
+import { Mail, Send, Eye, MousePointer, AlertTriangle, CheckCircle, Clock, Search, Filter } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { useEmailLogs, useEmailStats, EmailLogWithRelations } from '@/hooks/useMessages';
+
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    hour: 'numeric', 
+    minute: '2-digit' 
+  });
+};
+
+const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
+  queued: { icon: Clock, color: 'text-muted-foreground', bg: 'bg-muted', label: 'Queued' },
+  sent: { icon: Send, color: 'text-info', bg: 'bg-info/10', label: 'Sent' },
+  delivered: { icon: CheckCircle, color: 'text-success', bg: 'bg-success/10', label: 'Delivered' },
+  opened: { icon: Eye, color: 'text-primary', bg: 'bg-primary/10', label: 'Opened' },
+  clicked: { icon: MousePointer, color: 'text-secondary', bg: 'bg-secondary/10', label: 'Clicked' },
+  bounced: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', label: 'Bounced' },
+  failed: { icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Failed' },
+};
+
+const getEmailStatus = (email: EmailLogWithRelations): string => {
+  if (email.clicked_at) return 'clicked';
+  if (email.opened_at) return 'opened';
+  if (email.bounced_at || email.status === 'bounced') return 'bounced';
+  if (email.failed_at || email.status === 'failed') return 'failed';
+  if (email.delivered_at || email.status === 'delivered') return 'delivered';
+  if (email.sent_at || email.status === 'sent') return 'sent';
+  return 'queued';
+};
+
+const emailTypeLabels: Record<string, string> = {
+  appointment_request_received: 'Booking Received',
+  appointment_confirmed: 'Confirmed',
+  appointment_reminder: 'Reminder',
+  appointment_cancelled: 'Cancelled',
+  appointment_rescheduled: 'Rescheduled',
+  appointment_completed: 'Completed',
+  technician_en_route: 'Tech En Route',
+  tech_new_assignment: 'Tech Assigned',
+  tech_daily_schedule: 'Daily Schedule',
+  admin_new_appointment: 'Admin: New Booking',
+  admin_appointment_cancelled: 'Admin: Cancelled',
+  follow_up: 'Follow Up',
+  invoice_sent: 'Invoice',
+  custom: 'Custom',
+};
+
+export default function Messages() {
+  const { data: emails = [], isLoading } = useEmailLogs();
+  const { stats } = useEmailStats();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+
+  const filteredEmails = useMemo(() => {
+    return emails.filter(email => {
+      const matchesSearch = !searchQuery || 
+        email.recipient_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.recipient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.customer?.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.customer?.last_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const emailStatus = getEmailStatus(email);
+      const matchesStatus = statusFilter === 'all' || emailStatus === statusFilter;
+      const matchesType = typeFilter === 'all' || email.email_type === typeFilter;
+      
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [emails, searchQuery, statusFilter, typeFilter]);
+
+  const uniqueTypes = useMemo(() => {
+    return [...new Set(emails.map(e => e.email_type))];
+  }, [emails]);
+
+  const statCards = [
+    { label: 'Total Sent', value: stats.totalSent, icon: Mail, color: 'text-primary' },
+    { label: 'Delivered', value: `${stats.deliveryRate}%`, icon: CheckCircle, color: 'text-success' },
+    { label: 'Opened', value: `${stats.openRate}%`, icon: Eye, color: 'text-info' },
+    { label: 'Clicked', value: stats.clicked, icon: MousePointer, color: 'text-secondary' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Messages</h1>
+        <p className="text-muted-foreground">Email communication history and tracking</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {statCards.map((stat) => (
+          <Card key={stat.label} className="shadow-card">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={cn('rounded-lg p-2', stat.color.replace('text-', 'bg-') + '/10')}>
+                <stat.icon className={cn('h-5 w-5', stat.color)} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{isLoading ? '-' : stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <Card className="shadow-card">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by email, name, or subject..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {Object.entries(statusConfig).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>
+                    <div className="flex items-center gap-2">
+                      <config.icon className={cn('h-3 w-3', config.color)} />
+                      {config.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Email Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {uniqueTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {emailTypeLabels[type] || type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email History Table */}
+      <Card className="shadow-card">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Recipient</TableHead>
+                <TableHead className="hidden md:table-cell">Subject</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Interactions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-40" /></TableCell>
+                    <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                    <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-32" /></TableCell>
+                  </TableRow>
+                ))
+              ) : filteredEmails.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12">
+                    <Mail className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      {emails.length === 0 ? 'No emails sent yet' : 'No emails match your filters'}
+                    </p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredEmails.map((email) => {
+                  const status = getEmailStatus(email);
+                  const statusInfo = statusConfig[status] || statusConfig.queued;
+                  const StatusIcon = statusInfo.icon;
+                  
+                  return (
+                    <TableRow key={email.id}>
+                      <TableCell className="whitespace-nowrap">
+                        {formatDate(email.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">
+                            {email.customer 
+                              ? `${email.customer.first_name} ${email.customer.last_name || ''}`
+                              : email.recipient_name || 'Unknown'}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+                            {email.recipient_email}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <p className="truncate max-w-[300px]">{email.subject}</p>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {emailTypeLabels[email.email_type] || email.email_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline" 
+                          className={cn('gap-1', statusInfo.color, statusInfo.bg)}
+                        >
+                          <StatusIcon className="h-3 w-3" />
+                          {statusInfo.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <div className="flex gap-4 text-xs text-muted-foreground">
+                          {email.opened_at && (
+                            <span className="flex items-center gap-1">
+                              <Eye className="h-3 w-3" />
+                              {formatDate(email.opened_at)}
+                            </span>
+                          )}
+                          {email.clicked_at && (
+                            <span className="flex items-center gap-1">
+                              <MousePointer className="h-3 w-3" />
+                              {formatDate(email.clicked_at)}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
