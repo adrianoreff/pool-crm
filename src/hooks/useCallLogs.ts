@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { CallLogWithCustomer, CallLogWithMessages, CallLogFilters } from '@/types/database';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 // Hook to sync VAPI calls on demand
 export function useSyncVapiCalls() {
@@ -23,6 +24,91 @@ export function useSyncVapiCalls() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['call-logs'] });
+    },
+  });
+}
+
+// Hook to delete a single call log
+export function useDeleteCallLog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (callId: string) => {
+      // First delete related call messages
+      const { error: messagesError } = await supabase
+        .from('call_messages')
+        .delete()
+        .eq('call_log_id', callId);
+
+      if (messagesError) throw messagesError;
+
+      // Then delete the call log
+      const { error } = await supabase
+        .from('call_logs')
+        .delete()
+        .eq('id', callId);
+
+      if (error) throw error;
+      return callId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['call-logs'] });
+      toast.success('Call log deleted');
+    },
+    onError: (error) => {
+      console.error('Error deleting call log:', error);
+      toast.error('Failed to delete call log');
+    },
+  });
+}
+
+// Hook to delete all call logs for the business
+export function useClearAllCallLogs() {
+  const { profile } = useAuth();
+  const businessId = profile?.business_id;
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!businessId) throw new Error('No business ID');
+
+      // Get all call log IDs for this business
+      const { data: callLogs, error: fetchError } = await supabase
+        .from('call_logs')
+        .select('id')
+        .eq('business_id', businessId);
+
+      if (fetchError) throw fetchError;
+
+      if (callLogs && callLogs.length > 0) {
+        const callIds = callLogs.map(c => c.id);
+
+        // Delete all related call messages
+        const { error: messagesError } = await supabase
+          .from('call_messages')
+          .delete()
+          .in('call_log_id', callIds);
+
+        if (messagesError) throw messagesError;
+
+        // Delete all call logs
+        const { error } = await supabase
+          .from('call_logs')
+          .delete()
+          .eq('business_id', businessId);
+
+        if (error) throw error;
+      }
+
+      return callLogs?.length || 0;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['call-logs'] });
+      toast.success(`Cleared ${count} call log(s)`);
+    },
+    onError: (error) => {
+      console.error('Error clearing call logs:', error);
+      toast.error('Failed to clear call history');
     },
   });
 }
