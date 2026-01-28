@@ -152,6 +152,12 @@ export function useUpdateAppointmentStatus() {
               body: { type: 'appointment_confirmation', appointmentId: id },
             });
             console.log('Confirmation email sent to customer');
+
+            // Admin confirmation recorded (for records)
+            await supabase.functions.invoke('send-notification', {
+              body: { type: 'admin_confirmation_recorded', appointmentId: id },
+            });
+            console.log('Confirmation recorded email sent to admin');
           }
 
           // Completed email

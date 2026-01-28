@@ -123,7 +123,7 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('appointments').insert({
+      const { data: created, error } = await supabase.from('appointments').insert({
         business_id: profile.business_id,
         customer_id: data.customer_id,
         service_id: data.service_id || null,
@@ -138,9 +138,24 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
         customer_notes: data.customer_notes || null,
         status: 'scheduled',
         source: 'manual',
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      // Send "technician assigned" email when creating with a technician
+      if (created?.id && data.technician_id) {
+        try {
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              type: 'technician_assigned',
+              appointmentId: created.id,
+              appUrl: window.location.origin,
+            },
+          });
+        } catch (emailError) {
+          console.error('Failed to send technician assigned notification:', emailError);
+        }
+      }
 
       toast({ title: 'Success', description: 'Appointment created successfully' });
       queryClient.invalidateQueries({ queryKey: ['appointments'] });

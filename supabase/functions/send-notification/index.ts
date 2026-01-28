@@ -18,8 +18,12 @@ interface StandardNotificationRequest {
     | "appointment_rescheduled"
     | "appointment_cancelled"
     | "appointment_reminder"
-    | "admin_new_appointment";
+    | "admin_new_appointment"
+    | "admin_confirmation_recorded"
+    | "technician_assigned";
   appointmentId: string;
+  /** Optional app origin for technician portal link in email (e.g. window.location.origin) */
+  appUrl?: string;
 }
 
 interface CustomEmailRequest {
@@ -114,7 +118,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Handle standard appointment notifications
-    const { type, appointmentId } = body as StandardNotificationRequest;
+    const { type, appointmentId, appUrl = "" } = body as StandardNotificationRequest;
 
     // Get appointment with related data
     const { data: appointment, error } = await supabase
@@ -137,8 +141,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Admin notifications don't require customer email
-    if (type !== "admin_new_appointment" && !appointment.customer?.email) {
+    // Admin/technician notifications don't require customer email
+    if (
+      type !== "admin_new_appointment" &&
+      type !== "admin_confirmation_recorded" &&
+      type !== "technician_assigned" &&
+      !appointment.customer?.email
+    ) {
       console.log("Customer has no email, skipping customer notification");
       return new Response(JSON.stringify({ success: true, message: "No customer email" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -186,6 +195,193 @@ Deno.serve(async (req: Request) => {
       .detail-row { padding: 8px 0; border-bottom: 1px solid #e5e5e5; }
       .reference { font-size: 24px; font-weight: bold; color: #F97316; letter-spacing: 2px; }
     `;
+
+    // Admin confirmation recorded: send to same recipients as new appointment
+    if (type === "admin_confirmation_recorded") {
+      const { data: recipients, error: recipientsError } = await supabase
+        .from("notification_recipients")
+        .select("email, name")
+        .eq("business_id", appointment.business_id)
+        .eq("is_active", true)
+        .eq("notify_new_appointment", true);
+
+      if (recipientsError) {
+        console.error("Error fetching notification recipients:", recipientsError);
+      }
+
+      const fallback = appointment.business.email
+        ? [{ email: appointment.business.email, name: appointment.business.name }]
+        : [];
+      const toRecipients = (recipients && recipients.length > 0) ? recipients : fallback;
+
+      if (toRecipients.length === 0) {
+        return new Response(JSON.stringify({ success: true, message: "No admin recipients configured" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const subject = `✅ Appointment Confirmed - ${customerName} on ${dateFormatted}`;
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head><style>${baseStyles}</style></head>
+        <body>
+          <div class="container">
+            <div class="header header-success">
+              <h1 style="margin:0;">Appointment Confirmed</h1>
+            </div>
+            <div class="content">
+              <p>You have confirmed the following appointment:</p>
+              <div class="details-box">
+                <div class="detail-row"><strong>Customer:</strong> ${customerName}</div>
+                <div class="detail-row"><strong>Service:</strong> ${serviceName}</div>
+                <div class="detail-row"><strong>Date:</strong> ${dateFormatted} at ${timeWindow}</div>
+                <div class="detail-row"><strong>Address:</strong> ${appointment.address}</div>
+                ${appointment.technician
+                  ? `<div class="detail-row"><strong>Technician:</strong> ${technicianName}</div>`
+                  : `<div class="detail-row" style="color: #f97316;"><strong>⚠️ No technician assigned yet</strong></div>`
+                }
+              </div>
+              <p>This is a confirmation for your records.</p>
+            </div>
+            <div class="footer">
+              <p>${businessName} | ${appointment.business?.phone || ""}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const emailIds: string[] = [];
+      for (const r of toRecipients) {
+        const { data: emailData, error: emailError } = await resend.emails.send({
+          from: `${businessName} <promo@metricflow.space>`,
+          to: [r.email],
+          subject,
+          html: htmlContent,
+        });
+        if (emailError) {
+          console.error("Admin confirmation email error:", emailError);
+          await supabase.from("email_logs").insert({
+            business_id: appointment.business_id,
+            email_type: "admin_confirmation_recorded",
+            recipient_type: "admin",
+            recipient_email: r.email,
+            recipient_name: r.name,
+            subject,
+            appointment_id: appointmentId,
+            status: "failed",
+            failed_at: new Date().toISOString(),
+            error_message: emailError.message,
+          });
+          continue;
+        }
+        if (emailData?.id) emailIds.push(emailData.id);
+        await supabase.from("email_logs").insert({
+          business_id: appointment.business_id,
+          email_type: "admin_confirmation_recorded",
+          recipient_type: "admin",
+          recipient_email: r.email,
+          recipient_name: r.name,
+          subject,
+          appointment_id: appointmentId,
+          resend_id: emailData?.id,
+          status: "sent",
+          sent_at: new Date().toISOString(),
+        });
+      }
+      return new Response(JSON.stringify({ success: true, emailIds }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Technician assigned: send to the assigned technician
+    if (type === "technician_assigned") {
+      if (!appointment.technician?.email) {
+        console.error("Technician has no email");
+        return new Response(JSON.stringify({ error: "Technician has no email" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const technicianPortalUrl = appUrl ? `${appUrl}/technician/jobs/${appointmentId}` : "";
+      const subject = `🔧 New Job Assigned - ${customerName} on ${dateFormatted}`;
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head><style>${baseStyles}</style></head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin:0;">New Job Assigned</h1>
+            </div>
+            <div class="content">
+              <p>A new job has been assigned to you:</p>
+              <div class="details-box">
+                <div class="detail-row"><strong>Customer:</strong> ${customerName}</div>
+                <div class="detail-row"><strong>Service:</strong> ${serviceName}</div>
+                <div class="detail-row"><strong>Date:</strong> ${dateFormatted} at ${timeWindow}</div>
+                <div class="detail-row"><strong>Address:</strong> ${appointment.address}</div>
+                ${appointment.internal_notes ? `<div class="detail-row"><strong>Notes:</strong> ${appointment.internal_notes}</div>` : ""}
+              </div>
+              ${technicianPortalUrl
+                ? `<p><a href="${technicianPortalUrl}" style="background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">View Job Details</a></p>`
+                : "<p>Log in to the technician portal to view job details.</p>"
+              }
+              <p style="color: #666; font-size: 14px; margin-top: 20px;">You can view all your assigned jobs in the Technician Portal.</p>
+            </div>
+            <div class="footer">
+              <p>${businessName} | ${appointment.business?.phone || ""}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const { data: emailData, error: emailError } = await resend.emails.send({
+        from: `${businessName} <promo@metricflow.space>`,
+        to: [appointment.technician.email],
+        subject,
+        html: htmlContent,
+      });
+
+      if (emailError) {
+        console.error("Technician assigned email error:", emailError);
+        await supabase.from("email_logs").insert({
+          business_id: appointment.business_id,
+          email_type: "technician_assigned",
+          recipient_type: "technician",
+          recipient_email: appointment.technician.email,
+          recipient_name: technicianName,
+          subject,
+          appointment_id: appointmentId,
+          user_id: appointment.technician.id,
+          status: "failed",
+          failed_at: new Date().toISOString(),
+          error_message: emailError.message,
+        });
+        throw emailError;
+      }
+
+      await supabase.from("email_logs").insert({
+        business_id: appointment.business_id,
+        email_type: "technician_assigned",
+        recipient_type: "technician",
+        recipient_email: appointment.technician.email,
+        recipient_name: technicianName,
+        subject,
+        appointment_id: appointmentId,
+        user_id: appointment.technician.id,
+        resend_id: emailData?.id,
+        status: "sent",
+        sent_at: new Date().toISOString(),
+      });
+
+      return new Response(JSON.stringify({ success: true, emailId: emailData?.id }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Admin notification: send to configured recipients
     if (type === "admin_new_appointment") {

@@ -153,6 +153,24 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
         .eq('id', appointment.id);
 
       if (error) throw error;
+
+      // Send "technician assigned" email when a technician is assigned or changed
+      const previousTechnicianId = appointment.technician_id ?? '';
+      const newTechnicianId = editData.technician_id === 'none' ? '' : (editData.technician_id || '');
+      if (newTechnicianId && newTechnicianId !== previousTechnicianId) {
+        try {
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              type: 'technician_assigned',
+              appointmentId: appointment.id,
+              appUrl: window.location.origin,
+            },
+          });
+          console.log('Technician assigned email sent');
+        } catch (emailError) {
+          console.error('Failed to send technician assigned notification:', emailError);
+        }
+      }
       
       // Send reschedule notifications if date or time changed
       if (dateChanged || timeChanged) {
