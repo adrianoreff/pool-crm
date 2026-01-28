@@ -34,10 +34,6 @@ export function ProtectedRoute({ children, requiresOnboarding = true, allowedRol
       if (profile.role === 'technician') {
         return <Navigate to="/technician/dashboard" replace />;
       }
-      // If admin tries to access technician login, redirect to admin dashboard
-      if (location.pathname === '/technician/login' && profile.role !== 'technician') {
-        return <Navigate to="/dashboard" replace />;
-      }
       // Otherwise redirect to appropriate dashboard
       return <Navigate to="/dashboard" replace />;
     }

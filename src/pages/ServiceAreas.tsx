@@ -32,9 +32,11 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useServiceAreas, useToggleServiceAreaActive, useDeleteServiceArea } from '@/hooks/useServiceAreas';
+import { useBusiness } from '@/hooks/useBusiness';
 import { ServiceAreaWithTechnician } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddServiceAreaModal, EditServiceAreaModal } from '@/components/modals';
+import { ServiceAreasMap } from '@/components/maps/ServiceAreasMap';
 
 // Generate a color based on index for visual differentiation
 const areaColors = ['#3B82F6', '#10B981', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4'];
@@ -221,6 +223,8 @@ function ServiceAreaCard({
 
 export default function ServiceAreas() {
   const { data: serviceAreas = [], isLoading } = useServiceAreas();
+  const { data: business } = useBusiness();
+  const mapboxToken = business?.mapbox_public_token;
   const deleteServiceArea = useDeleteServiceArea();
   const activeAreas = serviceAreas.filter(a => a.is_active).length;
   
@@ -294,7 +298,11 @@ export default function ServiceAreas() {
         <div className="lg:col-span-2">
           <Card className="shadow-card overflow-hidden">
             <CardContent className="p-0">
-              <MapPlaceholder areas={serviceAreas} />
+              {mapboxToken ? (
+                <ServiceAreasMap areas={serviceAreas} token={mapboxToken} />
+              ) : (
+                <MapPlaceholder areas={serviceAreas} />
+              )}
             </CardContent>
           </Card>
         </div>

@@ -13,15 +13,22 @@ interface ServiceChecklist {
   id: string;
   name: string;
   items: ChecklistItem[];
+  business_id: string;
+  service_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface AppointmentChecklistItem {
   id: string;
+  appointment_id: string;
   item_id: string;
   item_text: string;
   completed: boolean;
   completed_at: string | null;
   notes: string | null;
+  created_at: string;
 }
 
 export function useJobChecklist(appointmentId: string, serviceId: string | null) {
@@ -35,12 +42,12 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
     queryFn: async () => {
       if (!serviceId) return null;
 
-      const { data, error } = await supabase
-        .from('service_checklists')
+      const { data, error } = await (supabase
+        .from('service_checklists' as any)
         .select('*')
         .eq('service_id', serviceId)
         .eq('is_active', true)
-        .maybeSingle();
+        .maybeSingle() as any);
 
       if (error) throw error;
       return data as ServiceChecklist | null;
@@ -52,19 +59,19 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
   const { data: completedItems = [] } = useQuery({
     queryKey: ['appointment-checklist-items', appointmentId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('appointment_checklist_items')
+      const { data, error } = await (supabase
+        .from('appointment_checklist_items' as any)
         .select('*')
-        .eq('appointment_id', appointmentId);
+        .eq('appointment_id', appointmentId) as any);
 
       if (error) throw error;
-      return data as AppointmentChecklistItem[];
+      return (data || []) as AppointmentChecklistItem[];
     },
     enabled: !!appointmentId,
   });
 
   // Calculate progress
-  const progress = checklistTemplate
+  const progress = checklistTemplate && checklistTemplate.items?.length > 0
     ? completedItems.filter(item => item.completed).length / checklistTemplate.items.length
     : 0;
 
@@ -81,20 +88,20 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
 
       if (existing) {
         // Update existing
-        const { error } = await supabase
-          .from('appointment_checklist_items')
+        const { error } = await (supabase
+          .from('appointment_checklist_items' as any)
           .update({
             completed,
             completed_at: completed ? new Date().toISOString() : null,
             notes: notes || null,
           })
-          .eq('id', existing.id);
+          .eq('id', existing.id) as any);
 
         if (error) throw error;
       } else {
         // Create new
-        const { error } = await supabase
-          .from('appointment_checklist_items')
+        const { error } = await (supabase
+          .from('appointment_checklist_items' as any)
           .insert({
             appointment_id: appointmentId,
             item_id: itemId,
@@ -102,7 +109,7 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
             completed,
             completed_at: completed ? new Date().toISOString() : null,
             notes: notes || null,
-          });
+          }) as any);
 
         if (error) throw error;
       }
@@ -110,7 +117,7 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointment-checklist-items', appointmentId] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({ title: 'Failed to update checklist', description: error.message, variant: 'destructive' });
     },
   });

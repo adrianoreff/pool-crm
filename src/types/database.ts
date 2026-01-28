@@ -25,6 +25,14 @@ export type AppointmentWithRelations = Appointment & {
   customer: Customer;
   service: Service | null;
   technician: Pick<User, 'id' | 'first_name' | 'last_name' | 'avatar_url' | 'color'> | null;
+  // Extended fields from database that may be returned in queries
+  started_at?: string | null;
+  completed_at?: string | null;
+  time_spent_minutes?: number | null;
+  en_route_at?: string | null;
+  arrived_at?: string | null;
+  work_summary?: string | null;
+  technician_notes?: string | null;
 };
 
 export type CustomerWithAddresses = Customer & {

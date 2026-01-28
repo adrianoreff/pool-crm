@@ -62,6 +62,47 @@ export type Database = {
           },
         ]
       }
+      appointment_checklist_items: {
+        Row: {
+          appointment_id: string
+          completed: boolean | null
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          item_id: string
+          item_text: string
+          notes: string | null
+        }
+        Insert: {
+          appointment_id: string
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          item_id: string
+          item_text: string
+          notes?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          item_text?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_checklist_items_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointment_photos: {
         Row: {
           appointment_id: string
@@ -112,16 +153,19 @@ export type Database = {
           actual_end_time: string | null
           actual_start_time: string | null
           address: string
+          arrived_at: string | null
           business_id: string
           cancellation_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           city: string | null
+          completed_at: string | null
           confirmed_at: string | null
           confirmed_by: string | null
           created_at: string | null
           customer_id: string
           customer_notes: string | null
+          en_route_at: string | null
           id: string
           internal_notes: string | null
           invoice_id: string | null
@@ -135,26 +179,33 @@ export type Database = {
           service_id: string | null
           source: Database["public"]["Enums"]["appointment_source"]
           source_call_id: string | null
+          started_at: string | null
           state: string | null
           status: Database["public"]["Enums"]["appointment_status"]
           technician_id: string | null
+          technician_notes: string | null
+          time_spent_minutes: number | null
           updated_at: string | null
+          work_summary: string | null
           zip_code: string | null
         }
         Insert: {
           actual_end_time?: string | null
           actual_start_time?: string | null
           address: string
+          arrived_at?: string | null
           business_id: string
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           city?: string | null
+          completed_at?: string | null
           confirmed_at?: string | null
           confirmed_by?: string | null
           created_at?: string | null
           customer_id: string
           customer_notes?: string | null
+          en_route_at?: string | null
           id?: string
           internal_notes?: string | null
           invoice_id?: string | null
@@ -168,26 +219,33 @@ export type Database = {
           service_id?: string | null
           source?: Database["public"]["Enums"]["appointment_source"]
           source_call_id?: string | null
+          started_at?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["appointment_status"]
           technician_id?: string | null
+          technician_notes?: string | null
+          time_spent_minutes?: number | null
           updated_at?: string | null
+          work_summary?: string | null
           zip_code?: string | null
         }
         Update: {
           actual_end_time?: string | null
           actual_start_time?: string | null
           address?: string
+          arrived_at?: string | null
           business_id?: string
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           city?: string | null
+          completed_at?: string | null
           confirmed_at?: string | null
           confirmed_by?: string | null
           created_at?: string | null
           customer_id?: string
           customer_notes?: string | null
+          en_route_at?: string | null
           id?: string
           internal_notes?: string | null
           invoice_id?: string | null
@@ -201,10 +259,14 @@ export type Database = {
           service_id?: string | null
           source?: Database["public"]["Enums"]["appointment_source"]
           source_call_id?: string | null
+          started_at?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["appointment_status"]
           technician_id?: string | null
+          technician_notes?: string | null
+          time_spent_minutes?: number | null
           updated_at?: string | null
+          work_summary?: string | null
           zip_code?: string | null
         }
         Relationships: [
@@ -1285,6 +1347,54 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_checklists: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          items: Json
+          name: string
+          service_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          items?: Json
+          name: string
+          service_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          items?: Json
+          name?: string
+          service_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_checklists_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_checklists_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]

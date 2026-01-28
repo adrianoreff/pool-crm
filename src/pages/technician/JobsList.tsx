@@ -61,7 +61,7 @@ export default function JobsList() {
         groups.completed.push(apt);
       } else if (apt.status === 'in_progress') {
         groups.in_progress.push(apt);
-      } else if (apt.status === 'scheduled' || apt.status === 'confirmed') {
+      } else if (apt.status === 'scheduled') {
         groups.scheduled.push(apt);
       } else {
         groups.other.push(apt);
