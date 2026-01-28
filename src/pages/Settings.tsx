@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -198,7 +199,11 @@ export default function Settings() {
               </div>
               <div className="space-y-2">
                 <Label>Address</Label>
-                <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} />
+                <AddressAutocomplete 
+                  value={businessAddress} 
+                  onChange={setBusinessAddress}
+                  placeholder="Enter your business address"
+                />
               </div>
               <Button 
                 className="bg-primary hover:bg-primary-hover"

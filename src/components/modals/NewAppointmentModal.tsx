@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AddressAutocomplete, AddressResult } from '@/components/ui/address-autocomplete';
 import { Calendar } from '@/components/ui/calendar';
 import {
   Form,
@@ -332,7 +333,17 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
                 <FormItem>
                   <FormLabel>Address *</FormLabel>
                   <FormControl>
-                    <Input placeholder="123 Main St" {...field} />
+                    <AddressAutocomplete 
+                      placeholder="123 Main St" 
+                      value={field.value}
+                      onChange={field.onChange}
+                      onAddressSelect={(result: AddressResult) => {
+                        form.setValue('address', result.address);
+                        if (result.city) form.setValue('city', result.city);
+                        if (result.state) form.setValue('state', result.state);
+                        if (result.zipCode) form.setValue('zip_code', result.zipCode);
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
