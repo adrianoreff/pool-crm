@@ -58,7 +58,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTeamInvitations } from '@/hooks/useTeamInvitations';
 import { ResendInvitationModal } from '@/components/modals/ResendInvitationModal';
-import { Mail, Clock, RefreshCw, X } from 'lucide-react';
+import { Clock, RefreshCw, X } from 'lucide-react';
 
 type ViewMode = 'grid' | 'list';
 

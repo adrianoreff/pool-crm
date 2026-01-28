@@ -58,6 +58,10 @@ const businessNavItems: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
+const adminToolsNavItems: NavItem[] = [
+  { label: 'Tech Portal', href: '/technician/dashboard', icon: Wrench },
+];
+
 const NavSection = ({ 
   title, 
   items, 
@@ -176,6 +180,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <NavSection title="Operations" items={operationsNavItems} collapsed={collapsed} />
         <NavSection title="Communication" items={communicationNavItems} collapsed={collapsed} />
         <NavSection title="Business" items={businessNavItems} collapsed={collapsed} />
+        <NavSection title="Admin Tools" items={adminToolsNavItems} collapsed={collapsed} />
       </div>
 
       {/* Collapse Toggle */}

@@ -31,7 +31,7 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
         .order('scheduled_start_time', { ascending: true });
 
       if (filters?.status) {
-        query = query.eq('status', filters.status);
+        query = query.eq('status', filters.status as any);
       }
       if (filters?.dateFrom) {
         query = query.gte('scheduled_date', filters.dateFrom);
