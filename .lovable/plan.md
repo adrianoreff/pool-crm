@@ -1,288 +1,201 @@
 
+# Plano de Correção: Atalho /technician, Mapbox e Erros de Build
 
-# Booking Widget - Plano de Implementação Completo
+## Resumo dos Problemas Identificados
 
-## Contexto
+### 1. Falta de atalho para a página `/technician`
+A página `/technician` existe e funciona, mas não há um link na sidebar principal para acessá-la. A sidebar atual só mostra links para as páginas do painel admin (Dashboard, Calendar, Appointments, etc.). 
 
-O script `<script src="https://tradeflow.app/widget.js" data-id="wgt_..."></script>` não funciona porque:
-1. O arquivo `widget.js` não existe
-2. A URL `https://tradeflow.app` não é a URL do projeto
+Para acessar o painel do técnico, o usuário precisa digitar manualmente `/technician/dashboard` na URL ou fazer login como técnico.
 
-A boa notícia é que toda a infraestrutura de backend já está pronta:
-- `widget-config` - Edge function para buscar configuração
-- `widget-availability` - Edge function para buscar horários disponíveis  
-- `create-appointment` - Edge function para criar agendamentos
-- Tabela `widget_config` com cores, textos e embed_code
+### 2. Mapbox não carrega na página Service Areas
+A página `ServiceAreas.tsx` está usando um componente `MapPlaceholder` estático em vez de integrar com o Mapbox. Mesmo com o token salvo em Settings, o mapa real não está sendo renderizado.
 
-## Arquitetura da Solução
+### 3. Erros de Build (TypeScript)
+Há vários erros de TypeScript causados por:
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                     SITE DO CLIENTE                              │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ <script src="https://tradeflow-hub-87.lovable.app/       │   │
-│  │          widget-loader.js" data-id="wgt_xxx"></script>   │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                              │                                   │
-│                              ▼                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │           Botão Flutuante "Book Now"                      │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                              │ click                             │
-│                              ▼                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                   Modal de Booking                        │   │
-│  │  ┌────────────────────────────────────────────────────┐  │   │
-│  │  │  Step 1: Selecionar Serviço                        │  │   │
-│  │  │  Step 2: Escolher Data e Horário                   │  │   │
-│  │  │  Step 3: Informações do Cliente                    │  │   │
-│  │  │  Step 4: Confirmação                               │  │   │
-│  │  └────────────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    SUPABASE EDGE FUNCTIONS                       │
-│  widget-config ──► widget-availability ──► create-appointment    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Componentes a Criar
-
-### 1. Widget Loader (`public/widget-loader.js`)
-Script vanilla JavaScript que:
-- Lê o `data-id` do script tag
-- Injeta estilos CSS isolados
-- Cria o botão flutuante
-- Carrega o iframe do widget quando clicado
-
-### 2. Página do Widget (`src/pages/BookingWidget.tsx`)
-Página React standalone que:
-- Funciona em modo iframe (sem header/sidebar)
-- Recebe `embed_code` via URL params
-- Implementa o wizard de 4 passos
-- Comunica com as edge functions existentes
-
-### 3. Rota Pública
-Adicionar rota `/widget/:embedCode` que carrega o BookingWidget sem autenticação
-
-### 4. Atualização do Settings
-Corrigir a URL do embed code para usar a URL real do projeto publicado
+| Erro | Causa |
+|------|-------|
+| `started_at`, `completed_at`, `time_spent_minutes`, `en_route_at`, `arrived_at` não existem | O arquivo `types.ts` está desatualizado - esses campos existem no banco mas não estão nos tipos TypeScript |
+| Duplicate identifier `Mail` em `Team.tsx` | Import duplicado de `Mail` do lucide-react |
+| `useEffect` não encontrado em `CompleteJob.tsx` | Falta import do `useEffect` |
+| Comparação de tipos inválida em `ProtectedRoute.tsx` e `JobsList.tsx` | Comparação de status `'technician'` e `'confirmed'` que não existem nos tipos |
 
 ---
 
-## Detalhes Técnicos
+## Solução Proposta
 
-### Arquivos a Criar
+### Parte 1: Adicionar Atalho para /technician na Sidebar
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `public/widget-loader.js` | Script embeddable para sites externos |
-| `src/pages/BookingWidget.tsx` | Componente React do wizard de booking |
-| `src/components/widget/WidgetServiceSelect.tsx` | Step 1: Seleção de serviço |
-| `src/components/widget/WidgetDateTimePicker.tsx` | Step 2: Data e horário |
-| `src/components/widget/WidgetCustomerForm.tsx` | Step 3: Formulário do cliente |
-| `src/components/widget/WidgetConfirmation.tsx` | Step 4: Confirmação |
+Adicionar um novo item na sidebar para usuários admin/owner acessarem o painel do técnico:
 
-### Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/App.tsx` | Adicionar rota pública `/widget/:embedCode` |
-| `src/pages/Settings.tsx` | Atualizar URL do embed code |
-
----
-
-## Widget Loader (public/widget-loader.js)
-
-```javascript
-// Self-executing function para evitar conflitos
-(function() {
-  // 1. Encontrar o script tag e pegar data-id
-  var script = document.currentScript;
-  var embedCode = script.getAttribute('data-id');
-  
-  // 2. Configurar URLs baseado no ambiente
-  var WIDGET_URL = 'https://tradeflow-hub-87.lovable.app/widget/' + embedCode;
-  var API_URL = 'https://rfbkwdpilwmdnaurlxhm.supabase.co/functions/v1';
-  
-  // 3. Buscar configuração do widget
-  fetch(API_URL + '/widget-config?embed_code=' + embedCode)
-    .then(r => r.json())
-    .then(config => initWidget(config))
-    .catch(err => console.error('Widget error:', err));
-  
-  function initWidget(config) {
-    // 4. Injetar estilos CSS
-    var styles = createStyles(config.appearance);
-    document.head.appendChild(styles);
-    
-    // 5. Criar botão flutuante
-    var button = createFloatingButton(config.appearance);
-    document.body.appendChild(button);
-    
-    // 6. Criar modal container
-    var modal = createModalContainer();
-    document.body.appendChild(modal);
-    
-    // 7. Event listeners
-    button.onclick = () => openModal(modal, WIDGET_URL);
-  }
-  
-  // ... funções auxiliares
-})();
-```
-
----
-
-## Booking Widget Page (BookingWidget.tsx)
-
-### Fluxo do Wizard
-
-```text
-Step 1: SERVIÇO
-├── Lista de serviços com nome, descrição, duração
-├── Preço estimado (se configurado)
-└── Botão "Continue"
-
-Step 2: DATA E HORÁRIO  
-├── Calendário para selecionar data
-├── Grid de horários disponíveis (via widget-availability)
-├── Mostra quantidade de técnicos disponíveis
-└── Botões "Back" e "Continue"
-
-Step 3: INFORMAÇÕES
-├── Nome completo
-├── Telefone
-├── Email (opcional)
-├── Endereço do serviço
-├── Notas adicionais (opcional)
-└── Botões "Back" e "Book Now"
-
-Step 4: CONFIRMAÇÃO
-├── Resumo do agendamento
-├── Código de referência
-├── Instruções próximos passos
-└── Botão "Close" ou "Book Another"
-```
-
-### Estados do Componente
+**Arquivo:** `src/components/layout/Sidebar.tsx`
 
 ```typescript
-interface WidgetState {
-  step: 1 | 2 | 3 | 4;
-  config: WidgetConfig | null;
-  selectedService: Service | null;
-  selectedDate: Date | null;
-  selectedTime: string | null;
-  customerInfo: {
-    firstName: string;
-    lastName: string;
-    phone: string;
-    email: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    notes: string;
-  };
-  booking: BookingResult | null;
-  isLoading: boolean;
-  error: string | null;
+// Adicionar no final dos businessNavItems ou como uma nova seção
+const adminToolsNavItems: NavItem[] = [
+  { label: 'Tech Portal', href: '/technician/dashboard', icon: UserCog },
+];
+```
+
+Ou alternativamente, adicionar um botão "View as Technician" na área de perfil da sidebar.
+
+---
+
+### Parte 2: Integrar Mapbox na página Service Areas
+
+**Arquivos a modificar:**
+- `src/pages/ServiceAreas.tsx`
+
+**Implementação:**
+1. Criar um componente `MapboxMap` que usa o token salvo no business
+2. Substituir o `MapPlaceholder` pelo mapa real quando o token estiver configurado
+3. Mostrar mensagem de configuração quando o token não existir
+
+```typescript
+function MapboxMap({ areas, token }: { areas: ServiceAreaWithTechnician[]; token: string }) {
+  // Usar mapbox-gl ou react-map-gl para renderizar o mapa
+  // Exibir as service areas como polígonos no mapa
+}
+
+// No componente principal:
+const { data: business } = useBusiness();
+const mapboxToken = business?.mapbox_public_token;
+
+{mapboxToken ? (
+  <MapboxMap areas={serviceAreas} token={mapboxToken} />
+) : (
+  <MapPlaceholder areas={serviceAreas} />
+)}
+```
+
+**Nota:** Será necessário instalar a dependência `mapbox-gl` ou `react-map-gl`.
+
+---
+
+### Parte 3: Corrigir Erros de Build
+
+#### 3.1 Atualizar tipos em `src/types/database.ts`
+
+Adicionar os campos que faltam ao tipo `AppointmentWithRelations`:
+
+```typescript
+export type AppointmentWithRelations = Appointment & {
+  customer: Customer;
+  service: Service | null;
+  technician: Pick<User, 'id' | 'first_name' | 'last_name' | 'avatar_url' | 'color'> | null;
+  // Campos adicionais que existem no banco
+  started_at?: string | null;
+  completed_at?: string | null;
+  time_spent_minutes?: number | null;
+  en_route_at?: string | null;
+  arrived_at?: string | null;
+  work_summary?: string | null;
+  technician_notes?: string | null;
+};
+```
+
+#### 3.2 Corrigir import duplicado em `Team.tsx`
+
+**Linha 6 e 61** - Remover o import duplicado:
+
+```typescript
+// Linha 6: Manter
+import { Mail, /* outros */ } from 'lucide-react';
+
+// Linha 61: Remover o import duplicado
+// import { Mail, Clock, RefreshCw, X } from 'lucide-react'; // REMOVER
+```
+
+#### 3.3 Adicionar import useEffect em `CompleteJob.tsx`
+
+**Linha 1-2:**
+```typescript
+import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react'; // Adicionar useEffect
+```
+
+#### 3.4 Corrigir comparação de tipos em `ProtectedRoute.tsx`
+
+**Linha 38:** A comparação `profile.role !== 'technician'` está incorreta porque `allowedRoles` só contém `['owner', 'admin', 'dispatcher']`. Simplificar a lógica:
+
+```typescript
+// Remover a linha 38 ou ajustar a condição
+if (profile.role === 'technician') {
+  return <Navigate to="/technician/dashboard" replace />;
+}
+// Remover a verificação redundante da linha 38
+```
+
+#### 3.5 Corrigir comparação em `JobsList.tsx`
+
+**Linha 64:** O status `'confirmed'` não existe no enum. Remover essa comparação:
+
+```typescript
+} else if (apt.status === 'scheduled') { // Remover || apt.status === 'confirmed'
+  groups.scheduled.push(apt);
+}
+```
+
+#### 3.6 Corrigir hook `useJobChecklist.ts`
+
+O problema é que o Supabase client não está reconhecendo as tabelas `service_checklists` e `appointment_checklist_items`. Precisamos verificar se essas tabelas existem e adicionar os tipos corretos.
+
+#### 3.7 Corrigir `useTechnicianAppointments.ts`
+
+**Linha 34:** O filtro de status precisa usar o tipo correto:
+
+```typescript
+if (filters?.status) {
+  query = query.eq('status', filters.status as Database['public']['Enums']['appointment_status']);
 }
 ```
 
 ---
 
-## Fluxo de API Calls
+## Arquivos a Modificar
 
-```text
-1. Página carrega
-   └── GET /widget-config?embed_code=wgt_xxx
-       └── Retorna: business, appearance, services, operatingHours, bookingRules
+| Arquivo | Mudanças |
+|---------|----------|
+| `src/components/layout/Sidebar.tsx` | Adicionar link para Tech Portal |
+| `src/pages/ServiceAreas.tsx` | Integrar Mapbox quando token disponível |
+| `src/types/database.ts` | Adicionar campos extras ao `AppointmentWithRelations` |
+| `src/pages/Team.tsx` | Remover import duplicado de `Mail` |
+| `src/pages/technician/CompleteJob.tsx` | Adicionar import `useEffect` |
+| `src/components/auth/ProtectedRoute.tsx` | Corrigir lógica de comparação de role |
+| `src/pages/technician/JobsList.tsx` | Remover status 'confirmed' inválido |
+| `src/hooks/useJobChecklist.ts` | Corrigir tipos do Supabase |
+| `src/hooks/useTechnicianAppointments.ts` | Tipar corretamente o filtro de status |
 
-2. Usuário seleciona data
-   └── POST /widget-availability
-       Body: { embedCode, date, serviceId }
-       └── Retorna: { date, slots: [{ time, available, techniciansAvailable }] }
+---
 
-3. Usuário submete booking
-   └── POST /create-appointment
-       Body: { embedCode, customer, serviceId, date, time, address, ... }
-       └── Retorna: { success, appointment: { id, referenceCode, portalToken, ... } }
+## Dependências Necessárias
+
+Para a integração completa do Mapbox, será necessário instalar:
+
+```bash
+npm install mapbox-gl
+npm install --save-dev @types/mapbox-gl
+```
+
+Ou usar `react-map-gl` que é um wrapper React:
+
+```bash
+npm install react-map-gl mapbox-gl
 ```
 
 ---
 
-## Design do Widget
+## Ordem de Implementação
 
-### Cores (Customizáveis via widget_config)
-- **Primary**: `#F97316` (laranja)
-- **Background**: `#FFFFFF`
-- **Text**: `#0F172A`
-- **Border**: `#E2E8F0`
-- **Button Text**: `#FFFFFF`
-
-### Responsividade
-- Desktop: Modal de 480px de largura
-- Mobile: Full screen
-
-### Acessibilidade
-- Focus states para navegação por teclado
-- ARIA labels
-- Contraste de cores adequado
+1. **Primeiro:** Corrigir todos os erros de build (tipos, imports duplicados)
+2. **Segundo:** Adicionar atalho na sidebar para /technician
+3. **Terceiro:** Integrar Mapbox na página Service Areas
 
 ---
 
-## Atualização do Settings.tsx
+## Observações Técnicas
 
-O embed code atual usa `https://tradeflow.app` que não existe.
-
-Correção:
-```typescript
-// Antes
-value={`<script src="https://tradeflow.app/widget.js" data-id="${widgetConfig?.embed_code}"></script>`}
-
-// Depois  
-value={`<script src="https://tradeflow-hub-87.lovable.app/widget-loader.js" data-id="${widgetConfig?.embed_code}"></script>`}
-```
-
-Também adicionar:
-- Preview ao vivo do widget
-- Configuração de cores
-- Customização do texto do botão
-
----
-
-## Resumo dos Arquivos
-
-### Novos (6 arquivos)
-1. `public/widget-loader.js` - Script embeddable
-2. `src/pages/BookingWidget.tsx` - Página principal do widget
-3. `src/components/widget/WidgetServiceSelect.tsx` - Step 1
-4. `src/components/widget/WidgetDateTimePicker.tsx` - Step 2
-5. `src/components/widget/WidgetCustomerForm.tsx` - Step 3
-6. `src/components/widget/WidgetConfirmation.tsx` - Step 4
-
-### Modificados (2 arquivos)
-1. `src/App.tsx` - Nova rota `/widget/:embedCode`
-2. `src/pages/Settings.tsx` - URL correta + preview + copy funcional
-
----
-
-## Resultado Final
-
-Após implementação, o usuário poderá:
-
-1. **No TradeFlow CRM**: Ir em Settings > Widget, ver o preview, copiar o código
-2. **No site externo**: Colar o script tag
-3. **Visitante do site**: Ver botão "Book Now", clicar, preencher wizard, agendar
-4. **No TradeFlow CRM**: Ver o novo agendamento no Dashboard/Calendar
-
-O embed code gerado será:
-```html
-<script src="https://tradeflow-hub-87.lovable.app/widget-loader.js" 
-        data-id="wgt_f75f7fa4bcb438a36115c48f"></script>
-```
-
+- O arquivo `src/integrations/supabase/types.ts` é gerado automaticamente pelo Supabase e não deve ser editado manualmente. Os campos existem no banco mas os tipos não foram regenerados.
+- A solução para os tipos é criar uma extensão no `src/types/database.ts` que adiciona os campos extras.
+- O Mapbox Public Token é seguro para usar no frontend (é público por natureza).
