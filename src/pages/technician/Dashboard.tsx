@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTodayTechnicianAppointments } from '@/hooks/useTechnicianAppointments';
 import { useUpdateJobStatus } from '@/hooks/useUpdateJobStatus';
+import { useBusiness } from '@/hooks/useBusiness';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MapPin, Clock, Wrench, Navigation, Play, CheckCircle2, Circle } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { TechnicianJobsMap } from '@/components/technician/TechnicianJobsMap';
 
 function getInitials(firstName: string | null, lastName: string | null) {
   return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
@@ -39,7 +41,9 @@ export default function TechnicianDashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: appointments = [], isLoading } = useTodayTechnicianAppointments();
+  const { data: business } = useBusiness();
   const updateStatus = useUpdateJobStatus();
+  const mapboxToken = business?.mapbox_public_token;
 
   const stats = useMemo(() => {
     const total = appointments.length;
@@ -193,7 +197,12 @@ export default function TechnicianDashboard() {
         </Card>
       </div>
 
-      {/* Next Job */}
+      {/* Jobs Map */}
+      <TechnicianJobsMap
+        appointments={appointments}
+        mapboxToken={mapboxToken}
+        onMarkerClick={(id) => navigate(`/technician/jobs/${id}`)}
+      />
       {nextJob && (
         <Card className="border-2 border-[#F97316]">
           <CardHeader>

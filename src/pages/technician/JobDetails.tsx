@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/technician/StatusBadge';
 import { Badge } from '@/components/ui/badge';
+import { MapPreview } from '@/components/technician/MapPreview';
 import { MapPin, Phone, Mail, Clock, Wrench, Navigation, CheckCircle2, AlertCircle, FileText, Camera, History } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
@@ -315,18 +316,12 @@ export default function JobDetails() {
               </div>
             )}
           </div>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleNavigate}
-          >
-            <Navigation className="h-4 w-4 mr-2" />
-            Open in Maps
-          </Button>
-          {/* Map preview would go here - simplified for now */}
-          <div className="h-32 bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
-            Map Preview
-          </div>
+          <MapPreview
+            latitude={appointment.latitude ? Number(appointment.latitude) : null}
+            longitude={appointment.longitude ? Number(appointment.longitude) : null}
+            address={`${appointment.address}, ${appointment.city || ''} ${appointment.state || ''} ${appointment.zip_code || ''}`}
+            mapboxToken={business?.mapbox_public_token}
+          />
         </CardContent>
       </Card>
 
