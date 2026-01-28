@@ -20,6 +20,31 @@ export type WidgetConfig = Database['public']['Tables']['widget_config']['Row'];
 export type AppointmentActivity = Database['public']['Tables']['appointment_activity']['Row'];
 export type NotificationLog = Database['public']['Tables']['notification_log']['Row'];
 
+// Email template types
+export type EmailTemplateCategory = 'customer' | 'admin' | 'technician' | 'custom';
+export type EmailTemplateRecipientType = 'customer' | 'admin' | 'technician';
+
+export interface EmailTemplate {
+  id: string;
+  business_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  category: EmailTemplateCategory;
+  trigger_event: string | null;
+  recipient_type: EmailTemplateRecipientType;
+  subject: string;
+  body_html: string;
+  body_text: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EmailTemplateInsert = Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>;
+export type EmailTemplateUpdate = Partial<Omit<EmailTemplate, 'id' | 'business_id' | 'created_at'>>;
+
 // Extended types with relations
 export type AppointmentWithRelations = Appointment & {
   customer: Customer;

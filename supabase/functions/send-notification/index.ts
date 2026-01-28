@@ -42,6 +42,45 @@ interface CustomEmailRequest {
 
 type NotificationRequest = StandardNotificationRequest | CustomEmailRequest;
 
+// Helper to replace template variables
+function replaceTemplateVariables(content: string, data: Record<string, string>): string {
+  let result = content;
+  Object.entries(data).forEach(([key, value]) => {
+    const regex = new RegExp(`{{${key}}}`, 'g');
+    result = result.replace(regex, value || '');
+  });
+  // Remove any remaining {{#if ...}}...{{/if}} blocks
+  result = result.replace(/{{#if\s+\w+}}[\s\S]*?{{\/if}}/g, '');
+  // Remove any remaining unmatched variables
+  result = result.replace(/{{[^}]+}}/g, '');
+  return result;
+}
+
+// Helper to get custom template from database
+async function getCustomTemplate(
+  supabase: ReturnType<typeof createClient>,
+  businessId: string,
+  slug: string
+): Promise<{ subject: string; body_html: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('email_templates')
+      .select('subject, body_html, is_active')
+      .eq('business_id', businessId)
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return { subject: data.subject, body_html: data.body_html };
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -492,9 +531,37 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    switch (type) {
-      case "appointment_request_received":
-        subject = `We received your service request - ${businessName}`;
+    // Check for custom template in database
+    const templateVariables: Record<string, string> = {
+      customer_name: customerName,
+      customer_first_name: appointment.customer?.first_name || '',
+      customer_email: appointment.customer?.email || '',
+      customer_phone: appointment.customer?.phone || '',
+      customer_address: appointment.address || '',
+      appointment_id: appointment.ref_code || appointment.id || '',
+      appointment_date: dateFormatted,
+      appointment_time: timeWindow,
+      appointment_date_short: new Date(appointment.scheduled_date).toLocaleDateString('en-US'),
+      service_name: serviceName,
+      appointment_notes: appointment.customer_notes || '',
+      technician_name: technicianName,
+      technician_phone: appointment.technician?.phone || '',
+      business_name: businessName,
+      business_phone: appointment.business?.phone || '',
+      business_email: appointment.business?.email || '',
+      business_address: appointment.business?.address || '',
+    };
+
+    // Try to get custom template from database
+    const customTemplate = await getCustomTemplate(supabase, appointment.business_id, type);
+    if (customTemplate) {
+      subject = replaceTemplateVariables(customTemplate.subject, templateVariables);
+      htmlContent = replaceTemplateVariables(customTemplate.body_html, templateVariables);
+    } else {
+      // Use hardcoded default templates
+      switch (type) {
+        case "appointment_request_received":
+          subject = `We received your service request - ${businessName}`;
         htmlContent = `
           <!DOCTYPE html>
           <html>
@@ -681,12 +748,13 @@ Deno.serve(async (req: Request) => {
         `;
         break;
 
-      default:
-        return new Response(JSON.stringify({ error: "Unknown notification type" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-    }
+        default:
+          return new Response(JSON.stringify({ error: "Unknown notification type" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+      }
+    } // end else (no custom template)
 
     // Send email via Resend
     const { data: emailData, error: emailError } = await resend.emails.send({

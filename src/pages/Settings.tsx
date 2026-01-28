@@ -269,7 +269,7 @@ export default function Settings() {
                 <Label>Admin: New Appointment</Label>
                 <Switch checked={notifyAdminNewAppointment} onCheckedChange={setNotifyAdminNewAppointment} />
               </div>
-              <div className="flex items-center justify-between py-2">
+              <div className="flex items-center justify-between py-2 border-b">
                 <Label>Admin: Cancellation</Label>
                 <Switch checked={notifyAdminCancellation} onCheckedChange={setNotifyAdminCancellation} />
               </div>
@@ -280,6 +280,19 @@ export default function Settings() {
               >
                 {updateNotificationSettings.isPending ? 'Saving...' : 'Save Changes'}
               </Button>
+              
+              {/* Email Templates Link */}
+              <div className="mt-6 pt-6 border-t">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Email Templates</p>
+                    <p className="text-sm text-muted-foreground">Customize your email notifications</p>
+                  </div>
+                  <Button variant="outline" asChild>
+                    <a href="/email-templates">Manage Templates</a>
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

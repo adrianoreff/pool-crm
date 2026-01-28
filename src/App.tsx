@@ -21,6 +21,7 @@ import Messages from "./pages/Messages";
 import Invoices from "./pages/Invoices";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import EmailTemplates from "./pages/EmailTemplates";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -88,6 +89,7 @@ const App = () => (
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/email-templates" element={<EmailTemplates />} />
             </Route>
 
             {/* Technician Routes */}

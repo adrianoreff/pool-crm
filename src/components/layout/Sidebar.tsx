@@ -14,6 +14,7 @@ import {
   Receipt,
   BarChart3,
   Settings,
+  Mail,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -55,6 +56,7 @@ const communicationNavItems: NavItem[] = [
 const businessNavItems: NavItem[] = [
   { label: 'Invoices', href: '/invoices', icon: Receipt },
   { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { label: 'Email Templates', href: '/email-templates', icon: Mail },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
