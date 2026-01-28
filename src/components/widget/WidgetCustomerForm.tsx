@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { AddressAutocomplete, AddressResult } from '@/components/ui/address-autocomplete';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 
 interface CustomerInfo {
@@ -145,10 +146,16 @@ export function WidgetCustomerForm({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="address">Street Address *</Label>
-            <Input
+            <AddressAutocomplete
               id="address"
               value={formData.address}
-              onChange={(e) => handleChange('address', e.target.value)}
+              onChange={(value) => handleChange('address', value)}
+              onAddressSelect={(result: AddressResult) => {
+                handleChange('address', result.address);
+                if (result.city) handleChange('city', result.city);
+                if (result.state) handleChange('state', result.state);
+                if (result.zipCode) handleChange('zipCode', result.zipCode);
+              }}
               placeholder="123 Main St"
               className={errors.address ? 'border-destructive' : ''}
             />

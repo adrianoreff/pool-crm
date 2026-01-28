@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AddressAutocomplete, AddressResult } from '@/components/ui/address-autocomplete';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { CustomerWithAddresses } from '@/types/database';
@@ -118,10 +119,19 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
 
           <div className="space-y-2">
             <Label htmlFor="address">Address</Label>
-            <Input
+            <AddressAutocomplete
               id="address"
               value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              onChange={(value) => setFormData({ ...formData, address: value })}
+              onAddressSelect={(result: AddressResult) => {
+                setFormData({
+                  ...formData,
+                  address: result.address,
+                  city: result.city || formData.city,
+                  state: result.state || formData.state,
+                  zip_code: result.zipCode || formData.zip_code,
+                });
+              }}
               placeholder="123 Main St"
             />
           </div>
