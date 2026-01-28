@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Phone, Play, FileText, Calendar, UserPlus, Clock, CheckCircle, XCircle, HelpCircle, PhoneOff } from 'lucide-react';
+import { Phone, Play, FileText, Calendar, UserPlus, Clock, CheckCircle, XCircle, HelpCircle, PhoneOff, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { useCallLogs, useCallLogStats } from '@/hooks/useCallLogs';
+import { useCallLogs, useCallLogStats, useDeleteCallLog, useClearAllCallLogs, useSyncVapiCalls } from '@/hooks/useCallLogs';
 import { CallLogWithCustomer } from '@/types/database';
+import { AudioPlayer } from '@/components/call-logs/AudioPlayer';
+import { useAuth } from '@/contexts/AuthContext';
 
 const formatDuration = (seconds: number | null) => {
   if (!seconds) return '0:00';
@@ -34,8 +37,15 @@ const outcomeConfig: Record<string, { icon: React.ElementType; color: string; bg
 
 export default function CallLogs() {
   const [selectedCall, setSelectedCall] = useState<CallLogWithCustomer | null>(null);
+  const [playingCallId, setPlayingCallId] = useState<string | null>(null);
   const { data: callLogs = [], isLoading } = useCallLogs();
   const { stats } = useCallLogStats();
+  const deleteCallLog = useDeleteCallLog();
+  const clearAllCallLogs = useClearAllCallLogs();
+  const syncVapiCalls = useSyncVapiCalls();
+  const { profile } = useAuth();
+  
+  const isAdmin = profile?.role === 'owner' || profile?.role === 'admin';
 
   const statCards = [
     { label: 'Total Calls', value: stats.totalCalls, icon: Phone },
@@ -43,11 +53,63 @@ export default function CallLogs() {
     { label: 'Booking Rate', value: `${stats.bookingRate}%`, icon: CheckCircle },
   ];
 
+  const handleDeleteCall = (callId: string) => {
+    deleteCallLog.mutate(callId);
+    if (selectedCall?.id === callId) {
+      setSelectedCall(null);
+    }
+  };
+
+  const handleClearAll = () => {
+    clearAllCallLogs.mutate();
+    setSelectedCall(null);
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Call Logs</h1>
-        <p className="text-muted-foreground">AI call activity from VAPI</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Call Logs</h1>
+          <p className="text-muted-foreground">AI call activity from VAPI</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => syncVapiCalls.mutate()}
+            disabled={syncVapiCalls.isPending}
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-2", syncVapiCalls.isPending && "animate-spin")} />
+            Sync Calls
+          </Button>
+          {isAdmin && callLogs.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear all call history?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all {callLogs.length} call logs and their transcripts. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleClearAll}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {clearAllCallLogs.isPending ? 'Deleting...' : 'Delete All'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -102,33 +164,78 @@ export default function CallLogs() {
                 callLogs.map((call) => {
                   const outcome = outcomeConfig[call.outcome || 'no_action'] || outcomeConfig.no_action;
                   const OutcomeIcon = outcome.icon;
+                  const isExpanded = playingCallId === call.id;
                   
                   return (
-                    <TableRow key={call.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell>{formatDate(call.started_at)}</TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{call.caller_phone}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {call.customer ? `${call.customer.first_name} ${call.customer.last_name}` : 'New Caller'}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">{formatDuration(call.duration_seconds)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('gap-1', outcome.color, outcome.bg)}>
-                          <OutcomeIcon className="h-3 w-3" />{outcome.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Button variant="ghost" size="sm" disabled={!call.recording_url}><Play className="h-4 w-4" /></Button>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedCall(call)}>
-                          <FileText className="h-4 w-4 mr-1" />View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow key={call.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>{formatDate(call.started_at)}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{call.caller_phone}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {call.customer ? `${call.customer.first_name} ${call.customer.last_name}` : 'New Caller'}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">{formatDuration(call.duration_seconds)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('gap-1', outcome.color, outcome.bg)}>
+                            <OutcomeIcon className="h-3 w-3" />{outcome.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            disabled={!call.recording_url}
+                            onClick={() => setPlayingCallId(isExpanded ? null : call.id)}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedCall(call)}>
+                              <FileText className="h-4 w-4 mr-1" />View
+                            </Button>
+                            {isAdmin && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete call log?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete this call log from {call.caller_phone}. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => handleDeleteCall(call.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && call.recording_url && (
+                        <TableRow key={`${call.id}-player`}>
+                          <TableCell colSpan={6} className="py-2 bg-muted/30">
+                            <AudioPlayer src={call.recording_url} />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   );
                 })
               )}
@@ -139,15 +246,47 @@ export default function CallLogs() {
 
       <Dialog open={!!selectedCall} onOpenChange={() => setSelectedCall(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader><DialogTitle>Call Transcript</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Call Details</DialogTitle>
+            <DialogDescription>
+              {selectedCall && `Call from ${selectedCall.caller_phone} on ${formatDate(selectedCall.started_at)}`}
+            </DialogDescription>
+          </DialogHeader>
           {selectedCall && (
-            <ScrollArea className="h-[400px] pr-4">
-              <pre className="text-sm whitespace-pre-wrap font-sans">{selectedCall.transcript || 'No transcript available'}</pre>
-            </ScrollArea>
+            <div className="space-y-4">
+              {selectedCall.recording_url && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Recording</h4>
+                  <AudioPlayer src={selectedCall.recording_url} />
+                </div>
+              )}
+              
+              {selectedCall.summary && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Summary</h4>
+                  <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                    {selectedCall.summary}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-sm font-medium mb-2">Transcript</h4>
+                <ScrollArea className="h-[250px] bg-muted/50 rounded-lg p-3">
+                  <pre className="text-sm whitespace-pre-wrap font-sans">
+                    {selectedCall.transcript || 'No transcript available'}
+                  </pre>
+                </ScrollArea>
+              </div>
+            </div>
           )}
-          <div className="flex gap-2">
-            <Button className="bg-primary hover:bg-primary-hover"><Calendar className="h-4 w-4 mr-2" />Create Appointment</Button>
-            <Button variant="outline"><UserPlus className="h-4 w-4 mr-2" />Add as Customer</Button>
+          <div className="flex gap-2 pt-2">
+            <Button className="bg-primary hover:bg-primary-hover">
+              <Calendar className="h-4 w-4 mr-2" />Create Appointment
+            </Button>
+            <Button variant="outline">
+              <UserPlus className="h-4 w-4 mr-2" />Add as Customer
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
