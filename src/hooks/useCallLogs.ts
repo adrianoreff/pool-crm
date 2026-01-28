@@ -1,11 +1,45 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { CallLogWithCustomer, CallLogWithMessages, CallLogFilters } from '@/types/database';
+import { useEffect } from 'react';
+
+// Hook to sync VAPI calls on demand
+export function useSyncVapiCalls() {
+  const { profile } = useAuth();
+  const businessId = profile?.business_id;
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!businessId) throw new Error('No business ID');
+
+      const { data, error } = await supabase.functions.invoke('sync-vapi-calls', {
+        body: { business_id: businessId },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['call-logs'] });
+    },
+  });
+}
 
 export function useCallLogs(filters?: CallLogFilters) {
   const { profile } = useAuth();
   const businessId = profile?.business_id;
+  const syncMutation = useSyncVapiCalls();
+
+  // Auto-sync on first load
+  useEffect(() => {
+    if (businessId && !syncMutation.isPending) {
+      syncMutation.mutate();
+    }
+    // Only run once when businessId becomes available
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId]);
 
   return useQuery({
     queryKey: ['call-logs', businessId, filters],
