@@ -14,9 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, X, Plus } from 'lucide-react';
 import { ServiceAreaWithTechnician } from '@/types/database';
 import { useTechnicians } from '@/hooks/useTeam';
+import { useBusiness } from '@/hooks/useBusiness';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete';
 
 interface EditServiceAreaModalProps {
   open: boolean;
@@ -32,11 +34,14 @@ export function EditServiceAreaModal({ open, onOpenChange, serviceArea }: EditSe
     travel_surcharge: '',
   });
   const [newZipCode, setNewZipCode] = useState('');
+  const [addressSearch, setAddressSearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const { data: technicians = [] } = useTechnicians();
+  const { data: business } = useBusiness();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const mapboxToken = business?.mapbox_public_token;
 
   useEffect(() => {
     if (serviceArea) {
@@ -112,11 +117,27 @@ export function EditServiceAreaModal({ open, onOpenChange, serviceArea }: EditSe
 
           <div className="space-y-2">
             <Label>Zip Codes</Label>
+            {mapboxToken && (
+              <div className="mb-2">
+                <AddressAutocomplete
+                  value={addressSearch}
+                  onChange={setAddressSearch}
+                  onAddressSelect={(address) => {
+                    if (address.zipCode && !formData.zip_codes.includes(address.zipCode)) {
+                      setFormData({ ...formData, zip_codes: [...formData.zip_codes, address.zipCode] });
+                    }
+                    setAddressSearch('');
+                  }}
+                  mapboxToken={mapboxToken}
+                  placeholder="Search address to add zip code..."
+                />
+              </div>
+            )}
             <div className="flex gap-2">
               <Input
                 value={newZipCode}
                 onChange={(e) => setNewZipCode(e.target.value)}
-                placeholder="Enter zip code"
+                placeholder="Or enter zip code manually"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();

@@ -31,7 +31,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTechnicians } from '@/hooks/useTeam';
+import { useBusiness } from '@/hooks/useBusiness';
 import { Loader2 } from 'lucide-react';
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete';
 
 const serviceAreaSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -50,10 +52,13 @@ interface AddServiceAreaModalProps {
 
 export function AddServiceAreaModal({ open, onOpenChange, onSuccess }: AddServiceAreaModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [addressSearch, setAddressSearch] = useState('');
   const { toast } = useToast();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const { data: technicians = [] } = useTechnicians();
+  const { data: business } = useBusiness();
+  const mapboxToken = business?.mapbox_public_token;
 
   const form = useForm<ServiceAreaFormData>({
     resolver: zodResolver(serviceAreaSchema),
@@ -124,6 +129,29 @@ export function AddServiceAreaModal({ open, onOpenChange, onSuccess }: AddServic
                 </FormItem>
               )}
             />
+            {mapboxToken && (
+              <FormItem>
+                <FormLabel>Search Address</FormLabel>
+                <AddressAutocomplete
+                  value={addressSearch}
+                  onChange={setAddressSearch}
+                  onAddressSelect={(address) => {
+                    if (address.zipCode) {
+                      const currentZips = form.getValues('zip_codes');
+                      const zipsArray = currentZips ? currentZips.split(',').map(z => z.trim()).filter(z => z) : [];
+                      if (!zipsArray.includes(address.zipCode)) {
+                        zipsArray.push(address.zipCode);
+                        form.setValue('zip_codes', zipsArray.join(', '));
+                      }
+                    }
+                    setAddressSearch('');
+                  }}
+                  mapboxToken={mapboxToken}
+                  placeholder="Search to add zip codes..."
+                />
+                <FormDescription>Search addresses to auto-add zip codes</FormDescription>
+              </FormItem>
+            )}
             <FormField
               control={form.control}
               name="zip_codes"
@@ -133,7 +161,7 @@ export function AddServiceAreaModal({ open, onOpenChange, onSuccess }: AddServic
                   <FormControl>
                     <Input placeholder="78701, 78702, 78703" {...field} />
                   </FormControl>
-                  <FormDescription>Enter comma-separated zip codes</FormDescription>
+                  <FormDescription>Enter comma-separated zip codes or use address search above</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
