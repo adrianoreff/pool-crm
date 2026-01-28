@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
 import Appointments from "./pages/Appointments";
 import Customers from "./pages/Customers";
+import CustomerDetail from "./pages/CustomerDetail";
 import Team from "./pages/Team";
 import Services from "./pages/Services";
 import ServiceAreas from "./pages/ServiceAreas";
@@ -78,6 +79,7 @@ const App = () => (
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/appointments" element={<Appointments />} />
               <Route path="/customers" element={<Customers />} />
+              <Route path="/customers/:id" element={<CustomerDetail />} />
               <Route path="/team" element={<Team />} />
               <Route path="/services" element={<Services />} />
               <Route path="/service-areas" element={<ServiceAreas />} />

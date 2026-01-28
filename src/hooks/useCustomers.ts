@@ -170,8 +170,9 @@ export function useUpdateCustomer() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customer', variables.id] });
       toast({ title: 'Customer updated successfully' });
     },
     onError: (error) => {
