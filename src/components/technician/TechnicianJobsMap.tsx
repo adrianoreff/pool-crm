@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin } from 'lucide-react';
 import { AppointmentWithRelations } from '@/types/database';
+import { geocodeAddress } from '@/lib/mapbox/geocode';
 
 interface TechnicianJobsMapProps {
   appointments: AppointmentWithRelations[];
@@ -9,14 +10,14 @@ interface TechnicianJobsMapProps {
   onMarkerClick?: (appointmentId: string) => void;
 }
 
-// Status colors for map markers
-const STATUS_COLORS = {
-  scheduled: '#3B82F6',      // Blue - scheduled/confirmed
-  pending_confirmation: '#3B82F6', // Blue
-  in_progress: '#F97316',    // Orange - in progress
-  completed: '#22C55E',      // Green - completed
-  cancelled: '#EF4444',      // Red - cancelled
-  no_show: '#EF4444',        // Red - no show
+// Status -> design token (CSS variable) used for markers
+const STATUS_TOKEN: Record<string, 'info' | 'primary' | 'success' | 'destructive'> = {
+  scheduled: 'info',
+  pending_confirmation: 'info',
+  in_progress: 'primary',
+  completed: 'success',
+  cancelled: 'destructive',
+  no_show: 'destructive',
 };
 
 export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: TechnicianJobsMapProps) {
@@ -24,9 +25,72 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
+  const [geocodedByAppointmentId, setGeocodedByAppointmentId] = useState<
+    Record<string, { latitude: number; longitude: number }>
+  >({});
+
+  const resolvedAppointments = useMemo(() => {
+    return appointments.map((apt) => {
+      const lat = apt.latitude ?? geocodedByAppointmentId[apt.id]?.latitude ?? null;
+      const lng = apt.longitude ?? geocodedByAppointmentId[apt.id]?.longitude ?? null;
+      return { ...apt, latitude: lat, longitude: lng };
+    });
+  }, [appointments, geocodedByAppointmentId]);
+
+  const resolvedWithCoords = useMemo(() => {
+    return resolvedAppointments.filter((a) => a.latitude != null && a.longitude != null);
+  }, [resolvedAppointments]);
+
+  const buildAddress = (apt: AppointmentWithRelations) => {
+    const parts = [apt.address, apt.city, apt.state, apt.zip_code].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  // Geocode appointments that don't have coordinates yet
+  useEffect(() => {
+    if (!mapboxToken) return;
+
+    const missing = appointments.filter(
+      (a) =>
+        (a.latitude == null || a.longitude == null) &&
+        !geocodedByAppointmentId[a.id] &&
+        !!buildAddress(a)
+    );
+
+    if (missing.length === 0) return;
+
+    const controller = new AbortController();
+    setGeocodeLoading(true);
+
+    (async () => {
+      const results = await Promise.all(
+        missing.map(async (apt) => {
+          const coords = await geocodeAddress(buildAddress(apt), mapboxToken, controller.signal);
+          return { id: apt.id, coords };
+        })
+      );
+
+      if (controller.signal.aborted) return;
+
+      setGeocodedByAppointmentId((prev) => {
+        const next = { ...prev };
+        results.forEach(({ id, coords }) => {
+          if (coords) next[id] = { latitude: coords.latitude, longitude: coords.longitude };
+        });
+        return next;
+      });
+    })().finally(() => {
+      if (!controller.signal.aborted) setGeocodeLoading(false);
+    });
+
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapboxToken, appointments]);
 
   useEffect(() => {
     if (!mapboxToken || !mapContainerRef.current) return;
+    if (mapRef.current) return;
 
     // Check if mapbox-gl is already loaded
     if ((window as any).mapboxgl) {
@@ -55,7 +119,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
       mapboxgl.accessToken = mapboxToken;
 
       // Get center from first appointment with coordinates, or default
-      const appointmentWithCoords = appointments.find(a => a.latitude && a.longitude);
+      const appointmentWithCoords = resolvedWithCoords[0];
       const center = appointmentWithCoords 
         ? [Number(appointmentWithCoords.longitude), Number(appointmentWithCoords.latitude)]
         : [-98.5795, 39.8283]; // Center of US
@@ -64,7 +128,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
         container: mapContainerRef.current,
         style: 'mapbox://styles/mapbox/streets-v12',
         center,
-        zoom: appointmentWithCoords ? 10 : 4,
+         zoom: appointmentWithCoords ? 10 : 4,
       });
 
       mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -80,7 +144,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
         mapRef.current = null;
       }
     };
-  }, [mapboxToken]);
+  }, [mapboxToken, resolvedWithCoords.length]);
 
   // Add/update markers when appointments change or map loads
   useEffect(() => {
@@ -93,14 +157,14 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    // Filter appointments with coordinates
-    const appointmentsWithCoords = appointments.filter(a => a.latitude && a.longitude);
-
+    // Filter appointments with coordinates (including geocoded)
+    const appointmentsWithCoords = resolvedWithCoords;
     if (appointmentsWithCoords.length === 0) return;
 
     // Add markers
     appointmentsWithCoords.forEach(apt => {
-      const color = STATUS_COLORS[apt.status as keyof typeof STATUS_COLORS] || STATUS_COLORS.scheduled;
+      const token = STATUS_TOKEN[apt.status] || 'info';
+      const color = `hsl(var(--${token}))`;
       
       // Create custom marker element
       const el = document.createElement('div');
@@ -108,7 +172,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
       el.style.width = '30px';
       el.style.height = '30px';
       el.style.borderRadius = '50%';
-      el.style.backgroundColor = color;
+       el.style.backgroundColor = color;
       el.style.border = '3px solid white';
       el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
       el.style.cursor = 'pointer';
@@ -125,7 +189,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
       el.appendChild(inner);
 
       // Create popup
-      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+       const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
         <div style="padding: 8px;">
           <strong>${apt.customer?.first_name || ''} ${apt.customer?.last_name || ''}</strong>
           <div style="font-size: 12px; color: #666; margin-top: 4px;">
@@ -141,8 +205,8 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
               border-radius: 12px;
               font-size: 11px;
               font-weight: 500;
-              background: ${color}20;
-              color: ${color};
+               background: hsl(var(--${token}) / 0.15);
+               color: hsl(var(--${token}));
             ">
               ${apt.status.replace('_', ' ').toUpperCase()}
             </span>
@@ -178,7 +242,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
         zoom: 14,
       });
     }
-  }, [appointments, mapLoaded, onMarkerClick]);
+   }, [resolvedWithCoords, mapLoaded, onMarkerClick]);
 
   // Helper function
   function formatTime(time: string) {
@@ -207,7 +271,7 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
     );
   }
 
-  const appointmentsWithCoords = appointments.filter(a => a.latitude && a.longitude);
+  const appointmentsWithCoords = resolvedWithCoords;
 
   return (
     <Card>
@@ -218,31 +282,31 @@ export function TechnicianJobsMap({ appointments, mapboxToken, onMarkerClick }: 
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {appointmentsWithCoords.length === 0 ? (
-          <div className="h-64 bg-muted rounded-lg flex flex-col items-center justify-center text-muted-foreground gap-2">
-            <MapPin className="h-8 w-8" />
-            <p>No jobs with location data</p>
-          </div>
-        ) : (
-          <>
-            <div ref={mapContainerRef} className="h-64 w-full rounded-lg overflow-hidden" />
-            {/* Legend */}
-            <div className="flex flex-wrap gap-4 mt-3 text-xs">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span>Scheduled</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full bg-orange-500" />
-                <span>In Progress</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span>Completed</span>
-              </div>
+        <div className="relative">
+          <div ref={mapContainerRef} className="h-64 w-full rounded-lg overflow-hidden" />
+          {appointmentsWithCoords.length === 0 && (
+            <div className="absolute inset-0 bg-background/70 backdrop-blur-[1px] rounded-lg flex flex-col items-center justify-center text-muted-foreground gap-2">
+              <MapPin className="h-8 w-8" />
+              <p>{geocodeLoading ? 'Buscando localização dos endereços…' : 'No jobs with location data'}</p>
             </div>
-          </>
-        )}
+          )}
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 mt-3 text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-info" />
+            <span>Scheduled</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-primary" />
+            <span>In Progress</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-success" />
+            <span>Completed</span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
