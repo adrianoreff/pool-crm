@@ -42,6 +42,7 @@ export function CreateTemplateModal({ open, onOpenChange, onCreated }: CreateTem
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
+  const [subject, setSubject] = useState('');
   const [category, setCategory] = useState<EmailTemplateCategory>('custom');
   const [recipientType, setRecipientType] = useState<EmailTemplateRecipientType>('customer');
   
@@ -56,6 +57,7 @@ export function CreateTemplateModal({ open, onOpenChange, onCreated }: CreateTem
     setName('');
     setSlug('');
     setDescription('');
+    setSubject('');
     setCategory('custom');
     setRecipientType('customer');
   };
@@ -81,13 +83,15 @@ export function CreateTemplateModal({ open, onOpenChange, onCreated }: CreateTem
 
   const handleCreate = async () => {
     let initialHtml = '<p>Start writing your email content here...</p>';
-    let initialSubject = 'New Email Template';
+    let initialSubject = subject || 'New Email Template';
 
     if (startFrom === 'copy' && copyFromId) {
       const sourceTemplate = templates.find(t => t.id === copyFromId);
       if (sourceTemplate) {
         initialHtml = sourceTemplate.body_html;
-        initialSubject = sourceTemplate.subject;
+        if (!subject) {
+          initialSubject = `Copy of ${sourceTemplate.subject}`;
+        }
       }
     } else if (startFrom === 'html' && pastedHtml) {
       initialHtml = pastedHtml;
@@ -120,7 +124,7 @@ export function CreateTemplateModal({ open, onOpenChange, onCreated }: CreateTem
   };
 
   const canCreate = () => {
-    return name.trim() && slug.trim();
+    return name.trim() && slug.trim() && subject.trim();
   };
 
   return (
@@ -232,6 +236,19 @@ export function CreateTemplateModal({ open, onOpenChange, onCreated }: CreateTem
               />
               <p className="text-xs text-muted-foreground">
                 Used to identify this template in the system
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subject">Email Subject *</Label>
+              <Input
+                id="subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g., Thank you for your order - {{business_name}}"
+              />
+              <p className="text-xs text-muted-foreground">
+                You can use variables like {'{{customer_name}}'} in the subject
               </p>
             </div>
 
