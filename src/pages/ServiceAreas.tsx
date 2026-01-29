@@ -231,6 +231,8 @@ export default function ServiceAreas() {
   const [isAddServiceAreaOpen, setIsAddServiceAreaOpen] = useState(false);
   const [isEditServiceAreaOpen, setIsEditServiceAreaOpen] = useState(false);
   const [serviceAreaToEdit, setServiceAreaToEdit] = useState<ServiceAreaWithTechnician | null>(null);
+  const [drawBoundaryArea, setDrawBoundaryArea] = useState<ServiceAreaWithTechnician | null>(null);
+  const [isDrawBoundaryOpen, setIsDrawBoundaryOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
 
@@ -335,6 +337,7 @@ export default function ServiceAreas() {
                     area={area} 
                     colorIndex={idx}
                     onEdit={() => handleEdit(area)}
+                    onDrawBoundary={() => handleDrawBoundary(area)}
                     onDelete={() => handleDeleteClick(area.id)}
                   />
                 ))}

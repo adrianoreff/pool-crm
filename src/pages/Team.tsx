@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -142,9 +142,6 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
                 className={cn('capitalize text-xs', roleStyles[member.role])}
               >
                 {member.role}
-              </Badge>
-              <Badge variant="secondary" className="text-xs bg-success/10 text-success border-success/20">
-                Accepted
               </Badge>
               <div className={cn(
                 'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium',
@@ -492,6 +489,7 @@ export default function Team() {
         <Card>
           <CardHeader>
             <CardTitle>Pending Invitations</CardTitle>
+            <CardDescription>These people haven&apos;t accepted yet. Use &quot;Resend Invite&quot; to send the email again.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -508,7 +506,10 @@ export default function Team() {
                       <Mail className="h-5 w-5 text-muted-foreground" />
                       <div className="flex-1">
                         <div className="font-medium">{invitation.email}</div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                          <Badge variant="secondary" className="text-xs bg-warning/10 text-warning border-warning/20">
+                            Pending
+                          </Badge>
                           <Badge variant="outline" className="text-xs">
                             {invitation.role}
                           </Badge>
@@ -528,9 +529,10 @@ export default function Team() {
                         variant="outline"
                         size="sm"
                         onClick={() => setResendInvitationId(invitation.id)}
+                        className="shrink-0"
                       >
                         <RefreshCw className="h-4 w-4 mr-2" />
-                        Resend
+                        Resend Invite
                       </Button>
                       <Button
                         variant="ghost"
@@ -682,17 +684,12 @@ export default function Team() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge 
-                              variant="outline" 
-                              className={cn('capitalize', roleStyles[member.role])}
-                            >
-                              {member.role}
-                            </Badge>
-                            <Badge variant="secondary" className="text-xs bg-success/10 text-success border-success/20">
-                              Accepted
-                            </Badge>
-                          </div>
+                          <Badge 
+                            variant="outline" 
+                            className={cn('capitalize', roleStyles[member.role])}
+                          >
+                            {member.role}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className={cn(
