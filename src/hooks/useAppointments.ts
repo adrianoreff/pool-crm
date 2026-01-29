@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppointmentWithRelations, AppointmentFilters, AppointmentStatus } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
+import { getLocalDateString } from '@/lib/utils';
 
 export function useAppointments(filters?: AppointmentFilters) {
   const { profile } = useAuth();
@@ -54,7 +55,7 @@ export function useAppointments(filters?: AppointmentFilters) {
 }
 
 export function useTodayAppointments() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   return useAppointments({ dateFrom: today, dateTo: today });
 }
 

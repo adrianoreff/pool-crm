@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppointmentWithRelations } from '@/types/database';
+import { getLocalDateString } from '@/lib/utils';
 
 interface TechnicianAppointmentFilters {
   dateFrom?: string;
@@ -60,7 +61,7 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
 }
 
 export function useTodayTechnicianAppointments() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   // Include today and future appointments
   return useTechnicianAppointments({ dateFrom: today });
 }

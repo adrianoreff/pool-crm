@@ -27,7 +27,7 @@ import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { cn, formatAppointmentDateLong } from '@/lib/utils';
 import { format } from 'date-fns';
 import {
   Phone,
@@ -450,12 +450,7 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground mb-1">Date</p>
                     <p className="font-medium">
-                      {new Date(appointment.scheduled_date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+                      {formatAppointmentDateLong(appointment.scheduled_date)}
                     </p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">

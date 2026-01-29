@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { cn, formatAppointmentDate } from '@/lib/utils';
 import { useCustomer, useCustomerAppointments } from '@/hooks/useCustomers';
 import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
 import { EditCustomerModal, SendEmailModal } from '@/components/modals';
@@ -35,12 +35,7 @@ const formatCurrency = (amount: number | null) => {
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric',
-    year: 'numeric'
-  });
+  return formatAppointmentDate(dateStr);
 };
 
 const getInitials = (firstName: string, lastName: string | null) => {

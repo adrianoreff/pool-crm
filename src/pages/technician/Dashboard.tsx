@@ -9,8 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MapPin, Clock, Wrench, Navigation, Play, CheckCircle2, Circle } from 'lucide-react';
-import { formatTime } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { formatTime, formatAppointmentDateShort, getLocalDateString, cn } from '@/lib/utils';
 import { TechnicianJobsMap } from '@/components/technician/TechnicianJobsMap';
 
 function getInitials(firstName: string | null, lastName: string | null) {
@@ -70,7 +69,7 @@ export default function TechnicianDashboard() {
       })[0];
   }, [appointments]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   
   const todaySchedule = useMemo(() => {
     return appointments
@@ -310,8 +309,7 @@ export default function TechnicianDashboard() {
             <div className="space-y-3">
               {upcomingSchedule.map((apt) => {
                 const statusBadge = getStatusBadge(apt.status);
-                const aptDate = new Date(apt.scheduled_date);
-                const dateStr = aptDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                const dateStr = formatAppointmentDateShort(apt.scheduled_date);
                 
                 return (
                   <div

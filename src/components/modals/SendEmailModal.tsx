@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { formatAppointmentDate } from '@/lib/utils';
 import { EmailService } from '@/lib/services/email-service';
 import { useBusiness } from '@/hooks/useBusiness';
 import { supabase } from '@/integrations/supabase/client';
@@ -493,7 +494,7 @@ export function SendEmailModal({ isOpen, onClose, recipient, appointmentId }: Se
                   {appointment.ref_code} - {appointment.service?.name || 'Service'}
                 </span>
                 <Badge variant="outline" className="ml-auto">
-                  {new Date(appointment.scheduled_date).toLocaleDateString()}
+                  {formatAppointmentDate(appointment.scheduled_date)}
                 </Badge>
               </div>
             </div>

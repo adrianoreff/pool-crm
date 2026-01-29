@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/technician/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { MapPreview } from '@/components/technician/MapPreview';
 import { MapPin, Phone, Mail, Clock, Wrench, Navigation, CheckCircle2, AlertCircle, FileText, Camera, History } from 'lucide-react';
-import { formatTime } from '@/lib/utils';
+import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useBusiness } from '@/hooks/useBusiness';
 
@@ -355,12 +355,7 @@ export default function JobDetails() {
         </CardHeader>
         <CardContent>
           <div>
-            {new Date(appointment.scheduled_date).toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
+            {formatAppointmentDateLong(appointment.scheduled_date)}
           </div>
           <div className="text-sm text-muted-foreground mt-1">
             {formatTime(appointment.scheduled_start_time)} - {formatTime(appointment.scheduled_end_time)}

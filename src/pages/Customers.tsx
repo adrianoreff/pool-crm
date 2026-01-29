@@ -42,7 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
+import { cn, formatAppointmentDate } from '@/lib/utils';
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers';
 import { useCustomersLatestEmailStatus } from '@/hooks/useLatestEmailStatus';
 import { CustomerWithAddresses } from '@/types/database';
@@ -58,12 +58,7 @@ const formatCurrency = (amount: number | null) => {
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric',
-    year: 'numeric'
-  });
+  return formatAppointmentDate(dateStr);
 };
 
 const getInitials = (firstName: string, lastName: string | null) => {

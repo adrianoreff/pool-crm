@@ -4,7 +4,7 @@ import { useTechnicianAppointments } from '@/hooks/useTechnicianAppointments';
 import { JobCard } from '@/components/technician/JobCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatTime } from '@/lib/utils';
+import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
 
 type PeriodFilter = 'week' | 'month' | 'all';
 
@@ -162,12 +162,7 @@ export default function History() {
           {groupedByDate.map(([date, dateAppointments]) => (
             <div key={date}>
               <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-                {new Date(date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                }).toUpperCase()}
+                {formatAppointmentDateLong(date).toUpperCase()}
               </h2>
               <div className="space-y-2">
                 {dateAppointments.map((apt) => (

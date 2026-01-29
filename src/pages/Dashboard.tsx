@@ -43,7 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
+import { cn, getLocalDateString } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTodayAppointments, usePendingAppointments, useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
@@ -148,7 +148,7 @@ export default function Dashboard() {
   const scheduledCount = todaysAppointments.filter(a => a.status === 'scheduled').length;
   
   // Get today's calls
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const newCallsToday = callLogs.filter(c => 
     c.started_at.split('T')[0] === today
   ).length;

@@ -56,7 +56,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
+import { cn, formatAppointmentDate, parseLocalDate } from '@/lib/utils';
 import { useAppointments, useTodayAppointments, usePendingAppointments, useCancelAppointment } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServiceCategories } from '@/hooks/useServices';
@@ -93,12 +93,7 @@ const formatTime = (time: string) => {
 };
 
 const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric',
-    year: 'numeric'
-  });
+  return formatAppointmentDate(dateStr);
 };
 
 const getStatusBadge = (status: string) => {
@@ -198,7 +193,7 @@ export default function Appointments() {
   weekEnd.setDate(weekStart.getDate() + 7);
 
   const thisWeekCount = allAppointments.filter(a => {
-    const aptDate = new Date(a.scheduled_date);
+    const aptDate = parseLocalDate(a.scheduled_date);
     return aptDate >= weekStart && aptDate < weekEnd;
   }).length;
 
