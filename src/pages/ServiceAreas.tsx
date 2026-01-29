@@ -109,11 +109,13 @@ function ServiceAreaCard({
   area, 
   colorIndex, 
   onEdit, 
+  onDrawBoundary,
   onDelete 
 }: { 
   area: ServiceAreaWithTechnician; 
   colorIndex: number;
   onEdit: () => void;
+  onDrawBoundary: () => void;
   onDelete: () => void;
 }) {
   const toggleActive = useToggleServiceAreaActive();

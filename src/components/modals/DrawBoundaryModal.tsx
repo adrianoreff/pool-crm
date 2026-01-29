@@ -81,7 +81,7 @@ export function DrawBoundaryModal({ open, onOpenChange, serviceArea, mapboxToken
         </DialogHeader>
         <DrawBoundaryMap
           token={mapboxToken}
-          initialGeoJSON={serviceArea.geojson as GeoJSON.Polygon | null}
+          initialGeoJSON={serviceArea.geojson as unknown as GeoJSON.Polygon | null}
           onSave={handleSave}
           onCancel={handleCancel}
           areaName={serviceArea.name}
