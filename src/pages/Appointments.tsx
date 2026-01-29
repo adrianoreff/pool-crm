@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Search, 
   Filter, 
@@ -17,6 +18,8 @@ import {
   CalendarClock,
   Trash,
   Mail,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,7 +59,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn, formatAppointmentDate, parseLocalDate } from '@/lib/utils';
+import { cn, formatAppointmentDate, parseLocalDate, getLocalDateString } from '@/lib/utils';
 import { useAppointments, useTodayAppointments, usePendingAppointments, useCancelAppointment } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServiceCategories } from '@/hooks/useServices';
@@ -67,6 +70,16 @@ import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 
 type SortField = 'date' | 'customer' | 'status';
 type SortDirection = 'asc' | 'desc';
+type ViewMode = 'list' | 'grid';
+
+const APPOINTMENTS_VIEW_KEY = 'appointments_view_mode';
+function getStoredViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(APPOINTMENTS_VIEW_KEY);
+    if (v === 'list' || v === 'grid') return v;
+  } catch {}
+  return 'list';
+}
 
 const statusOptions = [
   { value: 'all', label: 'All Status' },
@@ -119,8 +132,10 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function Appointments() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [datePreset, setDatePreset] = useState<'today' | 'week' | null>(null);
   const [technicianFilter, setTechnicianFilter] = useState('all');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('date');
@@ -130,6 +145,22 @@ export default function Appointments() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
+
+  const setViewModeAndStore = (mode: ViewMode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(APPOINTMENTS_VIEW_KEY, mode);
+    } catch {}
+  };
+
+  // Sync URL params to filters (e.g. from dashboard stat card links)
+  useEffect(() => {
+    const date = searchParams.get('date');
+    const status = searchParams.get('status');
+    if (date === 'today' || date === 'week') setDatePreset(date);
+    if (status && statusOptions.some(o => o.value === status)) setStatusFilter(status);
+  }, [searchParams]);
 
   const { data: allAppointments = [], isLoading } = useAppointments(
     statusFilter !== 'all' ? { status: statusFilter as AppointmentStatus } : undefined
@@ -150,7 +181,17 @@ export default function Appointments() {
   // Filter appointments
   let filteredAppointments = allAppointments.filter(apt => {
     if (technicianFilter !== 'all' && apt.technician_id !== technicianFilter) return false;
-    
+    if (datePreset === 'today' && apt.scheduled_date !== getLocalDateString()) return false;
+    if (datePreset === 'week') {
+      const aptDate = parseLocalDate(apt.scheduled_date);
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+      if (aptDate < weekStart || aptDate >= weekEnd) return false;
+    }
     if (searchQuery) {
       const customer = apt.customer;
       const searchLower = searchQuery.toLowerCase();
@@ -163,7 +204,6 @@ export default function Appointments() {
       const addressMatch = apt.address.toLowerCase().includes(searchLower);
       if (!customerMatch && !addressMatch) return false;
     }
-    
     return true;
   });
 
@@ -317,13 +357,129 @@ export default function Appointments() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex rounded-lg border p-1">
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeAndStore('list')}
+                className="gap-1.5"
+              >
+                <List className="h-4 w-4" />
+                List
+              </Button>
+              <Button
+                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeAndStore('grid')}
+                className="gap-1.5"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Grid
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Table */}
+      {/* List or Grid */}
       <Card className="shadow-card">
         <CardContent className="p-0">
+          {viewMode === 'grid' ? (
+            <div className="p-4">
+              {isLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-40 rounded-lg" />
+                  ))}
+                </div>
+              ) : filteredAppointments.length === 0 ? (
+                <div className="text-center py-12">
+                  <Calendar className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                  <p className="text-muted-foreground">No appointments found</p>
+                  <Button className="mt-4" onClick={() => setIsNewAppointmentOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Appointment
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredAppointments.map((apt) => {
+                    const customer = apt.customer;
+                    const technician = apt.technician;
+                    const service = apt.service;
+                    const category = categories.find(c => c.id === service?.category_id);
+                    return (
+                      <Card
+                        key={apt.id}
+                        className="cursor-pointer hover:shadow-md transition-shadow border"
+                        onClick={() => handleViewDetails(apt)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            {getStatusBadge(apt.status)}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(apt); }}>
+                                  <Eye className="mr-2 h-4 w-4" /> View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(apt); }}>
+                                  <Pencil className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(apt); }}>
+                                  <CalendarClock className="mr-2 h-4 w-4" /> Reschedule
+                                </DropdownMenuItem>
+                                {apt.status !== 'cancelled' && apt.status !== 'completed' && (
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={(e) => { e.stopPropagation(); handleCancelClick(apt.id, e); }}
+                                  >
+                                    <Trash className="mr-2 h-4 w-4" /> Cancel
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <p className="font-medium">
+                            {customer?.first_name} {customer?.last_name}
+                          </p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {formatDate(apt.scheduled_date)} · {formatTime(apt.scheduled_start_time)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="outline" style={{ borderColor: category?.color, color: category?.color }}>
+                              {service?.name || 'Service'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-2 flex items-center gap-1">
+                            <MapPin className="h-3 w-3 flex-shrink-0" />
+                            {apt.address}
+                          </p>
+                          {technician && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-xs text-white" style={{ backgroundColor: technician.color || '#888' }}>
+                                  {technician.first_name?.[0]}{technician.last_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs text-muted-foreground">
+                                {technician.first_name} {technician.last_name}
+                              </span>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -505,6 +661,7 @@ export default function Appointments() {
               )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 

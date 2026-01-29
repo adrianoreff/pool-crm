@@ -128,6 +128,7 @@ export function useUpdateBusiness() {
       city: string;
       state: string;
       zip_code: string;
+      logo_url: string | null;
       vapi_assistant_id: string | null;
       mapbox_public_token: string | null;
     }>) => {

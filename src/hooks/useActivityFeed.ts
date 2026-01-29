@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-interface ActivityItem {
+const ACTIVITY_FEED_CLEARED_KEY = 'activity_feed_cleared_at';
+
+export interface ActivityItem {
   id: string;
   type: 'appointment_created' | 'appointment_updated' | 'appointment_completed' | 'customer_added' | 'payment_received' | 'call_received';
   title: string;
@@ -10,12 +12,33 @@ interface ActivityItem {
   timestamp: string;
 }
 
-export function useActivityFeed(limit = 10) {
+export function getActivityFeedClearedAt(): string | null {
+  try {
+    return localStorage.getItem(ACTIVITY_FEED_CLEARED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function useClearActivityFeed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      localStorage.setItem(ACTIVITY_FEED_CLEARED_KEY, new Date().toISOString());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
+    },
+  });
+}
+
+export function useActivityFeed(limit = 10, clearedAtOverride?: string | null) {
   const { profile } = useAuth();
   const businessId = profile?.business_id;
+  const clearedAt = clearedAtOverride !== undefined ? clearedAtOverride : getActivityFeedClearedAt();
 
   return useQuery({
-    queryKey: ['activity-feed', businessId, limit],
+    queryKey: ['activity-feed', businessId, limit, clearedAt ?? ''],
     queryFn: async () => {
       if (!businessId) return [];
 
@@ -96,9 +119,16 @@ export function useActivityFeed(limit = 10) {
       });
 
       // Sort by timestamp and limit
-      return activities
+      let result = activities
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, limit);
+
+      // Filter out activities before cleared-at (client-side)
+      if (clearedAt) {
+        const clearedTime = new Date(clearedAt).getTime();
+        result = result.filter((a) => new Date(a.timestamp).getTime() > clearedTime);
+      }
+      return result;
     },
     enabled: !!businessId,
   });

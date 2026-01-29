@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 export interface EmailLogWithRelations {
   id: string;
@@ -106,5 +107,57 @@ export function useCustomerEmailHistory(customerId: string) {
       return data;
     },
     enabled: !!businessId && !!customerId,
+  });
+}
+
+export function useDeleteEmailLog() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const businessId = profile?.business_id;
+
+  return useMutation({
+    mutationFn: async (emailLogId: string) => {
+      const { error } = await supabase
+        .from('email_logs')
+        .delete()
+        .eq('id', emailLogId)
+        .eq('business_id', businessId!);
+
+      if (error) throw error;
+      return emailLogId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-logs'] });
+      toast.success('Message deleted');
+    },
+    onError: (error) => {
+      toast.error('Failed to delete message');
+      console.error(error);
+    },
+  });
+}
+
+export function useClearAllEmailLogs() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const businessId = profile?.business_id;
+
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('email_logs')
+        .delete()
+        .eq('business_id', businessId!);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-logs'] });
+      toast.success('All message history cleared');
+    },
+    onError: (error) => {
+      toast.error('Failed to clear message history');
+      console.error(error);
+    },
   });
 }

@@ -41,7 +41,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useServices, useServiceCategories, useToggleServiceActive } from '@/hooks/useServices';
 import { ServiceWithCategory, ServiceCategory } from '@/types/database';
-import { AddServiceModal, AddCategoryModal } from '@/components/modals';
+import { AddServiceModal, EditServiceModal, AddCategoryModal } from '@/components/modals';
 
 const categoryIcons: Record<string, React.ElementType> = {
   Droplets, Zap, Thermometer, Home, Waves, Wrench,
@@ -65,7 +65,15 @@ const formatPrice = (basePrice: number | null, maxPrice: number | null) => {
   return `$${basePrice} - $${maxPrice}`;
 };
 
-function ServiceRow({ service, categoryColor }: { service: ServiceWithCategory; categoryColor: string }) {
+function ServiceRow({
+  service,
+  categoryColor,
+  onEdit,
+}: {
+  service: ServiceWithCategory;
+  categoryColor: string;
+  onEdit: (service: ServiceWithCategory) => void;
+}) {
   const toggleActive = useToggleServiceActive();
 
   return (
@@ -101,7 +109,9 @@ function ServiceRow({ service, categoryColor }: { service: ServiceWithCategory; 
             <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(service)}>
+              <Edit className="mr-2 h-4 w-4" />Edit
+            </DropdownMenuItem>
             <DropdownMenuItem>Duplicate</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive"><Trash className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
@@ -117,6 +127,13 @@ export default function Services() {
   const { data: categories = [], isLoading: loadingCategories } = useServiceCategories();
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [editingService, setEditingService] = useState<ServiceWithCategory | null>(null);
+  const [isEditServiceOpen, setIsEditServiceOpen] = useState(false);
+
+  const handleEditService = (service: ServiceWithCategory) => {
+    setEditingService(service);
+    setIsEditServiceOpen(true);
+  };
 
   const totalServices = services.length;
   const activeServices = services.filter(s => s.is_active).length;
@@ -204,7 +221,12 @@ export default function Services() {
                       </TableHeader>
                       <TableBody>
                         {categoryServices.map((service) => (
-                          <ServiceRow key={service.id} service={service} categoryColor={category.color || '#888'} />
+                          <ServiceRow
+                            key={service.id}
+                            service={service}
+                            categoryColor={category.color || '#888'}
+                            onEdit={handleEditService}
+                          />
                         ))}
                       </TableBody>
                     </Table>
@@ -220,6 +242,14 @@ export default function Services() {
       <AddServiceModal 
         open={isAddServiceOpen} 
         onOpenChange={setIsAddServiceOpen} 
+      />
+      <EditServiceModal
+        open={isEditServiceOpen}
+        onOpenChange={(open) => {
+          setIsEditServiceOpen(open);
+          if (!open) setEditingService(null);
+        }}
+        service={editingService}
       />
       <AddCategoryModal 
         open={isAddCategoryOpen} 

@@ -1,10 +1,19 @@
-import { useState } from 'react';
-import { Phone, Play, FileText, Calendar, UserPlus, Clock, CheckCircle, XCircle, HelpCircle, PhoneOff, Trash2, RefreshCw } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Phone, Play, FileText, Calendar, UserPlus, Clock, CheckCircle, XCircle, HelpCircle, PhoneOff, Trash2, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,11 +44,104 @@ const outcomeConfig: Record<string, { icon: React.ElementType; color: string; bg
   missed: { icon: PhoneOff, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Missed' },
 };
 
+const dateRangeOptions = [
+  { value: 'all', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+];
+
+const outcomeFilterOptions = [
+  { value: 'all', label: 'All outcomes' },
+  { value: 'booked', label: 'Booked' },
+  { value: 'faq_answered', label: 'FAQ' },
+  { value: 'no_action', label: 'No Action' },
+  { value: 'voicemail', label: 'Voicemail' },
+  { value: 'missed', label: 'Missed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'rescheduled', label: 'Rescheduled' },
+];
+
+const durationFilterOptions = [
+  { value: 'all', label: 'Any duration' },
+  { value: 'short', label: 'Short (< 1 min)' },
+  { value: 'medium', label: 'Medium (1–5 min)' },
+  { value: 'long', label: 'Long (> 5 min)' },
+];
+
+function getDateRangeForPreset(preset: string): { dateFrom: string; dateTo: string } | undefined {
+  const now = new Date();
+  if (preset === 'today') {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return { dateFrom: start.toISOString(), dateTo: end.toISOString() };
+  }
+  if (preset === 'week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+    end.setMilliseconds(-1);
+    return { dateFrom: start.toISOString(), dateTo: end.toISOString() };
+  }
+  if (preset === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { dateFrom: start.toISOString(), dateTo: end.toISOString() };
+  }
+  return undefined;
+}
+
 export default function CallLogs() {
+  const [searchParams] = useSearchParams();
   const [selectedCall, setSelectedCall] = useState<CallLogWithCustomer | null>(null);
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
-  const { data: callLogs = [], isLoading } = useCallLogs();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateRangePreset, setDateRangePreset] = useState('all');
+  const [outcomeFilter, setOutcomeFilter] = useState('all');
+  const [durationFilter, setDurationFilter] = useState('all');
+
+  const dateParam = searchParams.get('date');
+  useEffect(() => {
+    if (dateParam === 'today') setDateRangePreset('today');
+  }, [dateParam]);
+  const callLogFilters = useMemo(() => {
+    const preset = dateParam === 'today' ? 'today' : dateRangePreset;
+    const range = getDateRangeForPreset(preset);
+    const filters: { dateFrom?: string; dateTo?: string; outcome?: string } = {};
+    if (range) {
+      filters.dateFrom = range.dateFrom;
+      filters.dateTo = range.dateTo;
+    }
+    if (outcomeFilter !== 'all') filters.outcome = outcomeFilter;
+    return Object.keys(filters).length > 0 ? filters : undefined;
+  }, [dateParam, dateRangePreset, outcomeFilter]);
+
+  const { data: callLogs = [], isLoading } = useCallLogs(callLogFilters);
   const { stats } = useCallLogStats();
+
+  const filteredBySearchAndDuration = useMemo(() => {
+    return callLogs.filter((call) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const phoneMatch = call.caller_phone?.toLowerCase().includes(q);
+        const nameMatch = call.customer
+          ? `${call.customer.first_name} ${call.customer.last_name || ''}`.toLowerCase().includes(q)
+          : false;
+        const dateStr = call.started_at ? new Date(call.started_at).toLocaleDateString() : '';
+        const dateMatch = dateStr.toLowerCase().includes(q);
+        if (!phoneMatch && !nameMatch && !dateMatch) return false;
+      }
+      if (durationFilter !== 'all') {
+        const sec = call.duration_seconds ?? 0;
+        if (durationFilter === 'short' && sec >= 60) return false;
+        if (durationFilter === 'medium' && (sec < 60 || sec > 300)) return false;
+        if (durationFilter === 'long' && sec <= 300) return false;
+      }
+      return true;
+    });
+  }, [callLogs, searchQuery, durationFilter]);
   const deleteCallLog = useDeleteCallLog();
   const clearAllCallLogs = useClearAllCallLogs();
   const syncVapiCalls = useSyncVapiCalls();
@@ -128,6 +230,53 @@ export default function CallLogs() {
         ))}
       </div>
 
+      {/* Search and filters */}
+      <Card className="shadow-card">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by phone, caller name, or date..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={dateRangePreset} onValueChange={setDateRangePreset}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Date range" />
+              </SelectTrigger>
+              <SelectContent>
+                {dateRangeOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={outcomeFilter} onValueChange={setOutcomeFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Outcome" />
+              </SelectTrigger>
+              <SelectContent>
+                {outcomeFilterOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={durationFilter} onValueChange={setDurationFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Duration" />
+              </SelectTrigger>
+              <SelectContent>
+                {durationFilterOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="shadow-card">
         <CardContent className="p-0">
           <Table>
@@ -153,15 +302,15 @@ export default function CallLogs() {
                     <TableCell><Skeleton className="h-8 w-16" /></TableCell>
                   </TableRow>
                 ))
-              ) : callLogs.length === 0 ? (
+              ) : filteredBySearchAndDuration.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12">
                     <Phone className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-                    <p className="text-muted-foreground">No call logs yet</p>
+                    <p className="text-muted-foreground">No call logs match your filters</p>
                   </TableCell>
                 </TableRow>
               ) : (
-                callLogs.map((call) => {
+                filteredBySearchAndDuration.map((call) => {
                   const outcome = outcomeConfig[call.outcome || 'no_action'] || outcomeConfig.no_action;
                   const OutcomeIcon = outcome.icon;
                   const isExpanded = playingCallId === call.id;

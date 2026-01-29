@@ -155,20 +155,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         collapsed && 'justify-center px-2'
       )}>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-            <Wrench className="h-5 w-5 text-primary-foreground" />
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg overflow-hidden bg-primary">
+            {business?.logo_url ? (
+              <img src={business.logo_url} alt="" className="h-full w-full object-contain" />
+            ) : (
+              <Wrench className="h-5 w-5 text-primary-foreground" />
+            )}
           </div>
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="text-lg font-bold text-sidebar-foreground">TradeFlow</span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-lg font-bold text-sidebar-foreground truncate">{business?.name || 'TradeFlow'}</span>
               <span className="text-xs text-sidebar-muted">CRM</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Business Name */}
-      {!collapsed && business && (
+      {/* Business name (when logo section shows TradeFlow) */}
+      {!collapsed && business && !business.logo_url && (
         <div className="border-b border-sidebar-border px-4 py-3">
           <p className="truncate text-sm font-medium text-sidebar-foreground">
             {business.name}

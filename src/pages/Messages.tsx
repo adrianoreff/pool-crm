@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Mail, Send, Eye, MousePointer, AlertTriangle, CheckCircle, Clock, Search, Filter } from 'lucide-react';
+import { Mail, Send, Eye, MousePointer, AlertTriangle, CheckCircle, Clock, Search, Filter, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,18 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { useEmailLogs, useEmailStats, EmailLogWithRelations } from '@/hooks/useMessages';
+import { useEmailLogs, useEmailStats, useDeleteEmailLog, useClearAllEmailLogs, EmailLogWithRelations } from '@/hooks/useMessages';
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
@@ -60,9 +70,13 @@ const emailTypeLabels: Record<string, string> = {
 export default function Messages() {
   const { data: emails = [], isLoading } = useEmailLogs();
   const { stats } = useEmailStats();
+  const deleteEmailLog = useDeleteEmailLog();
+  const clearAllEmailLogs = useClearAllEmailLogs();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
+  const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
 
   const filteredEmails = useMemo(() => {
     return emails.filter(email => {
@@ -92,11 +106,29 @@ export default function Messages() {
     { label: 'Clicked', value: stats.clicked, icon: MousePointer, color: 'text-secondary' },
   ];
 
+  const handleClearAll = () => {
+    clearAllEmailLogs.mutate(undefined, { onSuccess: () => setClearAllDialogOpen(false) });
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Messages</h1>
-        <p className="text-muted-foreground">Email communication history and tracking</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Messages</h1>
+          <p className="text-muted-foreground">Email communication history and tracking</p>
+        </div>
+        {emails.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => setClearAllDialogOpen(true)}
+            disabled={clearAllEmailLogs.isPending}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear All History
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -174,6 +206,7 @@ export default function Messages() {
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Interactions</TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -186,11 +219,12 @@ export default function Messages() {
                     <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                     <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                   </TableRow>
                 ))
               ) : filteredEmails.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <Mail className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
                     <p className="text-muted-foreground">
                       {emails.length === 0 ? 'No emails sent yet' : 'No emails match your filters'}
@@ -253,6 +287,17 @@ export default function Messages() {
                           )}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setEmailToDelete(email.id)}
+                          disabled={deleteEmailLog.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })
@@ -261,6 +306,54 @@ export default function Messages() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete single message confirmation */}
+      <AlertDialog open={!!emailToDelete} onOpenChange={(open) => !open && setEmailToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this email from the log. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (emailToDelete) {
+                  deleteEmailLog.mutate(emailToDelete, { onSuccess: () => setEmailToDelete(null) });
+                }
+              }}
+              disabled={deleteEmailLog.isPending}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear all history confirmation */}
+      <AlertDialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all message history?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all email log entries for your business ({emails.length} total). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={handleClearAll}
+              disabled={clearAllEmailLogs.isPending}
+            >
+              Clear All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

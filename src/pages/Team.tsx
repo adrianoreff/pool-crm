@@ -58,7 +58,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTeamInvitations } from '@/hooks/useTeamInvitations';
 import { ResendInvitationModal } from '@/components/modals/ResendInvitationModal';
-import { Clock, RefreshCw, X } from 'lucide-react';
+import { Clock, RefreshCw, X, ImagePlus, Loader2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useUpdateTeamMember } from '@/hooks/useTeam';
 
 type ViewMode = 'grid' | 'list';
 
@@ -97,6 +105,7 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
           <Avatar className="h-16 w-16 cursor-pointer" onClick={onViewProfile}>
+            <AvatarImage src={member.avatar_url || undefined} alt="" />
             <AvatarFallback 
               className="text-lg text-white font-medium"
               style={{ backgroundColor: member.color || '#888' }}
@@ -116,7 +125,7 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
               <DropdownMenuItem onClick={onViewSchedule}>View Schedule</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive" onClick={onDeactivate}>
-                Deactivate
+                Delete / Remove from team
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -127,12 +136,15 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
             <h3 className="font-semibold text-lg cursor-pointer hover:text-primary" onClick={onViewProfile}>
               {member.first_name} {member.last_name}
             </h3>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge 
                 variant="outline" 
                 className={cn('capitalize text-xs', roleStyles[member.role])}
               >
                 {member.role}
+              </Badge>
+              <Badge variant="secondary" className="text-xs bg-success/10 text-success border-success/20">
+                Accepted
               </Badge>
               <div className={cn(
                 'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium',
@@ -169,13 +181,22 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
   );
 }
 
+const ROLE_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'technician', label: 'Technician' },
+  { value: 'dispatcher', label: 'Manager / Dispatcher' },
+  { value: 'owner', label: 'Owner' },
+];
+
 function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserType | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const updateTeamMember = useUpdateTeamMember();
 
   useEffect(() => {
     if (member) {
@@ -209,6 +230,38 @@ function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserTy
     }
   };
 
+  const handleRoleChange = (role: string) => {
+    if (!member) return;
+    updateTeamMember.mutate({ id: member.id, role: role as UserType['role'] });
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !member) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please select an image (PNG, JPG, etc.)', variant: 'destructive' });
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `${member.id}/avatar.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { cacheControl: '3600', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      await supabase.from('users').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', member.id);
+      queryClient.invalidateQueries({ queryKey: ['team'] });
+      toast({ title: 'Photo updated' });
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err?.message || 'Could not upload. Ensure "avatars" storage bucket exists.', variant: 'destructive' });
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = '';
+    }
+  };
+
   if (!member) return null;
 
   return (
@@ -219,14 +272,35 @@ function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserTy
         </SheetHeader>
         <div className="mt-6 space-y-6">
           <div className="flex items-center gap-4">
-            <Avatar className="h-20 w-20">
-              <AvatarFallback 
-                className="text-2xl text-white font-medium"
-                style={{ backgroundColor: member.color || '#888' }}
+            <div className="relative">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={member.avatar_url || undefined} alt="" />
+                <AvatarFallback 
+                  className="text-2xl text-white font-medium"
+                  style={{ backgroundColor: member.color || '#888' }}
+                >
+                  {getInitials(member.first_name, member.last_name)}
+                </AvatarFallback>
+              </Avatar>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                id="team-member-photo"
+                onChange={handlePhotoChange}
+                disabled={photoUploading}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
+                onClick={() => document.getElementById('team-member-photo')?.click()}
+                disabled={photoUploading}
               >
-                {getInitials(member.first_name, member.last_name)}
-              </AvatarFallback>
-            </Avatar>
+                {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+              </Button>
+            </div>
             <div className="flex-1">
               {isEditing ? (
                 <div className="space-y-2">
@@ -244,9 +318,18 @@ function TeamMemberProfileSheet({ member, open, onOpenChange }: { member: UserTy
               ) : (
                 <div>
                   <h2 className="text-xl font-semibold">{member.first_name || ''} {member.last_name || ''}</h2>
-                  <Badge variant="outline" className={cn('capitalize mt-1', roleStyles[member.role])}>
-                    {member.role}
-                  </Badge>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <Select value={member.role} onValueChange={handleRoleChange} disabled={updateTeamMember.isPending}>
+                      <SelectTrigger className="w-[140px] h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.filter(r => r.value === 'owner' ? member.role === 'owner' : r.value !== 'owner').map((r) => (
+                          <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </div>
@@ -582,6 +665,7 @@ export default function Team() {
                         <TableCell>
                           <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleViewProfile(member)}>
                             <Avatar className="h-10 w-10">
+                              <AvatarImage src={member.avatar_url || undefined} alt="" />
                               <AvatarFallback 
                                 className="text-sm text-white font-medium"
                                 style={{ backgroundColor: member.color || '#888' }}
@@ -598,12 +682,17 @@ export default function Team() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant="outline" 
-                            className={cn('capitalize', roleStyles[member.role])}
-                          >
-                            {member.role}
-                          </Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge 
+                              variant="outline" 
+                              className={cn('capitalize', roleStyles[member.role])}
+                            >
+                              {member.role}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs bg-success/10 text-success border-success/20">
+                              Accepted
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className={cn(
@@ -637,7 +726,7 @@ export default function Team() {
                               <DropdownMenuItem onClick={() => handleViewSchedule(member)}>View Schedule</DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive" onClick={() => setMemberToDeactivate(member)}>
-                                Deactivate
+                                Delete / Remove from team
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -677,20 +766,20 @@ export default function Team() {
         onOpenChange={setIsProfileOpen} 
       />
 
-      {/* Deactivate Confirmation Dialog */}
-      <AlertDialog open={!!memberToDeactivate} onOpenChange={() => setMemberToDeactivate(null)}>
+      {/* Delete / Remove team member confirmation */}
+      <AlertDialog open={!!memberToDeactivate} onOpenChange={(open) => !open && setMemberToDeactivate(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate Team Member</AlertDialogTitle>
+            <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to deactivate {memberToDeactivate?.first_name} {memberToDeactivate?.last_name}? 
+              Are you sure you want to remove {memberToDeactivate?.first_name} {memberToDeactivate?.last_name} from the team?
               They will no longer have access to the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeactivate} className="bg-destructive text-destructive-foreground">
-              Deactivate
+            <AlertDialogAction onClick={handleDeactivate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

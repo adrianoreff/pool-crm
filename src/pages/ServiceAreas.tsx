@@ -35,7 +35,7 @@ import { useServiceAreas, useToggleServiceAreaActive, useDeleteServiceArea } fro
 import { useBusiness } from '@/hooks/useBusiness';
 import { ServiceAreaWithTechnician } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AddServiceAreaModal, EditServiceAreaModal } from '@/components/modals';
+import { AddServiceAreaModal, EditServiceAreaModal, DrawBoundaryModal } from '@/components/modals';
 import { ServiceAreasMap } from '@/components/maps/ServiceAreasMap';
 
 // Generate a color based on index for visual differentiation
@@ -157,9 +157,9 @@ function ServiceAreaCard({
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Zone
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={onDrawBoundary}>
                   <MapPin className="mr-2 h-4 w-4" />
-                  Draw on Map
+                  Draw boundary on map
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={onDelete}>
@@ -237,6 +237,11 @@ export default function ServiceAreas() {
   const handleEdit = (area: ServiceAreaWithTechnician) => {
     setServiceAreaToEdit(area);
     setIsEditServiceAreaOpen(true);
+  };
+
+  const handleDrawBoundary = (area: ServiceAreaWithTechnician) => {
+    setDrawBoundaryArea(area);
+    setIsDrawBoundaryOpen(true);
   };
 
   const handleDeleteClick = (areaId: string) => {
@@ -348,6 +353,15 @@ export default function ServiceAreas() {
         open={isEditServiceAreaOpen}
         onOpenChange={setIsEditServiceAreaOpen}
         serviceArea={serviceAreaToEdit}
+      />
+      <DrawBoundaryModal
+        open={isDrawBoundaryOpen}
+        onOpenChange={(open) => {
+          setIsDrawBoundaryOpen(open);
+          if (!open) setDrawBoundaryArea(null);
+        }}
+        serviceArea={drawBoundaryArea}
+        mapboxToken={mapboxToken || null}
       />
 
       {/* Delete Confirmation Dialog */}

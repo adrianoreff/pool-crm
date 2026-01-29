@@ -62,3 +62,9 @@ export function getLocalDateString(date: Date = new Date()): string {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/** Get local YYYY-MM-DD from an ISO date string (for filtering call_logs etc by "today"). */
+export function getLocalDateStringFromISO(isoString: string): string {
+  const d = new Date(isoString);
+  return getLocalDateString(d);
+}

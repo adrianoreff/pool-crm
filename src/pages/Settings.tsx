@@ -9,8 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building, Bell, Link, Code, Pencil } from 'lucide-react';
+import { Building, Bell, Link, Code, Pencil, ImagePlus, Loader2 } from 'lucide-react';
 import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig, useUpdateBusiness, useUpdateBookingRules, useUpdateNotificationSettings } from '@/hooks/useBusiness';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 // Helper to mask sensitive values
 const maskValue = (value: string) => {
@@ -26,6 +28,7 @@ export default function Settings() {
   const updateBusiness = useUpdateBusiness();
   const updateBookingRules = useUpdateBookingRules();
   const updateNotificationSettings = useUpdateNotificationSettings();
+  const { toast } = useToast();
 
   // Business profile state
   const [businessName, setBusinessName] = useState('');
@@ -33,6 +36,8 @@ export default function Settings() {
   const [businessEmail, setBusinessEmail] = useState('');
   const [businessWebsite, setBusinessWebsite] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
+  const [businessLogoUrl, setBusinessLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // Booking rules state
   const [timeSlotInterval, setTimeSlotInterval] = useState(30);
@@ -67,6 +72,7 @@ export default function Settings() {
       setBusinessEmail(business.email || '');
       setBusinessWebsite(business.website || '');
       setBusinessAddress(business.address || '');
+      setBusinessLogoUrl(business.logo_url ?? null);
       setVapiAssistantId(business.vapi_assistant_id || '');
       setMapboxToken((business as any).mapbox_public_token || '');
     }
@@ -99,7 +105,42 @@ export default function Settings() {
       email: businessEmail,
       website: businessWebsite,
       address: businessAddress,
+      logo_url: businessLogoUrl ?? undefined,
     });
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !business?.id) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please select an image file (PNG, JPG, etc.)', variant: 'destructive' });
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `${business.id}/logo.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('business-logos')
+        .upload(path, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('business-logos').getPublicUrl(path);
+      setBusinessLogoUrl(publicUrl);
+      updateBusiness.mutate({ logo_url: publicUrl });
+      toast({ title: 'Logo updated', description: 'Your business logo has been updated.' });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: 'Upload failed',
+        description: err?.message || 'Could not upload logo. Ensure the "business-logos" storage bucket exists.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLogoUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handleSaveBookingRules = () => {
@@ -179,10 +220,43 @@ export default function Settings() {
               <CardTitle className="flex items-center gap-2"><Building className="h-5 w-5" />Business Profile</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Business Logo</Label>
+                <p className="text-sm text-muted-foreground">Shown in the sidebar and email templates.</p>
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 rounded-lg border bg-muted flex items-center justify-center overflow-hidden">
+                    {businessLogoUrl ? (
+                      <img src={businessLogoUrl} alt="Business logo" className="h-full w-full object-contain" />
+                    ) : (
+                      <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      id="logo-upload"
+                      onChange={handleLogoFileChange}
+                      disabled={logoUploading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={logoUploading}
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                    >
+                      {logoUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      {logoUploading ? 'Uploading...' : 'Upload logo'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Business Name</Label>
-                  <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                  <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Your business name (shown in header)" />
                 </div>
                 <div className="space-y-2">
                   <Label>Phone Number</Label>

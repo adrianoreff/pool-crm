@@ -43,11 +43,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn, getLocalDateString } from '@/lib/utils';
+import { cn, getLocalDateString, getLocalDateStringFromISO } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTodayAppointments, usePendingAppointments, useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
-import { useActivityFeed } from '@/hooks/useActivityFeed';
+import { useActivityFeed, useClearActivityFeed, getActivityFeedClearedAt } from '@/hooks/useActivityFeed';
 import { useCallLogs } from '@/hooks/useCallLogs';
+import { useToast } from '@/hooks/use-toast';
 import { AppointmentWithRelations } from '@/types/database';
 import { AddCustomerModal, NewAppointmentModal, AppointmentDetailModal, SendEmailModal } from '@/components/modals';
 
@@ -126,11 +127,15 @@ export default function Dashboard() {
   const { profile } = useAuth();
   const { data: todaysAppointments = [], isLoading: loadingAppointments } = useTodayAppointments();
   const { data: pendingAppointments = [], isLoading: loadingPending } = usePendingAppointments();
-  const { data: activityFeed = [], isLoading: loadingActivity } = useActivityFeed(10);
+  const [activityClearedAt, setActivityClearedAt] = useState<string | null>(() => getActivityFeedClearedAt());
+  const { data: activityFeed = [], isLoading: loadingActivity } = useActivityFeed(10, activityClearedAt);
   const { data: callLogs = [] } = useCallLogs();
+  const clearActivityFeed = useClearActivityFeed();
+  const { toast } = useToast();
   
   const updateStatus = useUpdateAppointmentStatus();
   const cancelAppointment = useCancelAppointment();
+  const [clearHistoryDialogOpen, setClearHistoryDialogOpen] = useState(false);
 
   // Modal states
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
@@ -147,10 +152,10 @@ export default function Dashboard() {
   const inProgressCount = todaysAppointments.filter(a => a.status === 'in_progress').length;
   const scheduledCount = todaysAppointments.filter(a => a.status === 'scheduled').length;
   
-  // Get today's calls
+  // Get today's calls (use local date for correct timezone)
   const today = getLocalDateString();
-  const newCallsToday = callLogs.filter(c => 
-    c.started_at.split('T')[0] === today
+  const newCallsToday = callLogs.filter(c =>
+    getLocalDateStringFromISO(c.started_at) === today
   ).length;
 
   const stats = [
@@ -161,6 +166,7 @@ export default function Dashboard() {
       icon: Calendar,
       iconColor: 'text-primary',
       iconBg: 'bg-primary/10',
+      onClick: () => navigate('/appointments?date=today'),
     },
     {
       title: 'Pending Requests',
@@ -170,6 +176,7 @@ export default function Dashboard() {
       iconColor: 'text-warning',
       iconBg: 'bg-warning/10',
       highlight: pendingCount > 0,
+      onClick: () => navigate('/appointments?status=pending_confirmation'),
     },
     {
       title: 'This Week Revenue',
@@ -178,6 +185,7 @@ export default function Dashboard() {
       icon: DollarSign,
       iconColor: 'text-success',
       iconBg: 'bg-success/10',
+      onClick: () => navigate('/appointments?date=week'),
     },
     {
       title: 'New Calls Today',
@@ -186,8 +194,19 @@ export default function Dashboard() {
       icon: Phone,
       iconColor: 'text-primary',
       iconBg: 'bg-primary/10',
+      onClick: () => navigate('/call-logs?date=today'),
     },
   ];
+
+  const handleClearActivityHistory = () => {
+    clearActivityFeed.mutate(undefined, {
+      onSuccess: () => {
+        setActivityClearedAt(getActivityFeedClearedAt());
+        setClearHistoryDialogOpen(false);
+        toast({ title: 'Activity history cleared', description: 'Recent activity has been cleared.' });
+      },
+    });
+  };
 
   // Handlers for pending appointments
   const handleConfirm = (appointmentId: string) => {
@@ -260,15 +279,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - clickable */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card 
-            key={stat.title} 
+          <Card
+            key={stat.title}
             className={cn(
-              'shadow-card transition-shadow hover:shadow-elevated',
+              'shadow-card transition-shadow hover:shadow-elevated cursor-pointer',
               stat.highlight && 'ring-2 ring-warning/50'
             )}
+            onClick={stat.onClick}
           >
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
@@ -507,9 +527,19 @@ export default function Dashboard() {
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Recent Activity</CardTitle>
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary-hover">
-                  View All
-                </Button>
+                <div className="flex items-center gap-2">
+                  {activityFeed.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setClearHistoryDialogOpen(true)}
+                      disabled={clearActivityFeed.isPending}
+                    >
+                      Clear History
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -613,6 +643,24 @@ export default function Dashboard() {
             <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCancel} className="bg-destructive hover:bg-destructive/90">
               Cancel Appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Activity History Confirmation */}
+      <AlertDialog open={clearHistoryDialogOpen} onOpenChange={setClearHistoryDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Activity History</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to clear all recent activity? This will hide all items from the feed. You can still see appointments and calls in their respective pages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearActivityHistory} disabled={clearActivityFeed.isPending}>
+              Clear History
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

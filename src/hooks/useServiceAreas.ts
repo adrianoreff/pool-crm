@@ -51,6 +51,29 @@ export function useToggleServiceAreaActive() {
   });
 }
 
+export function useUpdateServiceAreaGeojson() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, geojson }: { id: string; geojson: object | null }) => {
+      const { error } = await supabase
+        .from('service_areas')
+        .update({ geojson, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-areas'] });
+      toast({ title: 'Boundary saved' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to save boundary', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useDeleteServiceArea() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

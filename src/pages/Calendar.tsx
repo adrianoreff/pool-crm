@@ -62,6 +62,20 @@ const formatTimeShort = (time: string) => {
   return `${hour12}${ampm}`;
 };
 
+// Status color coding for appointments
+const STATUS_COLORS: Record<string, { bg: string; border: string; label: string }> = {
+  pending_confirmation: { bg: '#3B82F620', border: '#3B82F6', label: 'Scheduled (pending)' },
+  scheduled: { bg: '#EAB30820', border: '#EAB308', label: 'Confirmed' },
+  in_progress: { bg: '#F9731620', border: '#F97316', label: 'In Progress' },
+  completed: { bg: '#22C55E20', border: '#22C55E', label: 'Completed' },
+  cancelled: { bg: '#EF444420', border: '#EF4444', label: 'Cancelled' },
+  no_show: { bg: '#6B728020', border: '#6B7280', label: 'No Show' },
+};
+
+function getStatusColor(status: string) {
+  return STATUS_COLORS[status] || { bg: '#6B728020', border: '#6B7280', label: status };
+}
+
 // Calculate overlapping appointments and assign positions
 interface OverlapInfo {
   index: number;
@@ -488,6 +502,19 @@ export default function CalendarPage() {
               </div>
             </div>
           </div>
+          {/* Color legend by status */}
+          <div className="flex flex-wrap items-center gap-4 pt-3 border-t mt-3">
+            <span className="text-xs font-medium text-muted-foreground">Status:</span>
+            {Object.entries(STATUS_COLORS).map(([status, { border, label }]) => (
+              <div key={status} className="flex items-center gap-1.5">
+                <div
+                  className="h-3 w-3 rounded-full flex-shrink-0 border border-white shadow"
+                  style={{ backgroundColor: border }}
+                />
+                <span className="text-xs text-muted-foreground">{label}</span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -575,7 +602,7 @@ export default function CalendarPage() {
                                   apt.scheduled_end_time,
                                   overlapInfo
                                 );
-                                const techColor = apt.technician?.color || '#F97316';
+                                const statusColor = getStatusColor(apt.status);
                                 const isAppointmentDragging = draggingAppointment?.id === apt.id;
 
                                 return (
@@ -594,8 +621,8 @@ export default function CalendarPage() {
                                       height: `${height}px`,
                                       left: `calc(${leftPercent}% + 2px)`,
                                       width: `calc(${widthPercent}% - 4px)`,
-                                      backgroundColor: `${techColor}20`,
-                                      borderLeft: `3px solid ${techColor}`,
+                                      backgroundColor: statusColor.bg,
+                                      borderLeft: `3px solid ${statusColor.border}`,
                                       userSelect: 'none',
                                       WebkitUserSelect: 'none',
                                       touchAction: 'none',
@@ -688,7 +715,7 @@ export default function CalendarPage() {
                           apt.scheduled_end_time,
                           overlapInfo
                         );
-                        const techColor = apt.technician?.color || '#F97316';
+                        const statusColor = getStatusColor(apt.status);
                         const isAppointmentDragging = draggingAppointment?.id === apt.id;
 
                         return (
@@ -707,8 +734,8 @@ export default function CalendarPage() {
                               height: `${height}px`,
                               left: `calc(${leftPercent}% + 8px)`,
                               width: `calc(${widthPercent}% - 16px)`,
-                              backgroundColor: `${techColor}15`,
-                              borderLeft: `4px solid ${techColor}`,
+                              backgroundColor: statusColor.bg,
+                              borderLeft: `4px solid ${statusColor.border}`,
                               userSelect: 'none',
                               WebkitUserSelect: 'none',
                               touchAction: 'none',
@@ -751,7 +778,7 @@ export default function CalendarPage() {
                                     <Avatar className="h-5 w-5">
                                       <AvatarFallback 
                                         className="text-xs text-white"
-                                        style={{ backgroundColor: apt.technician.color || '#F97316' }}
+                                        style={{ backgroundColor: apt.technician?.color || '#F97316' }}
                                       >
                                         {apt.technician.first_name?.[0]}
                                       </AvatarFallback>
@@ -906,19 +933,22 @@ function MonthView({
                   {date.getDate()}
                 </p>
                 <div className="space-y-1">
-                  {dayAppointments.slice(0, 3).map((apt) => (
-                    <div
-                      key={apt.id}
-                      className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80"
-                      style={{
-                        backgroundColor: `${apt.technician?.color || '#F97316'}20`,
-                        color: apt.technician?.color || '#F97316',
-                      }}
-                      onClick={(e) => onEventClick(apt, e)}
-                    >
-                      {apt.customer?.first_name}
-                    </div>
-                  ))}
+                  {dayAppointments.slice(0, 3).map((apt) => {
+                    const statusColor = getStatusColor(apt.status);
+                    return (
+                      <div
+                        key={apt.id}
+                        className="text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80"
+                        style={{
+                          backgroundColor: statusColor.bg,
+                          color: statusColor.border,
+                        }}
+                        onClick={(e) => onEventClick(apt, e)}
+                      >
+                        {apt.customer?.first_name}
+                      </div>
+                    );
+                  })}
                   {dayAppointments.length > 3 && (
                     <p className="text-xs text-muted-foreground text-center">
                       +{dayAppointments.length - 3} more

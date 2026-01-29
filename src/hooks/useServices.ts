@@ -110,3 +110,56 @@ export function useCreateService() {
     },
   });
 }
+
+export function useUpdateService() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      name,
+      description,
+      category_id,
+      duration_min,
+      duration_max,
+      base_price_min,
+      base_price_max,
+    }: {
+      id: string;
+      name?: string;
+      description?: string | null;
+      category_id?: string;
+      duration_min?: number | null;
+      duration_max?: number | null;
+      base_price_min?: number | null;
+      base_price_max?: number | null;
+    }) => {
+      const { data, error } = await supabase
+        .from('services')
+        .update({
+          name,
+          description,
+          category_id,
+          duration_min,
+          duration_max,
+          base_price_min,
+          base_price_max,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      toast({ title: 'Service updated successfully' });
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to update service', description: error.message, variant: 'destructive' });
+    },
+  });
+}
