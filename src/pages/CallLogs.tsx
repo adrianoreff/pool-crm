@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useCallLogs, useCallLogStats, useDeleteCallLog, useClearAllCallLogs, useSyncVapiCalls } from '@/hooks/useCallLogs';
-import { CallLogWithCustomer } from '@/types/database';
+import { CallLogWithCustomer, CallLogFilters } from '@/types/database';
 import { AudioPlayer } from '@/components/call-logs/AudioPlayer';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -109,12 +109,14 @@ export default function CallLogs() {
   const callLogFilters = useMemo(() => {
     const preset = dateParam === 'today' ? 'today' : dateRangePreset;
     const range = getDateRangeForPreset(preset);
-    const filters: { dateFrom?: string; dateTo?: string; outcome?: string } = {};
+    const filters: CallLogFilters = {};
     if (range) {
       filters.dateFrom = range.dateFrom;
       filters.dateTo = range.dateTo;
     }
-    if (outcomeFilter !== 'all') filters.outcome = outcomeFilter;
+    if (outcomeFilter !== 'all') {
+      filters.outcome = outcomeFilter as CallLogFilters['outcome'];
+    }
     return Object.keys(filters).length > 0 ? filters : undefined;
   }, [dateParam, dateRangePreset, outcomeFilter]);
 

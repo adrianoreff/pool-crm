@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { Database } from '@/integrations/supabase/types';
 import { ServiceAreaWithTechnician } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 
@@ -56,10 +57,10 @@ export function useUpdateServiceAreaGeojson() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, geojson }: { id: string; geojson: object | null }) => {
+    mutationFn: async ({ id, geojson }: { id: string; geojson: GeoJSON.Polygon | null }) => {
       const { error } = await supabase
         .from('service_areas')
-        .update({ geojson, updated_at: new Date().toISOString() })
+        .update({ geojson: geojson as unknown as Database['public']['Tables']['service_areas']['Update']['geojson'], updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
