@@ -206,10 +206,16 @@ Deno.serve(async (req: Request) => {
       metadata: { serviceId, date, time },
     });
 
-    // Send confirmation email to customer (fire and forget)
-    supabase.functions.invoke("send-notification", {
-      body: { type: "appointment_confirmation", appointmentId: appointment.id },
-    });
+    // Email to customer: "request received" when pending, "confirmed" only when auto-confirmed
+    if (initialStatus === "pending_confirmation") {
+      supabase.functions.invoke("send-notification", {
+        body: { type: "appointment_request_received", appointmentId: appointment.id },
+      });
+    } else {
+      supabase.functions.invoke("send-notification", {
+        body: { type: "appointment_confirmation", appointmentId: appointment.id },
+      });
+    }
 
     // Send notification to admin about new appointment (fire and forget)
     supabase.functions.invoke("send-notification", {

@@ -41,8 +41,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useServices } from '@/hooks/useServices';
 import { useTechnicians } from '@/hooks/useTeam';
+import { useCheckTechnicianConflict } from '@/hooks/useTechnicianConflict';
 import { Loader2, CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TechnicianConflictModal } from './TechnicianConflictModal';
+import type { AppointmentWithRelations } from '@/types/database';
 
 const appointmentSchema = z.object({
   customer_id: z.string().min(1, 'Customer is required'),
@@ -76,10 +79,14 @@ const timeSlots = Array.from({ length: 24 }, (_, i) => {
 
 export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselectedDate }: NewAppointmentModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [conflictAppointment, setConflictAppointment] = useState<(AppointmentWithRelations & { conflictTimeLabel?: string }) | null>(null);
+  const [pendingCreateData, setPendingCreateData] = useState<AppointmentFormData | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
-  
+  const checkConflict = useCheckTechnicianConflict();
+
   const { data: customers = [] } = useCustomers({});
   const { data: services = [] } = useServices();
   const { data: technicians = [] } = useTechnicians();
@@ -115,62 +122,113 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
     }
   }, [selectedCustomerId, customers, form]);
 
+  const performCreate = async (data: AppointmentFormData) => {
+    if (!profile?.business_id) return;
+
+    const { data: created, error } = await supabase.from('appointments').insert({
+      business_id: profile.business_id,
+      customer_id: data.customer_id,
+      service_id: data.service_id || null,
+      technician_id: data.technician_id || null,
+      scheduled_date: format(data.scheduled_date, 'yyyy-MM-dd'),
+      scheduled_start_time: data.scheduled_start_time,
+      scheduled_end_time: data.scheduled_end_time,
+      address: data.address,
+      city: data.city || null,
+      state: data.state || null,
+      zip_code: data.zip_code || null,
+      customer_notes: data.customer_notes || null,
+      status: 'scheduled',
+      source: 'manual',
+    }).select('id').single();
+
+    if (error) throw error;
+
+    if (created?.id && data.technician_id) {
+      try {
+        await supabase.functions.invoke('send-notification', {
+          body: {
+            type: 'technician_assigned',
+            appointmentId: created.id,
+            appUrl: window.location.origin,
+          },
+        });
+      } catch (emailError) {
+        console.error('Failed to send technician assigned notification:', emailError);
+      }
+    }
+
+    toast({ title: 'Success', description: 'Appointment created successfully' });
+    queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    form.reset();
+    onOpenChange(false);
+    onSuccess?.();
+  };
+
   const handleSubmit = async (data: AppointmentFormData) => {
     if (!profile?.business_id) {
       toast({ title: 'Error', description: 'Business not found', variant: 'destructive' });
       return;
     }
 
+    const dateStr = format(data.scheduled_date, 'yyyy-MM-dd');
+    if (data.technician_id) {
+      const result = await checkConflict(
+        data.technician_id,
+        dateStr,
+        data.scheduled_start_time,
+        data.scheduled_end_time
+      );
+      if (result.hasConflict && result.conflictAppointment) {
+        setConflictAppointment(result.conflictAppointment);
+        setPendingCreateData(data);
+        setConflictModalOpen(true);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const { data: created, error } = await supabase.from('appointments').insert({
-        business_id: profile.business_id,
-        customer_id: data.customer_id,
-        service_id: data.service_id || null,
-        technician_id: data.technician_id || null,
-        scheduled_date: format(data.scheduled_date, 'yyyy-MM-dd'),
-        scheduled_start_time: data.scheduled_start_time,
-        scheduled_end_time: data.scheduled_end_time,
-        address: data.address,
-        city: data.city || null,
-        state: data.state || null,
-        zip_code: data.zip_code || null,
-        customer_notes: data.customer_notes || null,
-        status: 'scheduled',
-        source: 'manual',
-      }).select('id').single();
-
-      if (error) throw error;
-
-      // Send "technician assigned" email when creating with a technician
-      if (created?.id && data.technician_id) {
-        try {
-          await supabase.functions.invoke('send-notification', {
-            body: {
-              type: 'technician_assigned',
-              appointmentId: created.id,
-              appUrl: window.location.origin,
-            },
-          });
-        } catch (emailError) {
-          console.error('Failed to send technician assigned notification:', emailError);
-        }
-      }
-
-      toast({ title: 'Success', description: 'Appointment created successfully' });
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-      form.reset();
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (error: any) {
+      await performCreate(data);
+    } catch (error: unknown) {
       console.error('Failed to create appointment:', error);
-      toast({ title: 'Error', description: error.message || 'Failed to create appointment', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to create appointment',
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleAssignAnywayCreate = async () => {
+    if (!pendingCreateData) return;
+    setIsSubmitting(true);
+    try {
+      await performCreate(pendingCreateData);
+      setPendingCreateData(null);
+      setConflictModalOpen(false);
+    } catch (error: unknown) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to create appointment',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const newAppointmentTechnicianName = pendingCreateData?.technician_id
+    ? (() => {
+        const t = technicians.find((x) => x.id === pendingCreateData.technician_id);
+        return t ? `${t.first_name} ${t.last_name || ''}`.trim() : '';
+      })()
+    : '';
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -431,5 +489,19 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
         </Form>
       </DialogContent>
     </Dialog>
+
+    <TechnicianConflictModal
+      open={conflictModalOpen}
+      onOpenChange={(open) => {
+        setConflictModalOpen(open);
+        if (!open) setPendingCreateData(null);
+      }}
+      conflictAppointment={conflictAppointment}
+      technicianName={newAppointmentTechnicianName}
+      onSelectDifferentTechnician={() => setConflictModalOpen(false)}
+      onSelectDifferentTime={() => setConflictModalOpen(false)}
+      onAssignAnyway={handleAssignAnywayCreate}
+    />
+    </>
   );
 }
