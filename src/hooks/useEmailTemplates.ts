@@ -390,18 +390,28 @@ export function useEmailTemplates() {
         }));
       }
 
-      // If no templates exist, return defaults
-      if (!data || data.length === 0) {
-        return DEFAULT_TEMPLATES.map((t, i) => ({
-          ...t,
-          id: `default-${i}`,
-          business_id: businessId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-      }
+      const dbTemplates = (data || []) as EmailTemplate[];
+      const slugsInDb = new Set(dbTemplates.map((t) => t.slug));
 
-      return data as EmailTemplate[];
+      // Merge: default templates (for slugs not in DB) + all templates from DB
+      const defaultMerged: EmailTemplate[] = DEFAULT_TEMPLATES.filter(
+        (t) => !slugsInDb.has(t.slug)
+      ).map((t, i) => ({
+        ...t,
+        id: `default-${t.slug}`,
+        business_id: businessId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+
+      const merged = [...defaultMerged, ...dbTemplates].sort((a, b) => {
+        const catOrder = { customer: 0, admin: 1, technician: 2, custom: 3 };
+        const catDiff = (catOrder[a.category] ?? 3) - (catOrder[b.category] ?? 3);
+        if (catDiff !== 0) return catDiff;
+        return a.name.localeCompare(b.name);
+      });
+
+      return merged;
     },
     enabled: !!businessId,
   });
@@ -416,10 +426,10 @@ export function useEmailTemplate(id: string) {
     queryFn: async (): Promise<EmailTemplate | null> => {
       if (!businessId || !id) return null;
 
-      // Handle default templates
+      // Handle default templates (id format: default-<slug>)
       if (id.startsWith('default-')) {
-        const index = parseInt(id.replace('default-', ''));
-        const template = DEFAULT_TEMPLATES[index];
+        const slug = id.replace('default-', '');
+        const template = DEFAULT_TEMPLATES.find((t) => t.slug === slug);
         if (template) {
           return {
             ...template,
@@ -495,10 +505,10 @@ export function useUpdateEmailTemplate() {
     mutationFn: async ({ id, ...updates }: EmailTemplateUpdate & { id: string }) => {
       if (!profile?.business_id) throw new Error('No business ID');
 
-      // Handle "default-" templates - create a new one
+      // Handle "default-" templates - create a new one (id format: default-<slug>)
       if (id.startsWith('default-')) {
-        const index = parseInt(id.replace('default-', ''));
-        const defaultTemplate = DEFAULT_TEMPLATES[index];
+        const slug = id.replace('default-', '');
+        const defaultTemplate = DEFAULT_TEMPLATES.find((t) => t.slug === slug);
         if (!defaultTemplate) throw new Error('Template not found');
 
         const { data, error } = await supabase
