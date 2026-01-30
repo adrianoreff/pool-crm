@@ -138,10 +138,7 @@ function LiveChatPanel({
                         isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50',
                         item.unreadCount > 0 && 'border-l-4 border-l-destructive'
                       )}
-                      onClick={() => {
-                        onSelect(item.appointmentId);
-                        onSelectDirect(null);
-                      }}
+                      onClick={() => onSelect(item.appointmentId)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium truncate text-sm">
@@ -192,10 +189,7 @@ function LiveChatPanel({
                         isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50',
                         unread > 0 && 'border-l-4 border-l-destructive'
                       )}
-                      onClick={() => {
-                        onSelectDirect(key);
-                        onSelect(null);
-                      }}
+                      onClick={() => onSelectDirect(key)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium truncate text-sm">{label}</span>
