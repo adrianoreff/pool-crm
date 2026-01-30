@@ -369,8 +369,13 @@ function LiveChatThread({ appointmentId, onBack }: { appointmentId: string; onBa
 export default function Messages() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'email';
-  const selectedChatId = searchParams.get('id') || null;
-  const selectedDirectParam = searchParams.get('direct') || null;
+  const idFromUrl = searchParams.get('id') || null;
+  const directFromUrl = searchParams.get('direct') || null;
+
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(idFromUrl);
+  const [selectedDirectKey, setSelectedDirectKey] = useState<'office' | string | null>(
+    directFromUrl === 'office' ? 'office' : directFromUrl || null
+  );
 
   const { data: emails = [], isLoading } = useEmailLogs();
   const { stats } = useEmailStats();
@@ -385,15 +390,16 @@ export default function Messages() {
   const { jobChatItems, totalChatUnread: jobChatUnread, jobChatsLoading: loadingChats } = useNotification();
   const { threads: directThreads, isLoading: directLoading } = useDirectMessageThreads();
 
-  const activeChatId = selectedChatId || (jobChatItems.length > 0 ? jobChatItems[0].appointmentId : null);
-  const selectedDirect: 'office' | string | null =
-    selectedDirectParam === 'office'
-      ? 'office'
-      : selectedDirectParam
-        ? selectedDirectParam
-        : null;
+  useEffect(() => {
+    setSelectedJobId(idFromUrl);
+    setSelectedDirectKey(directFromUrl === 'office' ? 'office' : directFromUrl || null);
+  }, [idFromUrl, directFromUrl]);
+
+  const selectedDirect: 'office' | string | null = selectedDirectKey;
 
   const setLiveChatSelection = (jobId: string | null, direct: 'office' | string | null) => {
+    setSelectedJobId(jobId);
+    setSelectedDirectKey(direct);
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
@@ -672,7 +678,7 @@ export default function Messages() {
           <LiveChatPanel
             items={jobChatItems}
             isLoading={loadingChats}
-            selectedId={selectedChatId}
+            selectedId={selectedJobId}
             onSelect={(id) => setLiveChatSelection(id ?? null, null)}
             directThreads={directThreads}
             directLoading={directLoading}
