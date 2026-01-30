@@ -363,6 +363,39 @@ export type Database = {
           },
         ]
       }
+      job_chat_read_receipts: {
+        Row: {
+          appointment_id: string
+          user_id: string
+          last_read_at: string
+        }
+        Insert: {
+          appointment_id: string
+          user_id: string
+          last_read_at?: string
+        }
+        Update: {
+          appointment_id?: string
+          user_id?: string
+          last_read_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_chat_read_receipts_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_chat_read_receipts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_overrides: {
         Row: {
           business_id: string

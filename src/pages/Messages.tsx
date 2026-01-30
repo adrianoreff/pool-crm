@@ -1,11 +1,14 @@
-import { useState, useMemo } from 'react';
-import { Mail, Send, Eye, MousePointer, AlertTriangle, CheckCircle, Clock, Search, Filter, Trash2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Mail, Send, Eye, MousePointer, AlertTriangle, CheckCircle, Clock, Search, Filter, Trash2, MessageSquare, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
@@ -19,6 +22,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useEmailLogs, useEmailStats, useDeleteEmailLog, useClearAllEmailLogs, EmailLogWithRelations } from '@/hooks/useMessages';
+import { useUnreadJobChats, type JobChatItem } from '@/hooks/useUnreadJobChats';
+import { useJobMessages } from '@/hooks/useJobMessages';
+import { formatAppointmentDate } from '@/lib/utils';
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
@@ -68,7 +74,149 @@ const emailTypeLabels: Record<string, string> = {
   custom: 'Custom',
 };
 
+function LiveChatPanel({
+  items,
+  isLoading,
+  selectedId,
+  onSelect,
+}: {
+  items: JobChatItem[];
+  isLoading: boolean;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-0 flex flex-col md:flex-row min-h-[400px]">
+        <div className="w-full md:w-80 border-b md:border-b-0 md:border-r shrink-0">
+          <div className="p-2 border-b">
+            <p className="text-sm font-medium">Job conversations</p>
+            <p className="text-xs text-muted-foreground">Technicians can message you from their app</p>
+          </div>
+          <ScrollArea className="h-[300px] md:h-[380px]">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : items.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8 px-4">
+                No job chats yet. When a technician sends a message from a job, it will appear here.
+              </p>
+            ) : (
+              <div className="p-2 space-y-1">
+                {items.map((item) => {
+                  const name = item.appointment.customer
+                    ? `${item.appointment.customer.first_name || ''} ${item.appointment.customer.last_name || ''}`.trim()
+                    : 'Customer';
+                  const isSelected = selectedId === item.appointmentId;
+                  return (
+                    <button
+                      key={item.appointmentId}
+                      type="button"
+                      className={cn(
+                        'w-full text-left rounded-lg p-3 border transition-colors',
+                        isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50',
+                        item.unreadCount > 0 && 'border-l-4 border-l-destructive'
+                      )}
+                      onClick={() => onSelect(item.appointmentId)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium truncate text-sm">
+                          {item.appointment.ref_code || item.appointmentId.slice(0, 8)} – {name}
+                        </span>
+                        {item.unreadCount > 0 && (
+                          <Badge variant="destructive" className="shrink-0 text-xs">
+                            {item.unreadCount}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {formatAppointmentDate(item.appointment.scheduled_date)}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+        <div className="flex-1 flex flex-col min-h-0">
+          {selectedId ? (
+            <LiveChatThread appointmentId={selectedId} onBack={() => onSelect(null)} />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
+              Select a conversation
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LiveChatThread({ appointmentId, onBack }: { appointmentId: string; onBack: () => void }) {
+  const [draft, setDraft] = useState('');
+  const { messages, sendMessage, isSending, markAsRead } = useJobMessages(appointmentId);
+
+  useEffect(() => {
+    markAsRead();
+  }, [appointmentId, markAsRead]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft.trim() || isSending) return;
+    await sendMessage(draft);
+    setDraft('');
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-[300px]">
+      <div className="p-2 border-b flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
+          Back
+        </Button>
+        <span className="text-sm font-medium">Conversation</span>
+      </div>
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-3">
+          {messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No messages yet.</p>
+          ) : (
+            messages.map((m) => {
+              const name = m.sender
+                ? `${m.sender.first_name || ''} ${m.sender.last_name || ''}`.trim() || m.sender_role
+                : m.sender_role;
+              return (
+                <div key={m.id} className="text-sm">
+                  <span className="font-medium text-muted-foreground">{name}:</span>{' '}
+                  <span className="whitespace-pre-wrap">{m.body}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
+      <form className="flex gap-2 p-3 border-t shrink-0" onSubmit={handleSend}>
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Type a message..."
+          className="flex-1"
+          disabled={isSending}
+        />
+        <Button type="submit" size="icon" disabled={!draft.trim() || isSending}>
+          {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 export default function Messages() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') || 'email';
+  const selectedChatId = searchParams.get('id') || null;
+
   const { data: emails = [], isLoading } = useEmailLogs();
   const { stats } = useEmailStats();
   const deleteEmailLog = useDeleteEmailLog();
@@ -78,6 +226,10 @@ export default function Messages() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
+
+  const { items: jobChatItems, totalUnread: jobChatUnread, isLoading: loadingChats } = useUnreadJobChats();
+  const activeChatId = selectedChatId || (jobChatItems.length > 0 ? jobChatItems[0].appointmentId : null);
+
 
   const filteredEmails = useMemo(() => {
     return emails.filter(email => {
@@ -111,14 +263,16 @@ export default function Messages() {
     clearAllEmailLogs.mutate(undefined, { onSuccess: () => setClearAllDialogOpen(false) });
   };
 
+  const isLiveChat = tab === 'live-chat';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Messages</h1>
-          <p className="text-muted-foreground">Email communication history and tracking</p>
+          <p className="text-muted-foreground">Email history and live chat with technicians</p>
         </div>
-        {emails.length > 0 && (
+        {!isLiveChat && emails.length > 0 && (
           <Button
             variant="outline"
             size="sm"
@@ -132,6 +286,27 @@ export default function Messages() {
         )}
       </div>
 
+      <Tabs
+        value={isLiveChat ? 'live-chat' : 'email'}
+        onValueChange={(v) => setSearchParams(v === 'live-chat' ? { tab: 'live-chat' } : {})}
+      >
+        <TabsList className="grid w-full max-w-[280px] grid-cols-2">
+          <TabsTrigger value="email" className="gap-2">
+            <Mail className="h-4 w-4" />
+            Email history
+          </TabsTrigger>
+          <TabsTrigger value="live-chat" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Live chat
+            {jobChatUnread > 0 && (
+              <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                {jobChatUnread}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="email" className="space-y-6 mt-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {statCards.map((stat) => (
@@ -307,6 +482,17 @@ export default function Messages() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="live-chat" className="mt-6">
+          <LiveChatPanel
+            items={jobChatItems}
+            isLoading={loadingChats}
+            selectedId={activeChatId}
+            onSelect={(id) => setSearchParams(id ? { tab: 'live-chat', id } : { tab: 'live-chat' })}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Delete single message confirmation */}
       <AlertDialog open={!!emailToDelete} onOpenChange={(open) => !open && setEmailToDelete(null)}>

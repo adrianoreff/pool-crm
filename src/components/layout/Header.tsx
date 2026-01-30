@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Search, Menu, User, Settings, LogOut, ChevronDown, AlertCircle, Clock } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Bell, Search, Menu, User, Settings, LogOut, ChevronDown, AlertCircle, Clock, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
+import { useUnreadJobChats } from '@/hooks/useUnreadJobChats';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -33,6 +35,19 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { totalCount, problemAppointments, pendingAppointments } = useNotificationCounts();
+  const { items: jobChatItems, totalUnread: jobChatUnread } = useUnreadJobChats();
+  const { toast } = useToast();
+  const prevJobChatUnread = useRef<number>(-1);
+
+  useEffect(() => {
+    if (jobChatUnread > prevJobChatUnread.current && prevJobChatUnread.current >= 0) {
+      toast({
+        title: 'New message from technician',
+        description: 'A technician sent a message in job chat.',
+      });
+    }
+    prevJobChatUnread.current = jobChatUnread;
+  }, [jobChatUnread, toast]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -77,6 +92,24 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Job chats - link to Live chat */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          onClick={() => navigate('/messages?tab=live-chat')}
+          aria-label="Job chats"
+        >
+          <MessageSquare className="h-5 w-5" />
+          {jobChatUnread > 0 && (
+            <Badge
+              className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-destructive text-destructive-foreground animate-pulse"
+            >
+              {jobChatUnread > 9 ? '9+' : jobChatUnread}
+            </Badge>
+          )}
+        </Button>
+
         {/* Notifications */}
         <Popover>
           <PopoverTrigger asChild>
@@ -98,7 +131,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
             </div>
             <ScrollArea className="h-[300px]">
               <div className="divide-y">
-                {totalCount === 0 ? (
+                {totalCount === 0 && jobChatUnread === 0 ? (
                   <div className="px-4 py-8 text-center text-muted-foreground text-sm">
                     No notifications
                   </div>
@@ -154,6 +187,37 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
                             +{pendingAppointments.length - 5} more
                           </div>
                         )}
+                      </div>
+                    )}
+                    {jobChatUnread > 0 && (
+                      <div className="py-2">
+                        <div className="px-4 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          Job chats – technician message
+                        </div>
+                        {jobChatItems.filter((i) => i.unreadCount > 0).slice(0, 3).map((item) => {
+                          const name = item.appointment.customer
+                            ? `${item.appointment.customer.first_name || ''} ${item.appointment.customer.last_name || ''}`.trim()
+                            : 'Customer';
+                          return (
+                            <button
+                              key={item.appointmentId}
+                              type="button"
+                              className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50 flex items-center justify-between gap-2"
+                              onClick={() => navigate(`/messages?tab=live-chat&id=${item.appointmentId}`)}
+                            >
+                              <span className="truncate">{item.appointment.ref_code || item.appointmentId.slice(0, 8)} – {name}</span>
+                              <span className="shrink-0 rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">
+                                {item.unreadCount}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        <div className="px-4 py-1">
+                          <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => navigate('/messages?tab=live-chat')}>
+                            Open Live chat
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </>

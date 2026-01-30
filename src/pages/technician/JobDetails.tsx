@@ -31,8 +31,12 @@ export default function JobDetails() {
   const { data: business } = useBusiness();
   const { data: appointment, isLoading, error } = useAppointment(id || '');
   const updateStatus = useUpdateJobStatus();
-  const { messages, sendMessage, isSending } = useJobMessages(id);
+  const { messages, sendMessage, isSending, markAsRead } = useJobMessages(id);
   const [messageDraft, setMessageDraft] = useState('');
+
+  useEffect(() => {
+    if (id) markAsRead();
+  }, [id, markAsRead]);
 
   // Debug logging
   useEffect(() => {

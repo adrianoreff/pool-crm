@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Menu, User, LogOut } from 'lucide-react';
 import { TechnicianNav } from '@/components/technician/TechnicianNav';
+import { TechnicianChatFAB } from '@/components/technician/TechnicianChatFAB';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 function getInitials(firstName: string | null, lastName: string | null) {
@@ -118,6 +119,9 @@ export function TechnicianLayout() {
       <main className="flex-1 container mx-auto px-4 py-6 pb-24">
         <Outlet />
       </main>
+
+      {/* Floating chat button */}
+      <TechnicianChatFAB />
 
       {/* Bottom Navigation */}
       <TechnicianNav />

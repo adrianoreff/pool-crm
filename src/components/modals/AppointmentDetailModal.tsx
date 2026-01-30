@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -116,8 +116,12 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
   const { data: technicians = [] } = useTechnicians();
   const { data: services = [] } = useServices();
   const checkConflict = useCheckTechnicianConflict();
-  const { messages, sendMessage, isSending } = useJobMessages(appointment?.id);
+  const { messages, sendMessage, isSending, markAsRead } = useJobMessages(appointment?.id);
   const [messageDraft, setMessageDraft] = useState('');
+
+  useEffect(() => {
+    if (open && appointment?.id) markAsRead();
+  }, [open, appointment?.id, markAsRead]);
 
   if (!appointment) return null;
 
