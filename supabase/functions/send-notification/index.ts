@@ -57,8 +57,9 @@ function replaceTemplateVariables(content: string, data: Record<string, string>)
 }
 
 // Helper to get custom template from database
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getCustomTemplate(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   businessId: string,
   slug: string
 ): Promise<{ subject: string; body_html: string } | null> {
@@ -75,7 +76,10 @@ async function getCustomTemplate(
       return null;
     }
 
-    return { subject: data.subject, body_html: data.body_html };
+    return { 
+      subject: data.subject as string, 
+      body_html: data.body_html as string 
+    };
   } catch {
     return null;
   }
