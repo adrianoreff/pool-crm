@@ -396,6 +396,61 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          id: string
+          business_id: string
+          sender_id: string
+          recipient_id: string | null
+          recipient_type: 'user' | 'office'
+          body: string
+          created_at: string
+          read_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          sender_id: string
+          recipient_id?: string | null
+          recipient_type: 'user' | 'office'
+          body: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          sender_id?: string
+          recipient_id?: string | null
+          recipient_type?: 'user' | 'office'
+          body?: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_overrides: {
         Row: {
           business_id: string

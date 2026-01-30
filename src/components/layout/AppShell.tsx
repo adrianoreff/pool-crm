@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { MobileNav } from './MobileNav';
@@ -10,6 +11,7 @@ export function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
+    <NotificationProvider>
     <div className="min-h-screen bg-background-secondary">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
@@ -43,5 +45,6 @@ export function AppShell() {
         </div>
       </main>
     </div>
+    </NotificationProvider>
   );
 }

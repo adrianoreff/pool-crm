@@ -1,5 +1,6 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -28,6 +29,7 @@ export function TechnicianLayout() {
   };
 
   return (
+    <NotificationProvider>
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -126,5 +128,6 @@ export function TechnicianLayout() {
       {/* Bottom Navigation */}
       <TechnicianNav />
     </div>
+    </NotificationProvider>
   );
 }

@@ -13,14 +13,15 @@ export interface JobChatItem {
   unreadCount: number;
 }
 
-const QUERY_KEY = 'unread-job-chats';
+export const UNREAD_JOB_CHATS_QUERY_KEY = 'unread-job-chats';
 
-export function useUnreadJobChats() {
+export function useUnreadJobChats(options?: { subscribeRealtime?: boolean }) {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+  const subscribe = options?.subscribeRealtime !== false;
 
   const query = useQuery({
-    queryKey: [QUERY_KEY, profile?.id, profile?.business_id, profile?.role],
+    queryKey: [UNREAD_JOB_CHATS_QUERY_KEY, profile?.id, profile?.business_id, profile?.role],
     queryFn: async (): Promise<JobChatItem[]> => {
       if (!profile?.id || !profile?.business_id) return [];
 
@@ -123,28 +124,28 @@ export function useUnreadJobChats() {
   });
 
   useEffect(() => {
-    if (!profile?.id) return;
+    if (!subscribe || !profile?.id) return;
     const channel = supabase
       .channel('job_messages_unread')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'job_messages' },
         () => {
-          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          queryClient.invalidateQueries({ queryKey: [UNREAD_JOB_CHATS_QUERY_KEY] });
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'job_chat_read_receipts' },
         () => {
-          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          queryClient.invalidateQueries({ queryKey: [UNREAD_JOB_CHATS_QUERY_KEY] });
         }
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, queryClient]);
+  }, [subscribe, profile?.id, queryClient]);
 
   const items = query.data ?? [];
   const totalUnread = items.reduce((s, i) => s + i.unreadCount, 0);

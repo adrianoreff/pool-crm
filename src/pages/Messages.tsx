@@ -22,9 +22,18 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useEmailLogs, useEmailStats, useDeleteEmailLog, useClearAllEmailLogs, EmailLogWithRelations } from '@/hooks/useMessages';
-import { useUnreadJobChats, type JobChatItem } from '@/hooks/useUnreadJobChats';
+import { useNotification } from '@/contexts/NotificationContext';
+import type { JobChatItem } from '@/hooks/useUnreadJobChats';
 import { useJobMessages } from '@/hooks/useJobMessages';
+import {
+  useDirectMessageThreads,
+  useOfficeChannelMessages,
+  useDirectThread,
+  type DirectThreadItem,
+  type DirectThreadUserItem,
+} from '@/hooks/useDirectMessages';
 import { formatAppointmentDate } from '@/lib/utils';
+import { Building2 } from 'lucide-react';
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
@@ -79,28 +88,39 @@ function LiveChatPanel({
   isLoading,
   selectedId,
   onSelect,
+  directThreads,
+  directLoading,
+  selectedDirect,
+  onSelectDirect,
 }: {
   items: JobChatItem[];
   isLoading: boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  directThreads: (DirectThreadItem | DirectThreadUserItem)[];
+  directLoading: boolean;
+  selectedDirect: 'office' | string | null;
+  onSelectDirect: (key: 'office' | string | null) => void;
 }) {
+  const hasJob = !!selectedId;
+  const hasDirect = selectedDirect !== null;
+
   return (
     <Card>
       <CardContent className="p-0 flex flex-col md:flex-row min-h-[400px]">
-        <div className="w-full md:w-80 border-b md:border-b-0 md:border-r shrink-0">
-          <div className="p-2 border-b">
-            <p className="text-sm font-medium">Job conversations</p>
-            <p className="text-xs text-muted-foreground">Technicians can message you from their app</p>
-          </div>
-          <ScrollArea className="h-[300px] md:h-[380px]">
+        <div className="w-full md:w-80 border-b md:border-b-0 md:border-r shrink-0 flex flex-col">
+          <ScrollArea className="flex-1 h-[300px] md:h-[380px]">
+            <div className="p-2 border-b">
+              <p className="text-sm font-medium">Job conversations</p>
+              <p className="text-xs text-muted-foreground">Messages tied to appointments</p>
+            </div>
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : items.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8 px-4">
-                No job chats yet. When a technician sends a message from a job, it will appear here.
+              <p className="text-sm text-muted-foreground text-center py-6 px-4">
+                No job chats yet.
               </p>
             ) : (
               <div className="p-2 space-y-1">
@@ -108,7 +128,7 @@ function LiveChatPanel({
                   const name = item.appointment.customer
                     ? `${item.appointment.customer.first_name || ''} ${item.appointment.customer.last_name || ''}`.trim()
                     : 'Customer';
-                  const isSelected = selectedId === item.appointmentId;
+                  const isSelected = !hasDirect && selectedId === item.appointmentId;
                   return (
                     <button
                       key={item.appointmentId}
@@ -118,7 +138,10 @@ function LiveChatPanel({
                         isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50',
                         item.unreadCount > 0 && 'border-l-4 border-l-destructive'
                       )}
-                      onClick={() => onSelect(item.appointmentId)}
+                      onClick={() => {
+                        onSelect(item.appointmentId);
+                        onSelectDirect(null);
+                      }}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium truncate text-sm">
@@ -138,10 +161,68 @@ function LiveChatPanel({
                 })}
               </div>
             )}
+            <div className="p-2 border-t mt-2">
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Building2 className="h-4 w-4" />
+                Direct messages
+              </p>
+              <p className="text-xs text-muted-foreground">Not tied to a job</p>
+            </div>
+            {directLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : directThreads.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4 px-4">
+                No direct messages yet.
+              </p>
+            ) : (
+              <div className="p-2 space-y-1">
+                {directThreads.map((thread) => {
+                  const key = thread.type === 'office' ? 'office' : thread.userId;
+                  const label = thread.type === 'office' ? 'Office channel' : thread.userName;
+                  const isSelected = hasDirect && selectedDirect === key;
+                  const unread = thread.unreadCount;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={cn(
+                        'w-full text-left rounded-lg p-3 border transition-colors',
+                        isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50',
+                        unread > 0 && 'border-l-4 border-l-destructive'
+                      )}
+                      onClick={() => {
+                        onSelectDirect(key);
+                        onSelect(null);
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium truncate text-sm">{label}</span>
+                        {unread > 0 && (
+                          <Badge variant="destructive" className="shrink-0 text-xs">
+                            {unread}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {thread.lastMessagePreview}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </ScrollArea>
         </div>
         <div className="flex-1 flex flex-col min-h-0">
-          {selectedId ? (
+          {hasDirect ? (
+            selectedDirect === 'office' ? (
+              <LiveDirectThread type="office" onBack={() => onSelectDirect(null)} />
+            ) : (
+              <LiveDirectThread type="user" userId={selectedDirect} onBack={() => onSelectDirect(null)} />
+            )
+          ) : selectedId ? (
             <LiveChatThread appointmentId={selectedId} onBack={() => onSelect(null)} />
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
@@ -151,6 +232,79 @@ function LiveChatPanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function LiveDirectThread({
+  type,
+  userId,
+  onBack,
+}: {
+  type: 'office';
+  userId?: never;
+  onBack: () => void;
+} | {
+  type: 'user';
+  userId: string;
+  onBack: () => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const office = useOfficeChannelMessages();
+  const thread = useDirectThread(type === 'user' ? userId : undefined);
+
+  const { messages, sendMessage, isSending, markAsRead } = type === 'office' ? office : thread;
+
+  useEffect(() => {
+    markAsRead();
+  }, [markAsRead]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft.trim() || isSending) return;
+    await sendMessage(draft);
+    setDraft('');
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-[300px]">
+      <div className="p-2 border-b flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
+          Back
+        </Button>
+        <span className="text-sm font-medium">{type === 'office' ? 'Office channel' : 'Direct message'}</span>
+      </div>
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-3">
+          {messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No messages yet.</p>
+          ) : (
+            messages.map((m) => {
+              const name = m.sender
+                ? `${m.sender.first_name || ''} ${m.sender.last_name || ''}`.trim() || 'User'
+                : 'User';
+              return (
+                <div key={m.id} className="text-sm">
+                  <span className="font-medium text-muted-foreground">{name}:</span>{' '}
+                  <span className="whitespace-pre-wrap">{m.body}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
+      <form className="flex gap-2 p-3 border-t shrink-0" onSubmit={handleSend}>
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Type a message..."
+          className="flex-1"
+          disabled={isSending}
+        />
+        <Button type="submit" size="icon" disabled={!draft.trim() || isSending}>
+          {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </form>
+    </div>
   );
 }
 
@@ -216,6 +370,7 @@ export default function Messages() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'email';
   const selectedChatId = searchParams.get('id') || null;
+  const selectedDirectParam = searchParams.get('direct') || null;
 
   const { data: emails = [], isLoading } = useEmailLogs();
   const { stats } = useEmailStats();
@@ -227,8 +382,32 @@ export default function Messages() {
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
 
-  const { items: jobChatItems, totalUnread: jobChatUnread, isLoading: loadingChats } = useUnreadJobChats();
+  const { jobChatItems, jobChatTotalUnread: jobChatUnread, jobChatsLoading: loadingChats } = useNotification();
+  const { threads: directThreads, isLoading: directLoading } = useDirectMessageThreads();
+
   const activeChatId = selectedChatId || (jobChatItems.length > 0 ? jobChatItems[0].appointmentId : null);
+  const selectedDirect: 'office' | string | null =
+    selectedDirectParam === 'office'
+      ? 'office'
+      : selectedDirectParam
+        ? selectedDirectParam
+        : null;
+
+  const setLiveChatSelection = (jobId: string | null, direct: 'office' | string | null) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'live-chat');
+    if (jobId) {
+      next.set('id', jobId);
+      next.delete('direct');
+    } else if (direct) {
+      next.set('direct', direct);
+      next.delete('id');
+    } else {
+      next.delete('id');
+      next.delete('direct');
+    }
+    setSearchParams(next);
+  };
 
 
   const filteredEmails = useMemo(() => {
@@ -488,8 +667,12 @@ export default function Messages() {
           <LiveChatPanel
             items={jobChatItems}
             isLoading={loadingChats}
-            selectedId={activeChatId}
-            onSelect={(id) => setSearchParams(id ? { tab: 'live-chat', id } : { tab: 'live-chat' })}
+            selectedId={selectedChatId}
+            onSelect={(id) => setLiveChatSelection(id ?? null, null)}
+            directThreads={directThreads}
+            directLoading={directLoading}
+            selectedDirect={selectedDirect}
+            onSelectDirect={(key) => setLiveChatSelection(null, key)}
           />
         </TabsContent>
       </Tabs>

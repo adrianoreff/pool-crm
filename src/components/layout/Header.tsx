@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
 import { Bell, Search, Menu, User, Settings, LogOut, ChevronDown, AlertCircle, Clock, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -22,8 +21,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/contexts/NotificationContext';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
-import { useUnreadJobChats } from '@/hooks/useUnreadJobChats';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -35,19 +34,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { totalCount, problemAppointments, pendingAppointments } = useNotificationCounts();
-  const { items: jobChatItems, totalUnread: jobChatUnread } = useUnreadJobChats();
-  const { toast } = useToast();
-  const prevJobChatUnread = useRef<number>(-1);
-
-  useEffect(() => {
-    if (jobChatUnread > prevJobChatUnread.current && prevJobChatUnread.current >= 0) {
-      toast({
-        title: 'New message from technician',
-        description: 'A technician sent a message in job chat.',
-      });
-    }
-    prevJobChatUnread.current = jobChatUnread;
-  }, [jobChatUnread, toast]);
+  const { jobChatItems, jobChatTotalUnread: jobChatUnread } = useNotification();
 
   const handleSignOut = async () => {
     await signOut();
