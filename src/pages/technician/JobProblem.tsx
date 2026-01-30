@@ -67,9 +67,21 @@ export default function JobProblem() {
       queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
 
+      // When "Report only", notify admins by email (fire-and-forget)
+      if (!cancelJob) {
+        supabase.functions.invoke('send-notification', {
+          body: { type: 'admin_job_problem', appointmentId: id },
+        }).then(({ error: emailErr }) => {
+          if (emailErr) {
+            console.error('Admin job problem email failed:', emailErr);
+            toast({ title: 'Problem reported', description: 'Office notification could not be sent.', variant: 'destructive' });
+          }
+        });
+      }
+
       toast({
         title: cancelJob ? 'Job cancelled and problem reported' : 'Problem reported',
-        description: 'The office will be notified.',
+        description: cancelJob ? 'The job has been cancelled.' : 'The office will be notified.',
       });
       navigate(`/technician/jobs/${id}`);
     } catch (err) {

@@ -41,17 +41,21 @@ import {
   X,
   Check,
   Loader2,
+  MessageSquare,
+  Send,
 } from 'lucide-react';
 import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
 import { useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServices } from '@/hooks/useServices';
 import { useCheckTechnicianConflict } from '@/hooks/useTechnicianConflict';
+import { useJobMessages } from '@/hooks/useJobMessages';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { SendEmailModal } from './SendEmailModal';
 import { TechnicianConflictModal } from './TechnicianConflictModal';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface AppointmentDetailModalProps {
   open: boolean;
@@ -112,6 +116,8 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
   const { data: technicians = [] } = useTechnicians();
   const { data: services = [] } = useServices();
   const checkConflict = useCheckTechnicianConflict();
+  const { messages, sendMessage, isSending } = useJobMessages(appointment?.id);
+  const [messageDraft, setMessageDraft] = useState('');
 
   if (!appointment) return null;
 
@@ -553,6 +559,51 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
                     <p className="text-sm">{appointment.customer_notes}</p>
                   </div>
                 )}
+
+                {/* Messages with technician */}
+                <div className="border rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Messages with technician
+                  </p>
+                  <ScrollArea className="h-[160px] pr-2">
+                    <div className="space-y-2">
+                      {messages.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No messages yet.</p>
+                      ) : (
+                        messages.map((m) => {
+                          const name = m.sender ? `${m.sender.first_name || ''} ${m.sender.last_name || ''}`.trim() || m.sender_role : m.sender_role;
+                          return (
+                            <div key={m.id} className="text-sm">
+                              <span className="font-medium text-muted-foreground">{name}:</span>{' '}
+                              <span className="whitespace-pre-wrap">{m.body}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </ScrollArea>
+                  <form
+                    className="flex gap-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!messageDraft.trim() || isSending) return;
+                      await sendMessage(messageDraft);
+                      setMessageDraft('');
+                    }}
+                  >
+                    <Input
+                      value={messageDraft}
+                      onChange={(e) => setMessageDraft(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1"
+                      disabled={isSending}
+                    />
+                    <Button type="submit" size="icon" disabled={!messageDraft.trim() || isSending}>
+                      {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </form>
+                </div>
               </div>
             )}
           </div>

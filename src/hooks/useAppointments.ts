@@ -44,6 +44,11 @@ export function useAppointments(filters?: AppointmentFilters) {
       if (filters?.source) {
         query = query.eq('source', filters.source);
       }
+      if (filters?.hasProblemReported) {
+        query = query
+          .not('status', 'in', '(cancelled,completed)')
+          .ilike('technician_notes', '%[Problem reported]%');
+      }
 
       const { data, error } = await query;
 

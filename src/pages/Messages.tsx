@@ -61,6 +61,7 @@ const emailTypeLabels: Record<string, string> = {
   tech_new_assignment: 'Tech Assigned',
   tech_daily_schedule: 'Daily Schedule',
   admin_new_appointment: 'Admin: New Booking',
+  admin_job_problem: 'Admin: Job Problem Reported',
   admin_appointment_cancelled: 'Admin: Cancelled',
   follow_up: 'Follow Up',
   invoice_sent: 'Invoice',

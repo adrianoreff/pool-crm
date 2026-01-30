@@ -46,6 +46,7 @@ import {
 import { cn, getLocalDateString, getLocalDateStringFromISO } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTodayAppointments, usePendingAppointments, useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { useActivityFeed, useClearActivityFeed, getActivityFeedClearedAt } from '@/hooks/useActivityFeed';
 import { useCallLogs } from '@/hooks/useCallLogs';
 import { useToast } from '@/hooks/use-toast';
@@ -148,6 +149,7 @@ export default function Dashboard() {
   const [emailRecipient, setEmailRecipient] = useState<{ id: string; name: string; email: string } | null>(null);
   const [emailAppointmentId, setEmailAppointmentId] = useState<string | undefined>(undefined);
 
+  const { problemsCount } = useNotificationCounts();
   const pendingCount = pendingAppointments.length;
   const inProgressCount = todaysAppointments.filter(a => a.status === 'in_progress').length;
   const scheduledCount = todaysAppointments.filter(a => a.status === 'scheduled').length;
@@ -278,6 +280,23 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Reported problems banner */}
+      {problemsCount > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex flex-row items-center justify-between gap-4 py-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+              <span className="text-sm font-medium">
+                {problemsCount} job{problemsCount !== 1 ? 's' : ''} with reported problem{problemsCount !== 1 ? 's' : ''} – review and decide next steps.
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/appointments?problem=1')}>
+              Review
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards - clickable */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -162,9 +162,17 @@ export default function Appointments() {
     if (status && statusOptions.some(o => o.value === status)) setStatusFilter(status);
   }, [searchParams]);
 
-  const { data: allAppointments = [], isLoading } = useAppointments(
-    statusFilter !== 'all' ? { status: statusFilter as AppointmentStatus } : undefined
-  );
+  const problemFilter = searchParams.get('problem') === '1';
+  const appointmentFilters = (() => {
+    const hasStatus = statusFilter !== 'all';
+    const hasProblem = problemFilter;
+    if (!hasStatus && !hasProblem) return undefined;
+    return {
+      ...(hasStatus && { status: statusFilter as AppointmentStatus }),
+      ...(hasProblem && { hasProblemReported: true }),
+    };
+  })();
+  const { data: allAppointments = [], isLoading } = useAppointments(appointmentFilters);
   const { data: todaysAppointments = [] } = useTodayAppointments();
   const { data: pendingAppointments = [] } = usePendingAppointments();
   const { data: technicians = [] } = useTechnicians();
@@ -279,6 +287,12 @@ export default function Appointments() {
       <ChevronDown className="h-4 w-4" />;
   };
 
+  const clearProblemFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('problem');
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -292,6 +306,18 @@ export default function Appointments() {
           New Appointment
         </Button>
       </div>
+
+      {/* Problem filter active */}
+      {problemFilter && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex flex-row items-center justify-between gap-4 py-3">
+            <p className="text-sm font-medium">Showing only jobs with a reported problem.</p>
+            <Button variant="ghost" size="sm" onClick={clearProblemFilter}>
+              Clear filter
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

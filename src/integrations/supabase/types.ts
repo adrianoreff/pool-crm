@@ -321,6 +321,48 @@ export type Database = {
           },
         ]
       }
+      job_messages: {
+        Row: {
+          id: string
+          appointment_id: string
+          sender_id: string
+          sender_role: string
+          body: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          appointment_id: string
+          sender_id: string
+          sender_role: string
+          body: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          appointment_id?: string
+          sender_id?: string
+          sender_role?: string
+          body?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_messages_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       availability_overrides: {
         Row: {
           business_id: string

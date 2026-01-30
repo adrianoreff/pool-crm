@@ -15,4 +15,5 @@ export * from './tech-assignment-cancelled';
 export * from './tech-daily-schedule';
 export * from './admin-appointment-cancelled';
 export * from './admin-daily-summary';
+export * from './admin-job-problem';
 export * from './admin-weekly-report';

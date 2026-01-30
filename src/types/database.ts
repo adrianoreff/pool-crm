@@ -102,6 +102,8 @@ export interface AppointmentFilters {
   technicianId?: string;
   serviceId?: string;
   source?: AppointmentSource;
+  /** When true, only appointments with technician_notes containing "[Problem reported]" and status not cancelled/completed */
+  hasProblemReported?: boolean;
 }
 
 export interface CustomerFilters {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Search, Menu, User, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { Bell, Search, Menu, User, Settings, LogOut, ChevronDown, AlertCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -31,7 +32,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const unreadCount = 0; // Will be replaced with real notifications later
+  const { totalCount, problemAppointments, pendingAppointments } = useNotificationCounts();
 
   const handleSignOut = async () => {
     await signOut();
@@ -81,33 +82,87 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
+              {totalCount > 0 && (
                 <Badge 
                   className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary text-primary-foreground"
                 >
-                  {unreadCount}
+                  {totalCount}
                 </Badge>
               )}
               <span className="sr-only">Notifications</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80 p-0">
-            <div className="flex items-center justify-between border-b px-4 py-3">
+            <div className="border-b px-4 py-3">
               <h3 className="font-semibold">Notifications</h3>
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
-                Mark all as read
-              </Button>
             </div>
             <ScrollArea className="h-[300px]">
               <div className="divide-y">
-                <div className="px-4 py-8 text-center text-muted-foreground text-sm">
-                  No notifications
-                </div>
+                {totalCount === 0 ? (
+                  <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                    No notifications
+                  </div>
+                ) : (
+                  <>
+                    {problemAppointments.length > 0 && (
+                      <div className="py-2">
+                        <div className="px-4 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          Reported problems
+                        </div>
+                        {problemAppointments.slice(0, 5).map((apt) => {
+                          const name = apt.customer ? `${apt.customer.first_name || ''} ${apt.customer.last_name || ''}`.trim() || 'Customer' : 'Customer';
+                          return (
+                            <button
+                              key={apt.id}
+                              type="button"
+                              className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50 flex items-center justify-between gap-2"
+                              onClick={() => navigate(`/appointments?problem=1`)}
+                            >
+                              <span className="truncate">{apt.ref_code || apt.id.slice(0, 8)} – {name}</span>
+                            </button>
+                          );
+                        })}
+                        {problemAppointments.length > 5 && (
+                          <div className="px-4 py-1 text-xs text-muted-foreground">
+                            +{problemAppointments.length - 5} more
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {pendingAppointments.length > 0 && (
+                      <div className="py-2">
+                        <div className="px-4 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          Pending confirmation
+                        </div>
+                        {pendingAppointments.slice(0, 5).map((apt) => {
+                          const name = apt.customer ? `${apt.customer.first_name || ''} ${apt.customer.last_name || ''}`.trim() || 'Customer' : 'Customer';
+                          return (
+                            <button
+                              key={apt.id}
+                              type="button"
+                              className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50 flex items-center justify-between gap-2"
+                              onClick={() => navigate('/appointments?status=pending_confirmation')}
+                            >
+                              <span className="truncate">{apt.ref_code || apt.id.slice(0, 8)} – {name}</span>
+                            </button>
+                          );
+                        })}
+                        {pendingAppointments.length > 5 && (
+                          <div className="px-4 py-1 text-xs text-muted-foreground">
+                            +{pendingAppointments.length - 5} more
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </ScrollArea>
             <div className="border-t p-2">
-              <Button variant="ghost" size="sm" className="w-full text-sm">
-                View all notifications
+              <Button variant="ghost" size="sm" className="w-full text-sm" onClick={() => navigate('/appointments')}>
+                View all appointments
               </Button>
             </div>
           </PopoverContent>

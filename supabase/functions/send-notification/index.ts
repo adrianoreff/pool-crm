@@ -20,6 +20,7 @@ interface StandardNotificationRequest {
     | "appointment_reminder"
     | "admin_new_appointment"
     | "admin_confirmation_recorded"
+    | "admin_job_problem"
     | "technician_assigned";
   appointmentId: string;
   /** Optional app origin for technician portal link in email (e.g. window.location.origin) */
@@ -531,6 +532,112 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(JSON.stringify({ success: failed < toRecipients.length, emailIds, failed }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Admin job problem: technician reported a problem (Report only) – send to same recipients as new appointment
+    if (type === "admin_job_problem") {
+      const { data: recipients, error: recipientsError } = await supabase
+        .from("notification_recipients")
+        .select("email, name")
+        .eq("business_id", appointment.business_id)
+        .eq("is_active", true)
+        .eq("notify_new_appointment", true);
+
+      if (recipientsError) {
+        console.error("Error fetching notification recipients:", recipientsError);
+      }
+
+      const fallback = appointment.business?.email
+        ? [{ email: appointment.business.email, name: appointment.business.name }]
+        : [];
+      const toRecipients = (recipients && recipients.length > 0) ? recipients : fallback;
+
+      if (toRecipients.length === 0) {
+        return new Response(JSON.stringify({ success: true, message: "No admin recipients configured" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const problemSummary = (appointment.technician_notes || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      subject = `[Problem reported] ${appointment.ref_code || appointmentId} – ${customerName} – ${serviceName}`;
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head><style>${baseStyles}</style></head>
+        <body>
+          <div class="container">
+            <div class="header header-warning" style="background: #DC2626;">
+              <h1 style="margin:0;">Job problem reported</h1>
+            </div>
+            <div class="content">
+              <p>A technician has reported a problem on a job. Please review and decide next steps.</p>
+              <div class="details-box" style="background: #FEF2F2; border-color: #FECACA;">
+                <div class="detail-row"><strong>Problem details:</strong></div>
+                <p style="white-space: pre-wrap; margin: 10px 0 0;">${problemSummary || "No details provided."}</p>
+              </div>
+              <div class="details-box">
+                <div class="detail-row"><strong>Reference:</strong> ${appointment.ref_code || "N/A"}</div>
+                <div class="detail-row"><strong>Service:</strong> ${serviceName}</div>
+                <div class="detail-row"><strong>Date:</strong> ${dateFormatted}</div>
+                <div class="detail-row"><strong>Time:</strong> ${timeWindow}</div>
+                <div class="detail-row"><strong>Address:</strong> ${appointment.address || ""}</div>
+                ${technicianName ? `<div class="detail-row"><strong>Technician:</strong> ${technicianName}</div>` : ""}
+              </div>
+              <p><strong>Customer:</strong> ${customerName} | ${appointment.customer?.phone || ""} | ${appointment.customer?.email || ""}</p>
+              <p style="color: #666; font-size: 14px;">Open the dashboard to view the appointment and take action.</p>
+            </div>
+            <div class="footer">
+              <p>${businessName} | ${appointment.business?.phone || ""}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const emailIds: string[] = [];
+      let failedCount = 0;
+      for (const r of toRecipients) {
+        const { data: emailData, error: emailError } = await resend.emails.send({
+          from: `${businessName} <promo@metricflow.space>`,
+          to: [r.email],
+          subject,
+          html: htmlContent,
+        });
+        if (emailError) {
+          failedCount++;
+          await supabase.from("email_logs").insert({
+            business_id: appointment.business_id,
+            email_type: "admin_job_problem",
+            recipient_type: "admin",
+            recipient_email: r.email,
+            recipient_name: r.name,
+            subject,
+            appointment_id: appointmentId,
+            customer_id: appointment.customer?.id,
+            status: "failed",
+            failed_at: new Date().toISOString(),
+            error_message: emailError.message,
+          });
+          continue;
+        }
+        if (emailData?.id) emailIds.push(emailData.id);
+        await supabase.from("email_logs").insert({
+          business_id: appointment.business_id,
+          email_type: "admin_job_problem",
+          recipient_type: "admin",
+          recipient_email: r.email,
+          recipient_name: r.name,
+          subject,
+          appointment_id: appointmentId,
+          customer_id: appointment.customer?.id,
+          resend_id: emailData?.id,
+          status: "sent",
+          sent_at: new Date().toISOString(),
+        });
+      }
+      return new Response(JSON.stringify({ success: failedCount < toRecipients.length, emailIds, failed: failedCount }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -1,14 +1,17 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppointment } from '@/hooks/useAppointments';
 import { useUpdateJobStatus } from '@/hooks/useUpdateJobStatus';
+import { useJobMessages } from '@/hooks/useJobMessages';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatusBadge } from '@/components/technician/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { MapPreview } from '@/components/technician/MapPreview';
-import { MapPin, Phone, Mail, Clock, Wrench, Navigation, CheckCircle2, AlertCircle, FileText, Camera, History } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Wrench, Navigation, CheckCircle2, AlertCircle, FileText, Camera, History, MessageSquare, Send } from 'lucide-react';
 import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useBusiness } from '@/hooks/useBusiness';
@@ -28,6 +31,8 @@ export default function JobDetails() {
   const { data: business } = useBusiness();
   const { data: appointment, isLoading, error } = useAppointment(id || '');
   const updateStatus = useUpdateJobStatus();
+  const { messages, sendMessage, isSending } = useJobMessages(id);
+  const [messageDraft, setMessageDraft] = useState('');
 
   // Debug logging
   useEffect(() => {
@@ -404,6 +409,55 @@ export default function JobDetails() {
           >
             Open Checklist →
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Messages with office */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Messages with office
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ScrollArea className="h-[160px] pr-2 rounded border p-2">
+            <div className="space-y-2">
+              {messages.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No messages yet.</p>
+              ) : (
+                messages.map((m) => {
+                  const name = m.sender ? `${m.sender.first_name || ''} ${m.sender.last_name || ''}`.trim() || m.sender_role : m.sender_role;
+                  return (
+                    <div key={m.id} className="text-sm">
+                      <span className="font-medium text-muted-foreground">{name}:</span>{' '}
+                      <span className="whitespace-pre-wrap">{m.body}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+          <form
+            className="flex gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!messageDraft.trim() || isSending) return;
+              await sendMessage(messageDraft);
+              setMessageDraft('');
+            }}
+          >
+            <Input
+              value={messageDraft}
+              onChange={(e) => setMessageDraft(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1"
+              disabled={isSending}
+            />
+            <Button type="submit" size="icon" disabled={!messageDraft.trim() || isSending}>
+              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
