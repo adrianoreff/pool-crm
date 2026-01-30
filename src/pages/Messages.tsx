@@ -390,11 +390,6 @@ export default function Messages() {
   const { jobChatItems, totalChatUnread: jobChatUnread, jobChatsLoading: loadingChats } = useNotification();
   const { threads: directThreads, isLoading: directLoading } = useDirectMessageThreads();
 
-  useEffect(() => {
-    setSelectedJobId(idFromUrl);
-    setSelectedDirectKey(directFromUrl === 'office' ? 'office' : directFromUrl || null);
-  }, [idFromUrl, directFromUrl]);
-
   const selectedDirect: 'office' | string | null = selectedDirectKey;
 
   const setLiveChatSelection = (jobId: string | null, direct: 'office' | string | null) => {
