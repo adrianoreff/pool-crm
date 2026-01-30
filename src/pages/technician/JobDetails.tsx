@@ -102,24 +102,34 @@ export default function JobDetails() {
     );
   }
 
-  const handleStatusUpdate = async (newStatus: string, timestamp?: string) => {
+  const handleOnMyWay = () => {
     if (!id) return;
-    
-    const updateParams: any = {
+    updateStatus.mutateAsync({
       id,
-      status: newStatus as any,
+      status: 'scheduled',
       sendNotification: true,
-    };
+      enRouteAt: new Date().toISOString(),
+    });
+  };
 
-    if (newStatus === 'scheduled' && timestamp) {
-      updateParams.enRouteAt = timestamp;
-    } else if (timestamp && newStatus === 'scheduled') {
-      updateParams.arrivedAt = timestamp;
-    } else if (newStatus === 'in_progress') {
-      updateParams.startedAt = new Date().toISOString();
-    }
+  const handleArrived = () => {
+    if (!id) return;
+    updateStatus.mutateAsync({
+      id,
+      status: 'scheduled',
+      sendNotification: true,
+      arrivedAt: new Date().toISOString(),
+    });
+  };
 
-    await updateStatus.mutateAsync(updateParams);
+  const handleStartJob = () => {
+    if (!id) return;
+    updateStatus.mutateAsync({
+      id,
+      status: 'in_progress',
+      sendNotification: true,
+      startedAt: new Date().toISOString(),
+    });
   };
 
   const handleNavigate = () => {
@@ -158,7 +168,7 @@ export default function JobDetails() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => handleStatusUpdate('scheduled', new Date().toISOString())}
+            onClick={handleOnMyWay}
             disabled={updateStatus.isPending}
           >
             On My Way
@@ -178,7 +188,7 @@ export default function JobDetails() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => handleStatusUpdate('scheduled', new Date().toISOString())}
+            onClick={handleArrived}
             disabled={updateStatus.isPending}
           >
             Arrived
@@ -198,7 +208,7 @@ export default function JobDetails() {
         <div className="flex gap-2">
           <Button
             className="bg-[#F97316] hover:bg-[#EA580C]"
-            onClick={() => handleStatusUpdate('in_progress')}
+            onClick={handleStartJob}
             disabled={updateStatus.isPending}
           >
             Start Job

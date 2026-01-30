@@ -35,6 +35,7 @@ import JobsList from "./pages/technician/JobsList";
 import JobDetails from "./pages/technician/JobDetails";
 import JobChecklist from "./pages/technician/JobChecklist";
 import CompleteJob from "./pages/technician/CompleteJob";
+import JobProblem from "./pages/technician/JobProblem";
 import History from "./pages/technician/History";
 import Profile from "./pages/technician/Profile";
 
@@ -106,6 +107,7 @@ const App = () => (
               <Route path="/technician/jobs/:id" element={<JobDetails />} />
               <Route path="/technician/jobs/:id/checklist" element={<JobChecklist />} />
               <Route path="/technician/jobs/:id/complete" element={<CompleteJob />} />
+              <Route path="/technician/jobs/:id/problem" element={<JobProblem />} />
               <Route path="/technician/history" element={<History />} />
               <Route path="/technician/profile" element={<Profile />} />
             </Route>

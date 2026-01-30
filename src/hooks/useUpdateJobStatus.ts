@@ -157,9 +157,10 @@ export function useUpdateJobStatus() {
 
       return { id, status };
     },
-    onSuccess: (_, { status }) => {
+    onSuccess: (_, { id, status }) => {
       queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] });
       const statusLabels: Record<string, string> = {
         scheduled: 'Status updated',
         in_progress: 'Job started',
