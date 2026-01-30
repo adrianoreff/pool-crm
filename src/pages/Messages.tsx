@@ -215,7 +215,7 @@ function LiveChatPanel({
             )}
           </ScrollArea>
         </div>
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0" key={selectedId || selectedDirect || 'empty'}>
           {hasDirect ? (
             selectedDirect === 'office' ? (
               <LiveDirectThread type="office" onBack={() => onSelectDirect(null)} />
@@ -382,7 +382,7 @@ export default function Messages() {
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
 
-  const { jobChatItems, jobChatTotalUnread: jobChatUnread, jobChatsLoading: loadingChats } = useNotification();
+  const { jobChatItems, totalChatUnread: jobChatUnread, jobChatsLoading: loadingChats } = useNotification();
   const { threads: directThreads, isLoading: directLoading } = useDirectMessageThreads();
 
   const activeChatId = selectedChatId || (jobChatItems.length > 0 ? jobChatItems[0].appointmentId : null);
@@ -394,19 +394,24 @@ export default function Messages() {
         : null;
 
   const setLiveChatSelection = (jobId: string | null, direct: 'office' | string | null) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', 'live-chat');
-    if (jobId) {
-      next.set('id', jobId);
-      next.delete('direct');
-    } else if (direct) {
-      next.set('direct', direct);
-      next.delete('id');
-    } else {
-      next.delete('id');
-      next.delete('direct');
-    }
-    setSearchParams(next);
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('tab', 'live-chat');
+        if (jobId) {
+          p.set('id', jobId);
+          p.delete('direct');
+        } else if (direct) {
+          p.set('direct', direct);
+          p.delete('id');
+        } else {
+          p.delete('id');
+          p.delete('direct');
+        }
+        return p;
+      },
+      { replace: true }
+    );
   };
 
 

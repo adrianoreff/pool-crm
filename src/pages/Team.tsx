@@ -9,6 +9,7 @@ import {
   List,
   Calendar,
   User,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTeamInvitations } from '@/hooks/useTeamInvitations';
 import { ResendInvitationModal } from '@/components/modals/ResendInvitationModal';
+import { useNavigate } from 'react-router-dom';
 import { Clock, RefreshCw, X, ImagePlus, Loader2 } from 'lucide-react';
 import {
   Select,
@@ -95,9 +97,10 @@ interface TeamMemberCardProps {
   onEdit: () => void;
   onViewSchedule: () => void;
   onDeactivate: () => void;
+  onMessage?: () => void;
 }
 
-function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedule, onDeactivate }: TeamMemberCardProps) {
+function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedule, onDeactivate, onMessage }: TeamMemberCardProps) {
   const status = statusStyles.available;
 
   return (
@@ -123,6 +126,12 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
               <DropdownMenuItem onClick={onViewProfile}>View Profile</DropdownMenuItem>
               <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
               <DropdownMenuItem onClick={onViewSchedule}>View Schedule</DropdownMenuItem>
+              {member.role === 'technician' && onMessage && (
+                <DropdownMenuItem onClick={onMessage}>
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Message
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive" onClick={onDeactivate}>
                 Delete / Remove from team
@@ -165,11 +174,17 @@ function TeamMemberCard({ member, todayJobs, onViewProfile, onEdit, onViewSchedu
           </div>
           
           {member.role === 'technician' && (
-            <div className="pt-3 border-t">
+            <div className="pt-3 border-t space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Today's Jobs</span>
                 <span className="font-semibold">{todayJobs}</span>
               </div>
+              {onMessage && (
+                <Button variant="outline" size="sm" className="w-full gap-2" onClick={onMessage}>
+                  <MessageSquare className="h-4 w-4" />
+                  Message
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -433,9 +448,14 @@ export default function Team() {
     setIsProfileOpen(true);
   };
 
+  const navigate = useNavigate();
+
   const handleViewSchedule = (member: UserType) => {
-    // Navigate to calendar filtered by this technician
-    window.location.href = `/calendar?technicianId=${member.id}`;
+    navigate(`/calendar?technicianId=${member.id}`);
+  };
+
+  const handleMessage = (member: UserType) => {
+    navigate(`/messages?tab=live-chat&direct=${encodeURIComponent(member.id)}`);
   };
 
   const handleDeactivate = async () => {
@@ -624,6 +644,7 @@ export default function Team() {
                 onEdit={() => handleEdit(member)}
                 onViewSchedule={() => handleViewSchedule(member)}
                 onDeactivate={() => setMemberToDeactivate(member)}
+                onMessage={member.role === 'technician' ? () => handleMessage(member) : undefined}
               />
             ))
           )}
@@ -721,6 +742,12 @@ export default function Team() {
                               <DropdownMenuItem onClick={() => handleViewProfile(member)}>View Profile</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEdit(member)}>Edit</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleViewSchedule(member)}>View Schedule</DropdownMenuItem>
+                              {member.role === 'technician' && (
+                                <DropdownMenuItem onClick={() => handleMessage(member)}>
+                                  <MessageSquare className="h-4 w-4 mr-2" />
+                                  Message
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive" onClick={() => setMemberToDeactivate(member)}>
                                 Delete / Remove from team

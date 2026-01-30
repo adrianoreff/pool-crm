@@ -3,11 +3,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadJobChats, UNREAD_JOB_CHATS_QUERY_KEY, type JobChatItem } from '@/hooks/useUnreadJobChats';
+import { useDirectMessageThreads, useOfficeChannelMessages } from '@/hooks/useDirectMessages';
 import { useToast } from '@/hooks/use-toast';
+
+const DIRECT_MESSAGES_QUERY_KEY = 'direct-messages';
 
 interface NotificationContextValue {
   jobChatItems: JobChatItem[];
   jobChatTotalUnread: number;
+  directTotalUnread: number;
+  totalChatUnread: number;
   jobChatsLoading: boolean;
 }
 
@@ -19,6 +24,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   const { items, totalUnread, isLoading } = useUnreadJobChats({ subscribeRealtime: false });
+  const { threads: directThreads } = useDirectMessageThreads();
+  const { unreadCount: officeChannelUnread } = useOfficeChannelMessages();
+
+  const directTotalUnread = useMemo(() => {
+    const fromThreads = directThreads.reduce((sum, t) => sum + t.unreadCount, 0);
+    if (profile?.role === 'technician') return fromThreads + officeChannelUnread;
+    return fromThreads;
+  }, [directThreads, profile?.role, officeChannelUnread]);
+  const totalChatUnread = totalUnread + directTotalUnread;
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -49,6 +63,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: [UNREAD_JOB_CHATS_QUERY_KEY] });
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'direct_messages' },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: [DIRECT_MESSAGES_QUERY_KEY] });
+          const newRow = payload.new as { sender_id?: string };
+          if (newRow?.sender_id && newRow.sender_id !== profile.id) {
+            toast({
+              title: 'New direct message',
+              description: 'You have a new message in office chat or direct message.',
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'direct_messages' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: [DIRECT_MESSAGES_QUERY_KEY] });
+        }
+      )
       .subscribe();
 
     return () => {
@@ -60,9 +95,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     () => ({
       jobChatItems: items,
       jobChatTotalUnread: totalUnread,
+      directTotalUnread,
+      totalChatUnread,
       jobChatsLoading: isLoading,
     }),
-    [items, totalUnread, isLoading]
+    [items, totalUnread, directTotalUnread, totalChatUnread, isLoading]
   );
 
   return (

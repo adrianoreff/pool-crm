@@ -34,7 +34,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { totalCount, problemAppointments, pendingAppointments } = useNotificationCounts();
-  const { jobChatItems, jobChatTotalUnread: jobChatUnread } = useNotification();
+  const { jobChatItems, totalChatUnread: jobChatUnread } = useNotification();
 
   const handleSignOut = async () => {
     await signOut();
