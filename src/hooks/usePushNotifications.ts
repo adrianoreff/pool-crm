@@ -149,22 +149,35 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       const registration = await navigator.serviceWorker.register('/sw-push.js');
       await navigator.serviceWorker.ready;
 
-      // Important: if the device still has an old subscription created with a different
-      // applicationServerKey (VAPID public key), the push service will reject sends with 403.
-      // Force a clean re-subscribe.
+      // CRITICAL: Force a complete reset to fix VAPID 403 errors.
+      // The push service (FCM) caches the association between endpoint and VAPID key.
+      // If the VAPID key changed, the old endpoint is permanently invalid.
+      // We MUST: 1) unsubscribe in browser (invalidates old endpoint)
+      //          2) delete ALL db subscriptions for this user
+      //          3) create a completely NEW subscription with current VAPID key
       try {
+        // Step 1: Unsubscribe any existing browser subscription
         const existing = await registration.pushManager.getSubscription();
         if (existing) {
-          await supabase
-            .from('push_subscriptions')
-            .delete()
-            .eq('user_id', user.id)
-            .eq('endpoint', existing.endpoint);
+          console.log('[Push] Unsubscribing existing subscription to force new endpoint');
           await existing.unsubscribe();
+        }
+        
+        // Step 2: Delete ALL subscriptions for this user from database
+        // This ensures no stale endpoints remain
+        const { error: deleteError } = await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('user_id', user.id);
+        
+        if (deleteError) {
+          console.warn('[Push] Error clearing old subscriptions:', deleteError);
+        } else {
+          console.log('[Push] Cleared all existing subscriptions for user');
         }
       } catch (e) {
         // Best-effort cleanup; do not block subscription
-        console.warn('Push cleanup before subscribe failed:', e);
+        console.warn('[Push] Cleanup before subscribe failed:', e);
       }
 
       // Subscribe to push
