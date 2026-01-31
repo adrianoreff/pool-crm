@@ -32,7 +32,7 @@ import {
   type DirectThreadUserItem,
 } from '@/hooks/useDirectMessages';
 import { formatAppointmentDate } from '@/lib/utils';
-import { Building2, MoreVertical, Trash2 } from 'lucide-react';
+import { Building2, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,

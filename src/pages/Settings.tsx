@@ -13,6 +13,7 @@ import { Building, Bell, Link, Code, Pencil, ImagePlus, Loader2 } from 'lucide-r
 import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig, useUpdateBusiness, useUpdateBookingRules, useUpdateNotificationSettings } from '@/hooks/useBusiness';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
 
 // Helper to mask sensitive values
 const maskValue = (value: string) => {
@@ -328,47 +329,53 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="notifications">
-          <Card className="shadow-card">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5" />Notification Settings</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label>Send Confirmation Email</Label>
-                <Switch checked={sendConfirmation} onCheckedChange={setSendConfirmation} />
-              </div>
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label>24h Reminder</Label>
-                <Switch checked={sendReminder24h} onCheckedChange={setSendReminder24h} />
-              </div>
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label>Admin: New Appointment</Label>
-                <Switch checked={notifyAdminNewAppointment} onCheckedChange={setNotifyAdminNewAppointment} />
-              </div>
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label>Admin: Cancellation</Label>
-                <Switch checked={notifyAdminCancellation} onCheckedChange={setNotifyAdminCancellation} />
-              </div>
-              <Button 
-                className="bg-primary hover:bg-primary-hover"
-                onClick={handleSaveNotificationSettings}
-                disabled={updateNotificationSettings.isPending}
-              >
-                {updateNotificationSettings.isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
-              
-              {/* Email Templates Link */}
-              <div className="mt-6 pt-6 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Email Templates</p>
-                    <p className="text-sm text-muted-foreground">Customize your email notifications</p>
-                  </div>
-                  <Button variant="outline" asChild>
-                    <a href="/email-templates">Manage Templates</a>
-                  </Button>
+          <div className="space-y-6">
+            {/* Push Notifications */}
+            <PushNotificationSettings />
+
+            {/* Email Notification Settings */}
+            <Card className="shadow-card">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5" />Email Notification Settings</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between py-2 border-b">
+                  <Label>Send Confirmation Email</Label>
+                  <Switch checked={sendConfirmation} onCheckedChange={setSendConfirmation} />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <Label>24h Reminder</Label>
+                  <Switch checked={sendReminder24h} onCheckedChange={setSendReminder24h} />
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <Label>Admin: New Appointment</Label>
+                  <Switch checked={notifyAdminNewAppointment} onCheckedChange={setNotifyAdminNewAppointment} />
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <Label>Admin: Cancellation</Label>
+                  <Switch checked={notifyAdminCancellation} onCheckedChange={setNotifyAdminCancellation} />
+                </div>
+                <Button 
+                  className="bg-primary hover:bg-primary-hover"
+                  onClick={handleSaveNotificationSettings}
+                  disabled={updateNotificationSettings.isPending}
+                >
+                  {updateNotificationSettings.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+                
+                {/* Email Templates Link */}
+                <div className="mt-6 pt-6 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Email Templates</p>
+                      <p className="text-sm text-muted-foreground">Customize your email notifications</p>
+                    </div>
+                    <Button variant="outline" asChild>
+                      <a href="/email-templates">Manage Templates</a>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="integrations">

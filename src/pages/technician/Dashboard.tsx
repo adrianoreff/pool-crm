@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MapPin, Clock, Wrench, Navigation, Play, CheckCircle2, Circle } from 'lucide-react';
 import { formatTime, formatAppointmentDateShort, getLocalDateString, cn } from '@/lib/utils';
 import { TechnicianJobsMap } from '@/components/technician/TechnicianJobsMap';
+import { EnablePushBanner } from '@/components/technician/EnablePushBanner';
 
 function getInitials(firstName: string | null, lastName: string | null) {
   return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
@@ -159,6 +160,9 @@ export default function TechnicianDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Enable Push Banner */}
+      <EnablePushBanner />
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">

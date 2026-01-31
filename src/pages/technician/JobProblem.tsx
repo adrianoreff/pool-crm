@@ -48,12 +48,12 @@ export default function JobProblem() {
 
     setIsSubmitting(true);
     try {
-      const updateData: { technician_notes: string; status?: string; updated_at: string } = {
+      const updateData: { technician_notes: string; status?: 'cancelled'; updated_at: string } = {
         technician_notes: newNotes,
         updated_at: new Date().toISOString(),
       };
       if (cancelJob) {
-        updateData.status = 'cancelled';
+        updateData.status = 'cancelled' as const;
       }
 
       const { error } = await supabase
