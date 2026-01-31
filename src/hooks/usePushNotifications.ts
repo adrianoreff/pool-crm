@@ -3,9 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-// VAPID public key - this will be set after generating keys
-// For now, we use a placeholder that will be replaced
-const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+// VAPID public key for push notifications
+const VAPID_PUBLIC_KEY = 'BAkPaTOoUxoucJHyKOUPEtiUJDohQESAsRShGpW0lpMOnD2lrZg6IAi2W16QzMqBxPQX0hiYzANyrhfKNS2aeOc';
 
 // Helper to convert base64url to Uint8Array
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
