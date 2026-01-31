@@ -321,136 +321,6 @@ export type Database = {
           },
         ]
       }
-      job_messages: {
-        Row: {
-          id: string
-          appointment_id: string
-          sender_id: string
-          sender_role: string
-          body: string
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          appointment_id: string
-          sender_id: string
-          sender_role: string
-          body: string
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          appointment_id?: string
-          sender_id?: string
-          sender_role?: string
-          body?: string
-          created_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "job_messages_appointment_id_fkey"
-            columns: ["appointment_id"]
-            isOneToOne: false
-            referencedRelation: "appointments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      job_chat_read_receipts: {
-        Row: {
-          appointment_id: string
-          user_id: string
-          last_read_at: string
-        }
-        Insert: {
-          appointment_id: string
-          user_id: string
-          last_read_at?: string
-        }
-        Update: {
-          appointment_id?: string
-          user_id?: string
-          last_read_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "job_chat_read_receipts_appointment_id_fkey"
-            columns: ["appointment_id"]
-            isOneToOne: false
-            referencedRelation: "appointments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_chat_read_receipts_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      direct_messages: {
-        Row: {
-          id: string
-          business_id: string
-          sender_id: string
-          recipient_id: string | null
-          recipient_type: 'user' | 'office'
-          body: string
-          created_at: string
-          read_at: string | null
-        }
-        Insert: {
-          id?: string
-          business_id: string
-          sender_id: string
-          recipient_id?: string | null
-          recipient_type: 'user' | 'office'
-          body: string
-          created_at?: string
-          read_at?: string | null
-        }
-        Update: {
-          id?: string
-          business_id?: string
-          sender_id?: string
-          recipient_id?: string | null
-          recipient_type?: 'user' | 'office'
-          body?: string
-          created_at?: string
-          read_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "direct_messages_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "direct_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "direct_messages_recipient_id_fkey"
-            columns: ["recipient_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       availability_overrides: {
         Row: {
           business_id: string
@@ -885,6 +755,61 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          body: string
+          business_id: string
+          created_at: string | null
+          id: string
+          read_at: string | null
+          recipient_id: string | null
+          recipient_type: string
+          sender_id: string
+        }
+        Insert: {
+          body: string
+          business_id: string
+          created_at?: string | null
+          id?: string
+          read_at?: string | null
+          recipient_id?: string | null
+          recipient_type: string
+          sender_id: string
+        }
+        Update: {
+          body?: string
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          read_at?: string | null
+          recipient_id?: string | null
+          recipient_type?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_logs: {
         Row: {
           appointment_id: string | null
@@ -1187,6 +1112,81 @@ export type Database = {
           },
         ]
       }
+      job_chat_read_receipts: {
+        Row: {
+          appointment_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          appointment_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          appointment_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_chat_read_receipts_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_chat_read_receipts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_messages: {
+        Row: {
+          appointment_id: string
+          body: string
+          created_at: string | null
+          id: string
+          sender_id: string
+          sender_role: string
+        }
+        Insert: {
+          appointment_id: string
+          body: string
+          created_at?: string | null
+          id?: string
+          sender_id: string
+          sender_role: string
+        }
+        Update: {
+          appointment_id?: string
+          body?: string
+          created_at?: string | null
+          id?: string
+          sender_id?: string
+          sender_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_messages_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_log: {
         Row: {
           appointment_id: string | null
@@ -1441,6 +1441,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string | null
+          device_type: string | null
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string | null
+          device_type?: string | null
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string | null
+          device_type?: string | null
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       service_areas: {
         Row: {
