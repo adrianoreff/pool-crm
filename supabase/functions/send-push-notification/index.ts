@@ -200,6 +200,58 @@ async function encryptPayload(
 }
 
 // Create VAPID JWT for authorization
+function leftPadToLength(bytes: Uint8Array, length: number): Uint8Array {
+  if (bytes.length >= length) return bytes;
+  const out = new Uint8Array(length);
+  out.set(bytes, length - bytes.length);
+  return out;
+}
+
+// WebCrypto ECDSA can return a DER-encoded signature. JWT (JOSE) requires raw (r||s) 64 bytes.
+function derEcdsaSigToJose(derOrRaw: Uint8Array, paramBytes = 32): Uint8Array {
+  // If already raw (r||s)
+  if (derOrRaw.length === paramBytes * 2) return derOrRaw;
+
+  // Minimal DER parser for: 30 <len> 02 <lenR> <r> 02 <lenS> <s>
+  let offset = 0;
+  const expect = (value: number) => {
+    if (derOrRaw[offset] !== value) {
+      throw new Error(`Invalid DER signature (expected 0x${value.toString(16)})`);
+    }
+    offset++;
+  };
+
+  const readLen = () => {
+    const len = derOrRaw[offset++];
+    if ((len & 0x80) === 0) return len;
+    const n = len & 0x7f;
+    let out = 0;
+    for (let i = 0; i < n; i++) {
+      out = (out << 8) | derOrRaw[offset++];
+    }
+    return out;
+  };
+
+  expect(0x30);
+  readLen();
+  expect(0x02);
+  const rLen = readLen();
+  const r = derOrRaw.subarray(offset, offset + rLen);
+  offset += rLen;
+  expect(0x02);
+  const sLen = readLen();
+  const s = derOrRaw.subarray(offset, offset + sLen);
+  offset += sLen;
+
+  // Strip leading 0x00 used to force positive INTEGER
+  const rStripped = (r.length > 0 && r[0] === 0x00) ? r.subarray(1) : r;
+  const sStripped = (s.length > 0 && s[0] === 0x00) ? s.subarray(1) : s;
+
+  const rPadded = leftPadToLength(rStripped, paramBytes);
+  const sPadded = leftPadToLength(sStripped, paramBytes);
+  return concatUint8Arrays(rPadded, sPadded);
+}
+
 async function createVapidJwt(
   audience: string,
   vapidPublicKey: string,
@@ -254,11 +306,11 @@ async function createVapidJwt(
       key,
       new TextEncoder().encode(unsignedToken)
     );
-    
-    // Convert from DER format to raw (r || s) format
-    // WebCrypto returns signature in raw format already for ECDSA P-256
-    const signature = new Uint8Array(signatureBuffer);
-    const signatureB64 = uint8ArrayToBase64Url(signature);
+
+    // Convert DER->JOSE raw (r||s) if needed
+    const signatureDerOrRaw = new Uint8Array(signatureBuffer);
+    const signatureJose = derEcdsaSigToJose(signatureDerOrRaw, 32);
+    const signatureB64 = uint8ArrayToBase64Url(signatureJose);
     
     return `${unsignedToken}.${signatureB64}`;
   } catch (e) {
@@ -330,6 +382,9 @@ serve(async (req) => {
       url: payload.url,
     });
 
+    // Public key is not sensitive, log a short fingerprint for debugging key mismatches
+    console.log(`VAPID public key suffix: ${vapidPublicKey.slice(-8)} (len=${vapidPublicKey.length})`);
+
     const payloadString = JSON.stringify(payload);
     let sentCount = 0;
     const errors: string[] = [];
@@ -347,9 +402,12 @@ serve(async (req) => {
         
         // Encrypt the payload
         const { body } = await encryptPayload(payloadString, sub.p256dh, sub.auth);
-        
-        // Build authorization header
-        const authorization = `vapid t=${jwt}, k=${vapidPublicKey}`;
+
+        // VAPID headers (widely supported)
+        // - Authorization: WebPush <JWT>
+        // - Crypto-Key: p256ecdsa=<public key>
+        const authorization = `WebPush ${jwt}`;
+        const cryptoKey = `p256ecdsa=${vapidPublicKey}`;
         
         // Send the push notification
         const response = await fetch(sub.endpoint, {
@@ -360,6 +418,7 @@ serve(async (req) => {
             "Content-Length": body.length.toString(),
             "TTL": "86400",
             "Authorization": authorization,
+            "Crypto-Key": cryptoKey,
           },
           body: toArrayBuffer(body),
         });
