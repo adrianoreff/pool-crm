@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 // VAPID public key for push notifications
-const VAPID_PUBLIC_KEY = 'BAkPaTOoUxoucJHyKOUPEtiUJDohQESAsRShGpW0lpMOnD2lrZg6IAi2W16QzMqBxPQX0hiYzANyrhfKNS2aeOc';
+const VAPID_PUBLIC_KEY = 'BKnBESrs54_UqYOCacuZsBoloGakTiZzEO-Ya939zbTW45Ge7-OP4ufjkqUjVq_BlFodczN4ufA1rr3gjSBe0bA';
 
 // Helper to convert base64url to Uint8Array
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
