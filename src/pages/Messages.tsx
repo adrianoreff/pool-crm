@@ -32,7 +32,13 @@ import {
   type DirectThreadUserItem,
 } from '@/hooks/useDirectMessages';
 import { formatAppointmentDate } from '@/lib/utils';
-import { Building2 } from 'lucide-react';
+import { Building2, MoreVertical, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
@@ -226,7 +232,8 @@ function LiveChatPanel({
 
 function LiveDirectThread({ userId, onBack }: { userId: string; onBack: () => void }) {
   const [draft, setDraft] = useState('');
-  const { messages, sendMessage, isSending, markAsRead } = useDirectThread(userId);
+  const [clearOpen, setClearOpen] = useState(false);
+  const { messages, sendMessage, isSending, markAsRead, clearChat, isClearing } = useDirectThread(userId);
 
   useEffect(() => {
     markAsRead();
@@ -239,14 +246,50 @@ function LiveDirectThread({ userId, onBack }: { userId: string; onBack: () => vo
     setDraft('');
   };
 
+  const handleClearChat = async () => {
+    await clearChat();
+    setClearOpen(false);
+  };
+
   return (
     <div className="flex flex-col h-full min-h-[300px]">
-      <div className="p-2 border-b flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
-          Back
-        </Button>
-        <span className="text-sm font-medium">Direct message</span>
+      <div className="p-2 border-b flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
+            Back
+          </Button>
+          <span className="text-sm font-medium">Direct message</span>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setClearOpen(true)} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear chat / Limpar todo o chat
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove all messages in this conversation? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+            <Button onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isClearing}>
+              {isClearing ? 'Clearing…' : 'Clear chat'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-3">
           {messages.length === 0 ? (
@@ -284,7 +327,8 @@ function LiveDirectThread({ userId, onBack }: { userId: string; onBack: () => vo
 
 function LiveChatThread({ appointmentId, onBack }: { appointmentId: string; onBack: () => void }) {
   const [draft, setDraft] = useState('');
-  const { messages, sendMessage, isSending, markAsRead } = useJobMessages(appointmentId);
+  const [clearOpen, setClearOpen] = useState(false);
+  const { messages, sendMessage, isSending, markAsRead, clearChat, isClearing } = useJobMessages(appointmentId);
 
   useEffect(() => {
     markAsRead();
@@ -297,14 +341,50 @@ function LiveChatThread({ appointmentId, onBack }: { appointmentId: string; onBa
     setDraft('');
   };
 
+  const handleClearChat = async () => {
+    await clearChat();
+    setClearOpen(false);
+  };
+
   return (
     <div className="flex flex-col h-full min-h-[300px]">
-      <div className="p-2 border-b flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
-          Back
-        </Button>
-        <span className="text-sm font-medium">Conversation</span>
+      <div className="p-2 border-b flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
+            Back
+          </Button>
+          <span className="text-sm font-medium">Conversation</span>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setClearOpen(true)} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear chat / Limpar todo o chat
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove all messages in this job chat? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+            <Button onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isClearing}>
+              {isClearing ? 'Clearing…' : 'Clear chat'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-3">
           {messages.length === 0 ? (

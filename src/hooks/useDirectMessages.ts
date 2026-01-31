@@ -241,6 +241,24 @@ export function useDirectThread(recipientUserId: string | undefined) {
     },
   });
 
+  const clearChat = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id || !recipientUserId) throw new Error('Missing user or recipient');
+      const messages = query.data ?? [];
+      const ids = messages.map((m) => m.id);
+      if (ids.length === 0) return;
+      const { error } = await supabase.from('direct_messages').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, 'thread', profile?.id, recipientUserId] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, 'threads'] });
+    },
+    onError: (err) => {
+      toast({ title: 'Failed to clear chat', description: (err as Error).message, variant: 'destructive' });
+    },
+  });
+
   return {
     messages: query.data ?? [],
     isLoading: query.isLoading,
@@ -248,6 +266,8 @@ export function useDirectThread(recipientUserId: string | undefined) {
     markAsRead: markAsRead.mutate,
     sendMessage: sendMessage.mutateAsync,
     isSending: sendMessage.isPending,
+    clearChat: clearChat.mutateAsync,
+    isClearing: clearChat.isPending,
   };
 }
 
@@ -365,6 +385,24 @@ export function useMyDirectThread() {
     },
   });
 
+  const clearChat = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id) throw new Error('Missing user');
+      const messages = query.data ?? [];
+      const ids = messages.map((m) => m.id);
+      if (ids.length === 0) return;
+      const { error } = await supabase.from('direct_messages').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, 'my-thread', profile?.id] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, 'threads'] });
+    },
+    onError: (err) => {
+      toast({ title: 'Failed to clear chat', description: (err as Error).message, variant: 'destructive' });
+    },
+  });
+
   return {
     messages: query.data ?? [],
     isLoading: query.isLoading,
@@ -373,6 +411,8 @@ export function useMyDirectThread() {
     markAsRead: markAsRead.mutate,
     sendMessage: sendMessage.mutateAsync,
     isSending: sendMessage.isPending,
+    clearChat: clearChat.mutateAsync,
+    isClearing: clearChat.isPending,
   };
 }
 

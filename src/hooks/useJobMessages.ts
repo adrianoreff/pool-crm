@@ -142,6 +142,21 @@ export function useJobMessages(appointmentId: string | undefined) {
     },
   });
 
+  const clearChat = useMutation({
+    mutationFn: async () => {
+      if (!appointmentId) throw new Error('Missing appointment');
+      const { error } = await supabase.from('job_messages').delete().eq('appointment_id', appointmentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, appointmentId] });
+      queryClient.invalidateQueries({ queryKey: [READ_RECEIPTS_KEY] });
+    },
+    onError: (err) => {
+      toast({ title: 'Failed to clear chat', description: (err as Error).message, variant: 'destructive' });
+    },
+  });
+
   return {
     messages: query.data ?? [],
     isLoading: query.isLoading,
@@ -149,5 +164,7 @@ export function useJobMessages(appointmentId: string | undefined) {
     markAsRead: markAsRead.mutate,
     sendMessage: sendMessage.mutateAsync,
     isSending: sendMessage.isPending,
+    clearChat: clearChat.mutateAsync,
+    isClearing: clearChat.isPending,
   };
 }

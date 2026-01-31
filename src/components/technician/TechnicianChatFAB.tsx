@@ -1,10 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Send, Loader2, ChevronLeft, Briefcase, User } from 'lucide-react';
+import { MessageSquare, Send, Loader2, ChevronLeft, Briefcase, User, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Sheet,
   SheetContent,
@@ -179,7 +195,8 @@ export function TechnicianChatFAB() {
 
 function DirectFromOfficeThread() {
   const [draft, setDraft] = useState('');
-  const { messages, sendMessage, isSending, markAsRead, lastAdminId } = useMyDirectThread();
+  const [clearOpen, setClearOpen] = useState(false);
+  const { messages, sendMessage, isSending, markAsRead, lastAdminId, clearChat, isClearing } = useMyDirectThread();
 
   useEffect(() => {
     markAsRead();
@@ -192,8 +209,44 @@ function DirectFromOfficeThread() {
     setDraft('');
   };
 
+  const handleClearChat = async () => {
+    await clearChat();
+    setClearOpen(false);
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      <div className="p-2 border-b flex items-center justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setClearOpen(true)} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear chat / Limpar todo o chat
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove all messages in this conversation? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+            <Button onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isClearing}>
+              {isClearing ? 'Clearing…' : 'Clear chat'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ScrollArea className="flex-1 p-3">
         <div className="space-y-2">
           {messages.length === 0 ? (
@@ -241,7 +294,8 @@ function ChatThread({
   onOpenJob: () => void;
 }) {
   const [draft, setDraft] = useState('');
-  const { messages, sendMessage, isSending, markAsRead } = useJobMessages(appointmentId);
+  const [clearOpen, setClearOpen] = useState(false);
+  const { messages, sendMessage, isSending, markAsRead, clearChat, isClearing } = useJobMessages(appointmentId);
 
   useEffect(() => {
     markAsRead();
@@ -254,13 +308,47 @@ function ChatThread({
     setDraft('');
   };
 
+  const handleClearChat = async () => {
+    await clearChat();
+    setClearOpen(false);
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div className="p-2 border-b">
+      <div className="p-2 border-b flex items-center justify-between gap-2">
         <Button variant="outline" size="sm" onClick={onOpenJob}>
           Open job details
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setClearOpen(true)} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear chat / Limpar todo o chat
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove all messages in this job chat? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+            <Button onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isClearing}>
+              {isClearing ? 'Clearing…' : 'Clear chat'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ScrollArea className="flex-1 p-3">
         <div className="space-y-2">
           {messages.length === 0 ? (
