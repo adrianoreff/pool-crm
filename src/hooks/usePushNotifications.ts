@@ -267,7 +267,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
     if (!user || !isSubscribed) return;
 
     try {
-      const { error } = await supabase.functions.invoke('send-push-notification', {
+      const { data, error } = await supabase.functions.invoke('send-push-notification', {
         body: {
           user_id: user.id,
           payload: {
@@ -280,9 +280,20 @@ export function usePushNotifications(): UsePushNotificationsReturn {
 
       if (error) throw error;
 
+      // If the function executed but could not deliver, show the returned reason.
+      const sent = (data as any)?.sent as number | undefined;
+      const total = (data as any)?.total as number | undefined;
+      const errors = (data as any)?.errors as string[] | undefined;
+
+      if (sent === 0 && errors?.length) {
+        throw new Error(errors[0]);
+      }
+
       toast({
         title: 'Test sent',
-        description: 'Check for your notification!',
+        description: total != null && sent != null
+          ? `Enviado para ${sent}/${total} dispositivos. Confira o push no seu aparelho.`
+          : 'Check for your notification!',
       });
     } catch (err) {
       console.error('Error sending test notification:', err);
