@@ -1,201 +1,424 @@
 
-# Plano de Correção: Atalho /technician, Mapbox e Erros de Build
+# PWA Push Notifications - Implementation Plan
 
-## Resumo dos Problemas Identificados
-
-### 1. Falta de atalho para a página `/technician`
-A página `/technician` existe e funciona, mas não há um link na sidebar principal para acessá-la. A sidebar atual só mostra links para as páginas do painel admin (Dashboard, Calendar, Appointments, etc.). 
-
-Para acessar o painel do técnico, o usuário precisa digitar manualmente `/technician/dashboard` na URL ou fazer login como técnico.
-
-### 2. Mapbox não carrega na página Service Areas
-A página `ServiceAreas.tsx` está usando um componente `MapPlaceholder` estático em vez de integrar com o Mapbox. Mesmo com o token salvo em Settings, o mapa real não está sendo renderizado.
-
-### 3. Erros de Build (TypeScript)
-Há vários erros de TypeScript causados por:
-
-| Erro | Causa |
-|------|-------|
-| `started_at`, `completed_at`, `time_spent_minutes`, `en_route_at`, `arrived_at` não existem | O arquivo `types.ts` está desatualizado - esses campos existem no banco mas não estão nos tipos TypeScript |
-| Duplicate identifier `Mail` em `Team.tsx` | Import duplicado de `Mail` do lucide-react |
-| `useEffect` não encontrado em `CompleteJob.tsx` | Falta import do `useEffect` |
-| Comparação de tipos inválida em `ProtectedRoute.tsx` e `JobsList.tsx` | Comparação de status `'technician'` e `'confirmed'` que não existem nos tipos |
+## Overview
+This plan implements a complete push notification system for TradeFlow CRM that works on iOS (Safari PWA), Android (Chrome/Firefox), and desktop browsers. The implementation uses the project's existing design system with orange (#F97316) as the primary color.
 
 ---
 
-## Solução Proposta
+## Part 1: Fix Existing Build Errors
 
-### Parte 1: Adicionar Atalho para /technician na Sidebar
+Before implementing push notifications, we need to fix two build errors:
 
-Adicionar um novo item na sidebar para usuários admin/owner acessarem o painel do técnico:
+### 1.1 Fix Duplicate Trash2 Import in Messages.tsx
+- **File**: `src/pages/Messages.tsx`
+- **Issue**: `Trash2` is imported twice on lines 3 and 35
+- **Fix**: Remove duplicate import from line 35
 
-**Arquivo:** `src/components/layout/Sidebar.tsx`
-
+### 1.2 Fix Type Error in JobProblem.tsx
+- **File**: `src/pages/technician/JobProblem.tsx`
+- **Issue**: `status` property type mismatch - string not assignable to appointment_status enum
+- **Fix**: Cast status to the proper enum type:
 ```typescript
-// Adicionar no final dos businessNavItems ou como uma nova seção
-const adminToolsNavItems: NavItem[] = [
-  { label: 'Tech Portal', href: '/technician/dashboard', icon: UserCog },
-];
+updateData.status = 'cancelled' as const;
 ```
-
-Ou alternativamente, adicionar um botão "View as Technician" na área de perfil da sidebar.
 
 ---
 
-### Parte 2: Integrar Mapbox na página Service Areas
+## Part 2: Install and Configure PWA Plugin
 
-**Arquivos a modificar:**
-- `src/pages/ServiceAreas.tsx`
+### 2.1 Install vite-plugin-pwa
+Add `vite-plugin-pwa` to dependencies:
+- Package: `vite-plugin-pwa`
+- Workbox integration for service worker generation
 
-**Implementação:**
-1. Criar um componente `MapboxMap` que usa o token salvo no business
-2. Substituir o `MapPlaceholder` pelo mapa real quando o token estiver configurado
-3. Mostrar mensagem de configuração quando o token não existir
-
+### 2.2 Configure vite.config.ts
 ```typescript
-function MapboxMap({ areas, token }: { areas: ServiceAreaWithTechnician[]; token: string }) {
-  // Usar mapbox-gl ou react-map-gl para renderizar o mapa
-  // Exibir as service areas como polígonos no mapa
-}
+import { VitePWA } from 'vite-plugin-pwa';
 
-// No componente principal:
-const { data: business } = useBusiness();
-const mapboxToken = business?.mapbox_public_token;
-
-{mapboxToken ? (
-  <MapboxMap areas={serviceAreas} token={mapboxToken} />
-) : (
-  <MapPlaceholder areas={serviceAreas} />
-)}
+export default defineConfig({
+  plugins: [
+    // ... existing plugins
+    VitePWA({
+      registerType: 'autoUpdate',
+      manifest: {
+        name: 'TradeFlow CRM',
+        short_name: 'TradeFlow',
+        description: 'Field Service Management CRM',
+        theme_color: '#F97316',
+        background_color: '#FFFFFF',
+        display: 'standalone',
+        start_url: '/',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      },
+      workbox: {
+        navigateFallback: '/index.html',
+        runtimeCaching: [...]
+      }
+    })
+  ]
+});
 ```
-
-**Nota:** Será necessário instalar a dependência `mapbox-gl` ou `react-map-gl`.
 
 ---
 
-### Parte 3: Corrigir Erros de Build
+## Part 3: Update index.html
 
-#### 3.1 Atualizar tipos em `src/types/database.ts`
+### 3.1 Add PWA Meta Tags
+Add to `<head>`:
+```html
+<!-- PWA Meta Tags -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="TradeFlow" />
+<meta name="theme-color" content="#F97316" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-Adicionar os campos que faltam ao tipo `AppointmentWithRelations`:
+<!-- Apple Touch Icons -->
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" sizes="152x152" href="/icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
+<link rel="apple-touch-icon" sizes="167x167" href="/icon-192.png" />
 
-```typescript
-export type AppointmentWithRelations = Appointment & {
-  customer: Customer;
-  service: Service | null;
-  technician: Pick<User, 'id' | 'first_name' | 'last_name' | 'avatar_url' | 'color'> | null;
-  // Campos adicionais que existem no banco
-  started_at?: string | null;
-  completed_at?: string | null;
-  time_spent_minutes?: number | null;
-  en_route_at?: string | null;
-  arrived_at?: string | null;
-  work_summary?: string | null;
-  technician_notes?: string | null;
-};
+<!-- Manifest -->
+<link rel="manifest" href="/manifest.webmanifest" />
 ```
 
-#### 3.2 Corrigir import duplicado em `Team.tsx`
+### 3.2 Update Title and Description
+- Change title from "Lovable App" to "TradeFlow CRM"
+- Update meta descriptions
 
-**Linha 6 e 61** - Remover o import duplicado:
+---
 
-```typescript
-// Linha 6: Manter
-import { Mail, /* outros */ } from 'lucide-react';
+## Part 4: Create PWA Icons
 
-// Linha 61: Remover o import duplicado
-// import { Mail, Clock, RefreshCw, X } from 'lucide-react'; // REMOVER
-```
+Create placeholder PNG icons in `/public`:
+- `/public/icon-192.png` (192x192px - orange "TF" logo)
+- `/public/icon-512.png` (512x512px - orange "TF" logo)
 
-#### 3.3 Adicionar import useEffect em `CompleteJob.tsx`
+Note: These will be generated as simple SVG-based icons initially. The user can replace them with proper branding later.
 
-**Linha 1-2:**
-```typescript
-import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useMemo, useEffect } from 'react'; // Adicionar useEffect
-```
+---
 
-#### 3.4 Corrigir comparação de tipos em `ProtectedRoute.tsx`
+## Part 5: Add Safe Area CSS
 
-**Linha 38:** A comparação `profile.role !== 'technician'` está incorreta porque `allowedRoles` só contém `['owner', 'admin', 'dispatcher']`. Simplificar a lógica:
-
-```typescript
-// Remover a linha 38 ou ajustar a condição
-if (profile.role === 'technician') {
-  return <Navigate to="/technician/dashboard" replace />;
-}
-// Remover a verificação redundante da linha 38
-```
-
-#### 3.5 Corrigir comparação em `JobsList.tsx`
-
-**Linha 64:** O status `'confirmed'` não existe no enum. Remover essa comparação:
-
-```typescript
-} else if (apt.status === 'scheduled') { // Remover || apt.status === 'confirmed'
-  groups.scheduled.push(apt);
-}
-```
-
-#### 3.6 Corrigir hook `useJobChecklist.ts`
-
-O problema é que o Supabase client não está reconhecendo as tabelas `service_checklists` e `appointment_checklist_items`. Precisamos verificar se essas tabelas existem e adicionar os tipos corretos.
-
-#### 3.7 Corrigir `useTechnicianAppointments.ts`
-
-**Linha 34:** O filtro de status precisa usar o tipo correto:
-
-```typescript
-if (filters?.status) {
-  query = query.eq('status', filters.status as Database['public']['Enums']['appointment_status']);
+### 5.1 Update src/index.css
+Add safe area utility classes for iOS notch/home indicator:
+```css
+/* Safe Area Utilities for iOS */
+.safe-area-top { padding-top: env(safe-area-inset-top); }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-area-left { padding-left: env(safe-area-inset-left); }
+.safe-area-right { padding-right: env(safe-area-inset-right); }
+.safe-area-inset { 
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); 
 }
 ```
 
 ---
 
-## Arquivos a Modificar
+## Part 6: Database Schema
 
-| Arquivo | Mudanças |
-|---------|----------|
-| `src/components/layout/Sidebar.tsx` | Adicionar link para Tech Portal |
-| `src/pages/ServiceAreas.tsx` | Integrar Mapbox quando token disponível |
-| `src/types/database.ts` | Adicionar campos extras ao `AppointmentWithRelations` |
-| `src/pages/Team.tsx` | Remover import duplicado de `Mail` |
-| `src/pages/technician/CompleteJob.tsx` | Adicionar import `useEffect` |
-| `src/components/auth/ProtectedRoute.tsx` | Corrigir lógica de comparação de role |
-| `src/pages/technician/JobsList.tsx` | Remover status 'confirmed' inválido |
-| `src/hooks/useJobChecklist.ts` | Corrigir tipos do Supabase |
-| `src/hooks/useTechnicianAppointments.ts` | Tipar corretamente o filtro de status |
+### 6.1 Create push_subscriptions Table
+
+**Migration SQL**:
+```sql
+CREATE TABLE push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  device_type TEXT DEFAULT 'desktop',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, endpoint)
+);
+
+-- Enable RLS
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- Users can only manage their own subscriptions
+CREATE POLICY "Users can insert own subscriptions"
+  ON push_subscriptions FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can view own subscriptions"
+  ON push_subscriptions FOR SELECT
+  USING (user_id = auth.uid());
+
+CREATE POLICY "Users can delete own subscriptions"
+  ON push_subscriptions FOR DELETE
+  USING (user_id = auth.uid());
+
+-- Service role can read all for sending notifications
+CREATE POLICY "Service role can read all subscriptions"
+  ON push_subscriptions FOR SELECT
+  USING (auth.role() = 'service_role');
+```
 
 ---
 
-## Dependências Necessárias
+## Part 7: Create Service Worker
 
-Para a integração completa do Mapbox, será necessário instalar:
+### 7.1 Create public/sw-push.js
+```javascript
+// Push Notification Service Worker
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+});
 
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim());
+});
+
+self.addEventListener('push', (e) => {
+  const data = e.data?.json() || {};
+  const title = data.title || 'TradeFlow CRM';
+  const options = {
+    body: data.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: data.tag || 'default',
+    data: { url: data.url || '/' },
+    vibrate: [200, 100, 200]
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window' }).then((list) => {
+      for (const client of list) {
+        if (client.url.includes(url) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
+```
+
+---
+
+## Part 8: Create React Hook
+
+### 8.1 Create src/hooks/usePushNotifications.ts
+
+Key functionality:
+- **State Management**: isSupported, isSubscribed, permission, isLoading, isiOS, isPWA
+- **iOS Detection**: Check user agent for iOS devices
+- **PWA Detection**: Check `display-mode: standalone`
+- **subscribe()**: Request permission, register SW, create subscription, save to DB
+- **unsubscribe()**: Remove from push manager and DB
+- **checkSubscription()**: Check existing subscription status
+
+**VAPID Key Handling**:
+- Store VAPID_PUBLIC_KEY as a constant (can be moved to env later)
+- Include base64url to Uint8Array conversion helper
+
+---
+
+## Part 9: Create Edge Function
+
+### 9.1 Create supabase/functions/send-push-notification/index.ts
+
+**Request Format**:
+```typescript
+{
+  user_id: string;
+  payload: {
+    title: string;
+    body: string;
+    url?: string;
+    tag?: string;
+  }
+}
+```
+
+**Implementation**:
+1. Receive user_id and payload
+2. Fetch all push subscriptions for that user from database
+3. For each subscription:
+   - Build encrypted payload using Web Push protocol (RFC 8291, aes128gcm)
+   - Generate VAPID JWT for authorization
+   - Send POST to push service endpoint
+   - Handle 410/404 responses (expired) - delete subscription
+4. Return success count
+
+**Required Secrets**:
+- VAPID_PUBLIC_KEY
+- VAPID_PRIVATE_KEY
+
+**VAPID Key Generation** (one-time setup):
 ```bash
-npm install mapbox-gl
-npm install --save-dev @types/mapbox-gl
+# Generate keys using web-push library or online tool
+# Public key: goes in frontend constant
+# Private key: goes in Supabase secret
 ```
 
-Ou usar `react-map-gl` que é um wrapper React:
-
-```bash
-npm install react-map-gl mapbox-gl
+### 9.2 Update supabase/config.toml
+```toml
+[functions.send-push-notification]
+verify_jwt = false
 ```
 
 ---
 
-## Ordem de Implementação
+## Part 10: Create UI Components
 
-1. **Primeiro:** Corrigir todos os erros de build (tipos, imports duplicados)
-2. **Segundo:** Adicionar atalho na sidebar para /technician
-3. **Terceiro:** Integrar Mapbox na página Service Areas
+### 10.1 Create src/components/settings/PushNotificationSettings.tsx
+
+**Component States**:
+
+1. **iOS Not Installed as PWA**:
+   - Show install instructions with orange accents
+   - Steps: Tap Share > Add to Home Screen > Open from home screen
+   - Use Building icon for visual appeal
+
+2. **Not Supported**:
+   - Gray message: "Push notifications not supported in this browser"
+   - Suggest trying Chrome or installing as PWA
+
+3. **Permission Denied**:
+   - Warning message about browser settings
+   - Link to help article on enabling notifications
+
+4. **Supported & Ready**:
+   - Switch toggle to enable/disable
+   - "Send Test" button when enabled
+   - Status indicator (Enabled/Disabled)
+   - Use project's Switch, Button, Card components
+
+### 10.2 Update src/pages/Settings.tsx
+- Add new section under "Notifications" tab
+- Include PushNotificationSettings component
+
+### 10.3 Update src/pages/technician/Profile.tsx
+- Replace dummy Switch with functional PushNotificationSettings
+- Compact mobile-friendly version
 
 ---
 
-## Observações Técnicas
+## Part 11: Integration Points
 
-- O arquivo `src/integrations/supabase/types.ts` é gerado automaticamente pelo Supabase e não deve ser editado manualmente. Os campos existem no banco mas os tipos não foram regenerados.
-- A solução para os tipos é criar uma extensão no `src/types/database.ts` que adiciona os campos extras.
-- O Mapbox Public Token é seguro para usar no frontend (é público por natureza).
+### 11.1 Events That Trigger Push Notifications
+
+| Event | Recipient | Edge Function Call Location |
+|-------|-----------|---------------------------|
+| New appointment booked | Admin | `send-notification` edge function |
+| Appointment confirmed | Customer (if subscribed) | `send-notification` edge function |
+| Technician assigned | Technician | `send-notification` edge function |
+| Technician en route | Customer | `customer-portal` edge function |
+| Job completed | Admin | `send-notification` edge function |
+| New job chat message | Recipient | `NotificationContext.tsx` (realtime listener) |
+| Problem reported | Admin | `JobProblem.tsx` |
+
+### 11.2 Update send-notification Edge Function
+Add push notification alongside email:
+```typescript
+// After sending email, also send push notification
+await supabase.functions.invoke('send-push-notification', {
+  body: {
+    user_id: recipientUserId,
+    payload: {
+      title: 'New Job Assigned',
+      body: `Job at ${address} on ${date}`,
+      url: `/technician/jobs/${appointmentId}`
+    }
+  }
+});
+```
+
+---
+
+## Part 12: First-Time Enable Prompt
+
+### 12.1 Create src/components/technician/EnablePushBanner.tsx
+- Show banner on technician dashboard if:
+  - Push notifications are supported
+  - User hasn't subscribed yet
+  - Not dismissed in this session
+- "Enable Notifications" CTA button
+- "Maybe Later" dismiss button
+- Stores dismissal in sessionStorage
+
+---
+
+## Technical Details
+
+### VAPID Keys
+Web Push requires VAPID (Voluntary Application Server Identification) keys:
+- **Public Key**: Shared with browser, stored in frontend
+- **Private Key**: Secret, stored in Supabase secrets
+
+The edge function will use these to sign requests to push services (FCM for Chrome, Mozilla Push for Firefox, APNs for Safari).
+
+### Web Push Encryption (RFC 8291)
+The edge function must implement:
+1. ECDH key agreement with p256dh
+2. HKDF key derivation
+3. AES-128-GCM encryption with aes128gcm content encoding
+
+We'll use Deno's Web Crypto API for this implementation.
+
+### iOS Limitations
+- Push only works when installed as PWA (via "Add to Home Screen")
+- Must be Safari on iOS 16.4+
+- User must grant permission after install
+
+---
+
+## File Changes Summary
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/pages/Messages.tsx` | Fix | Remove duplicate Trash2 import |
+| `src/pages/technician/JobProblem.tsx` | Fix | Fix status type casting |
+| `package.json` | Update | Add vite-plugin-pwa |
+| `vite.config.ts` | Update | Configure PWA plugin |
+| `index.html` | Update | Add PWA meta tags |
+| `public/icon-192.png` | Create | PWA icon 192x192 |
+| `public/icon-512.png` | Create | PWA icon 512x512 |
+| `public/sw-push.js` | Create | Push service worker |
+| `src/index.css` | Update | Add safe area utilities |
+| `supabase/migrations/...` | Create | push_subscriptions table |
+| `src/hooks/usePushNotifications.ts` | Create | Push notifications hook |
+| `supabase/functions/send-push-notification/index.ts` | Create | Edge function |
+| `supabase/config.toml` | Update | Add function config |
+| `src/components/settings/PushNotificationSettings.tsx` | Create | Settings component |
+| `src/pages/Settings.tsx` | Update | Add push settings section |
+| `src/pages/technician/Profile.tsx` | Update | Add functional push toggle |
+| `src/components/technician/EnablePushBanner.tsx` | Create | First-time prompt |
+| `src/pages/technician/Dashboard.tsx` | Update | Show enable banner |
+| `supabase/functions/send-notification/index.ts` | Update | Add push trigger calls |
+
+---
+
+## Required Secrets
+
+After approval, I'll need to add these Supabase secrets:
+1. **VAPID_PUBLIC_KEY** - Will be generated
+2. **VAPID_PRIVATE_KEY** - Will be generated
+
+The VAPID_PUBLIC_KEY will also be stored as a constant in the frontend code.
+
+---
+
+## Testing Checklist
+
+After implementation:
+1. Desktop Chrome: Subscribe, receive test notification
+2. Desktop Firefox: Subscribe, receive notification
+3. Android Chrome (browser): Subscribe, receive notification
+4. Android Chrome (installed PWA): Subscribe, receive notification
+5. iOS Safari (not installed): See install instructions
+6. iOS Safari (installed as PWA): Subscribe, receive notification
+7. Verify notification click opens correct page
+8. Verify unsubscribe removes from database
