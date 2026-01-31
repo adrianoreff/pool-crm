@@ -137,7 +137,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    // Also: if local storage contains a stale refresh token, Supabase will log
+    // "Invalid Refresh Token: Refresh Token Not Found" and can get the app stuck.
+    // In that case, force a clean sign-out so the user can log in again.
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
+      try {
+        // This may trigger refresh if needed
+        const { error } = await supabase.auth.getUser();
+        if (error && /Refresh Token Not Found/i.test(error.message)) {
+          console.warn('Auth session invalid (refresh token not found). Signing out.');
+          await supabase.auth.signOut();
+        }
+      } catch (e) {
+        // Best effort
+        console.warn('Auth session validation failed:', e);
+      }
+
       if (!currentSession) {
         setLoading(false);
       }
