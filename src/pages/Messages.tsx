@@ -27,7 +27,6 @@ import type { JobChatItem } from '@/hooks/useUnreadJobChats';
 import { useJobMessages } from '@/hooks/useJobMessages';
 import {
   useDirectMessageThreads,
-  useOfficeChannelMessages,
   useDirectThread,
   type DirectThreadItem,
   type DirectThreadUserItem,
@@ -99,8 +98,8 @@ function LiveChatPanel({
   onSelect: (id: string | null) => void;
   directThreads: (DirectThreadItem | DirectThreadUserItem)[];
   directLoading: boolean;
-  selectedDirect: 'office' | string | null;
-  onSelectDirect: (key: 'office' | string | null) => void;
+  selectedDirect: string | null;
+  onSelectDirect: (key: string | null) => void;
 }) {
   const hasJob = !!selectedId;
   const hasDirect = selectedDirect !== null;
@@ -175,9 +174,9 @@ function LiveChatPanel({
               </p>
             ) : (
               <div className="p-2 space-y-1">
-                {directThreads.map((thread) => {
-                  const key = thread.type === 'office' ? 'office' : thread.userId;
-                  const label = thread.type === 'office' ? 'Office channel' : thread.userName;
+                {directThreads.filter((t): t is DirectThreadUserItem => t.type === 'user').map((thread) => {
+                  const key = thread.userId;
+                  const label = thread.userName;
                   const isSelected = hasDirect && selectedDirect === key;
                   const unread = thread.unreadCount;
                   return (
@@ -211,11 +210,7 @@ function LiveChatPanel({
         </div>
         <div className="flex-1 flex flex-col min-h-0" key={selectedId || selectedDirect || 'empty'}>
           {hasDirect ? (
-            selectedDirect === 'office' ? (
-              <LiveDirectThread type="office" onBack={() => onSelectDirect(null)} />
-            ) : (
-              <LiveDirectThread type="user" userId={selectedDirect} onBack={() => onSelectDirect(null)} />
-            )
+            <LiveDirectThread userId={selectedDirect} onBack={() => onSelectDirect(null)} />
           ) : selectedId ? (
             <LiveChatThread appointmentId={selectedId} onBack={() => onSelect(null)} />
           ) : (
@@ -229,24 +224,9 @@ function LiveChatPanel({
   );
 }
 
-function LiveDirectThread({
-  type,
-  userId,
-  onBack,
-}: {
-  type: 'office';
-  userId?: never;
-  onBack: () => void;
-} | {
-  type: 'user';
-  userId: string;
-  onBack: () => void;
-}) {
+function LiveDirectThread({ userId, onBack }: { userId: string; onBack: () => void }) {
   const [draft, setDraft] = useState('');
-  const office = useOfficeChannelMessages();
-  const thread = useDirectThread(type === 'user' ? userId : undefined);
-
-  const { messages, sendMessage, isSending, markAsRead } = type === 'office' ? office : thread;
+  const { messages, sendMessage, isSending, markAsRead } = useDirectThread(userId);
 
   useEffect(() => {
     markAsRead();
@@ -265,7 +245,7 @@ function LiveDirectThread({
         <Button variant="ghost" size="sm" onClick={onBack} className="md:hidden">
           Back
         </Button>
-        <span className="text-sm font-medium">{type === 'office' ? 'Office channel' : 'Direct message'}</span>
+        <span className="text-sm font-medium">Direct message</span>
       </div>
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-3">
@@ -367,9 +347,7 @@ export default function Messages() {
   const directFromUrl = searchParams.get('direct') || null;
 
   const [selectedJobId, setSelectedJobId] = useState<string | null>(idFromUrl);
-  const [selectedDirectKey, setSelectedDirectKey] = useState<'office' | string | null>(
-    directFromUrl === 'office' ? 'office' : directFromUrl || null
-  );
+  const [selectedDirectKey, setSelectedDirectKey] = useState<string | null>(directFromUrl || null);
 
   const { data: emails = [], isLoading } = useEmailLogs();
   const { stats } = useEmailStats();
@@ -384,9 +362,9 @@ export default function Messages() {
   const { jobChatItems, totalChatUnread: jobChatUnread, jobChatsLoading: loadingChats } = useNotification();
   const { threads: directThreads, isLoading: directLoading } = useDirectMessageThreads();
 
-  const selectedDirect: 'office' | string | null = selectedDirectKey;
+  const selectedDirect: string | null = selectedDirectKey;
 
-  const setLiveChatSelection = (jobId: string | null, direct: 'office' | string | null) => {
+  const setLiveChatSelection = (jobId: string | null, direct: string | null) => {
     setSelectedJobId(jobId);
     setSelectedDirectKey(direct);
     setSearchParams(

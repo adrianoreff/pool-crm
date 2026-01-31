@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadJobChats, UNREAD_JOB_CHATS_QUERY_KEY, type JobChatItem } from '@/hooks/useUnreadJobChats';
-import { useDirectMessageThreads, useOfficeChannelMessages } from '@/hooks/useDirectMessages';
+import { useDirectMessageThreads } from '@/hooks/useDirectMessages';
 import { useToast } from '@/hooks/use-toast';
 
 const DIRECT_MESSAGES_QUERY_KEY = 'direct-messages';
@@ -25,13 +25,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const { items, totalUnread, isLoading } = useUnreadJobChats({ subscribeRealtime: false });
   const { threads: directThreads } = useDirectMessageThreads();
-  const { unreadCount: officeChannelUnread } = useOfficeChannelMessages();
 
-  const directTotalUnread = useMemo(() => {
-    const fromThreads = directThreads.reduce((sum, t) => sum + t.unreadCount, 0);
-    if (profile?.role === 'technician') return fromThreads + officeChannelUnread;
-    return fromThreads;
-  }, [directThreads, profile?.role, officeChannelUnread]);
+  const directTotalUnread = useMemo(
+    () => directThreads.reduce((sum, t) => sum + t.unreadCount, 0),
+    [directThreads]
+  );
   const totalChatUnread = totalUnread + directTotalUnread;
 
   useEffect(() => {
@@ -72,7 +70,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           if (newRow?.sender_id && newRow.sender_id !== profile.id) {
             toast({
               title: 'New direct message',
-              description: 'You have a new message in office chat or direct message.',
+              description: 'You have a new message.',
             });
           }
         }

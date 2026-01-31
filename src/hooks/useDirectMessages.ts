@@ -251,6 +251,131 @@ export function useDirectThread(recipientUserId: string | undefined) {
   };
 }
 
+/** Technician (or any user) view: 1:1 messages where I am sender or recipient (recipient_type=user) */
+export function useMyDirectThread() {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const query = useQuery({
+    queryKey: [QUERY_KEY, 'my-thread', profile?.id],
+    queryFn: async (): Promise<DirectMessageRow[]> => {
+      if (!profile?.id || !profile?.business_id) return [];
+      const { data, error } = await supabase
+        .from('direct_messages')
+        .select(`
+          id,
+          business_id,
+          sender_id,
+          recipient_id,
+          recipient_type,
+          body,
+          created_at,
+          read_at,
+          sender:users!direct_messages_sender_id_fkey(id, first_name, last_name)
+        `)
+        .eq('business_id', profile.business_id)
+        .eq('recipient_type', 'user')
+        .or(`sender_id.eq.${profile.id},recipient_id.eq.${profile.id}`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as DirectMessageRow[];
+    },
+    enabled: !!profile?.id && !!profile?.business_id,
+  });
+
+  const unreadCount = useMemo(() => {
+    const messages = query.data ?? [];
+    const myId = profile?.id;
+    if (!myId) return 0;
+    return messages.filter((m) => m.sender_id !== myId && !m.read_at).length;
+  }, [query.data, profile?.id]);
+
+  const lastAdminId = useMemo(() => {
+    const messages = query.data ?? [];
+    const myId = profile?.id;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender_id !== myId) return messages[i].sender_id;
+    }
+    return null;
+  }, [query.data, profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const channel = supabase
+      .channel('direct_messages_my_thread')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => {
+        queryClient.invalidateQueries({ queryKey: [QUERY_KEY, 'my-thread', profile.id] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, queryClient]);
+
+  const markAsRead = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id) return;
+      const messages = query.data ?? [];
+      const toUpdate = messages.filter((m) => m.sender_id !== profile.id && !m.read_at).map((m) => m.id);
+      if (toUpdate.length === 0) return;
+      await supabase
+        .from('direct_messages')
+        .update({ read_at: new Date().toISOString() })
+        .in('id', toUpdate);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    },
+  });
+
+  const sendMessage = useMutation({
+    mutationFn: async (body: string) => {
+      if (!profile?.id || !profile?.business_id) throw new Error('Missing user or business');
+      const recipientId = lastAdminId;
+      if (!recipientId) {
+        toast({
+          title: 'Cannot send yet',
+          description: 'Send a message from Office Chat first, or wait for the office to message you here.',
+          variant: 'destructive',
+        });
+        throw new Error('No recipient');
+      }
+      const { data, error } = await supabase
+        .from('direct_messages')
+        .insert({
+          business_id: profile.business_id,
+          sender_id: profile.id,
+          recipient_id: recipientId,
+          recipient_type: 'user',
+          body: body.trim(),
+        })
+        .select('id, created_at')
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY, 'my-thread'] });
+    },
+    onError: (err) => {
+      toast({ title: 'Failed to send message', description: (err as Error).message, variant: 'destructive' });
+    },
+  });
+
+  return {
+    messages: query.data ?? [],
+    isLoading: query.isLoading,
+    unreadCount,
+    lastAdminId,
+    markAsRead: markAsRead.mutate,
+    sendMessage: sendMessage.mutateAsync,
+    isSending: sendMessage.isPending,
+  };
+}
+
 export interface DirectThreadItem {
   type: 'office';
   unreadCount: number;
@@ -268,7 +393,7 @@ export interface DirectThreadUserItem {
   lastMessageSenderId: string;
 }
 
-/** Admin: list of direct message threads (office channel + 1:1 with technicians) */
+/** Admin: list of direct message threads (1:1 with technicians only) */
 export function useDirectMessageThreads() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
@@ -277,7 +402,6 @@ export function useDirectMessageThreads() {
     queryKey: [QUERY_KEY, 'threads', profile?.id, profile?.business_id],
     queryFn: async (): Promise<(DirectThreadItem | DirectThreadUserItem)[]> => {
       if (!profile?.business_id) return [];
-      const isOffice = ['owner', 'admin', 'dispatcher'].includes(profile?.role ?? '');
 
       const { data: allMessages, error } = await supabase
         .from('direct_messages')
@@ -296,22 +420,9 @@ export function useDirectMessageThreads() {
 
       if (error) return [];
 
-      const officeMessages = (allMessages || []).filter((m) => m.recipient_type === 'office');
       const userMessages = (allMessages || []).filter((m) => m.recipient_type === 'user');
 
       const threads: (DirectThreadItem | DirectThreadUserItem)[] = [];
-
-      if (officeMessages.length > 0 && isOffice) {
-        const last = officeMessages[0];
-        const unread = officeMessages.filter((m) => m.sender_id !== profile.id && !m.read_at).length;
-        threads.push({
-          type: 'office',
-          unreadCount: unread,
-          lastMessageAt: last.created_at || '',
-          lastMessagePreview: (last.body || '').slice(0, 60),
-          lastMessageSenderId: last.sender_id,
-        });
-      }
 
       const userThreadPartners = new Set<string>();
       for (const m of userMessages) {

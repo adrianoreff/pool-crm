@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Send, Loader2, ChevronLeft, Building2, Briefcase } from 'lucide-react';
+import { MessageSquare, Send, Loader2, ChevronLeft, Briefcase, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,21 +14,19 @@ import {
 } from '@/components/ui/sheet';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useJobMessages } from '@/hooks/useJobMessages';
-import { useOfficeChannelMessages } from '@/hooks/useDirectMessages';
+import { useMyDirectThread } from '@/hooks/useDirectMessages';
 import { cn } from '@/lib/utils';
 import { formatAppointmentDate } from '@/lib/utils';
 
-type ChatView = 'list' | 'job' | 'office';
+type ChatView = 'list' | 'job' | 'direct';
 
 export function TechnicianChatFAB() {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<ChatView>('list');
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { jobChatItems: items, jobChatTotalUnread: jobUnread, jobChatsLoading: jobLoading } = useNotification();
-  const { unreadCount: officeUnread } = useOfficeChannelMessages();
-
-  const totalUnread = jobUnread + officeUnread;
+  const { jobChatItems: items, totalChatUnread: totalUnread, jobChatsLoading: jobLoading } = useNotification();
+  const { unreadCount: directUnread } = useMyDirectThread();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -52,7 +50,7 @@ export function TechnicianChatFAB() {
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
         <SheetHeader className="p-4 border-b shrink-0">
           <SheetTitle className="flex items-center gap-2">
-            {(view === 'job' || view === 'office') ? (
+            {(view === 'job' || view === 'direct') ? (
               <Button
                 variant="ghost"
                 size="icon"
@@ -65,7 +63,7 @@ export function TechnicianChatFAB() {
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             ) : null}
-            {view === 'office' ? 'Office Chat' : view === 'job' ? 'Job chat' : 'Messages with office'}
+            {view === 'direct' ? 'Messages to you' : view === 'job' ? 'Job chat' : 'Messages with office'}
           </SheetTitle>
         </SheetHeader>
         <div className="flex-1 flex flex-col min-h-0">
@@ -78,26 +76,26 @@ export function TechnicianChatFAB() {
                 navigate(`/technician/jobs/${selectedAppointmentId}`);
               }}
             />
-          ) : view === 'office' ? (
-            <OfficeChatThread />
+          ) : view === 'direct' ? (
+            <DirectFromOfficeThread />
           ) : (
             <Tabs defaultValue="job-chats" className="flex-1 flex flex-col min-h-0">
               <TabsList className="w-full grid grid-cols-2 rounded-none border-b h-auto p-0">
-                <TabsTrigger value="job-chats" className="gap-1.5 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
-                  <Briefcase className="h-4 w-4" />
+                <TabsTrigger value="job-chats" className="gap-1.5 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none text-xs">
+                  <Briefcase className="h-4 w-4 shrink-0" />
                   Job Chats
-                  {jobUnread > 0 && (
+                  {items.some((i) => i.unreadCount > 0) && (
                     <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground">
-                      {jobUnread}
+                      {items.reduce((s, i) => s + i.unreadCount, 0)}
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="office-chat" className="gap-1.5 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
-                  <Building2 className="h-4 w-4" />
-                  Office Chat
-                  {officeUnread > 0 && (
+                <TabsTrigger value="direct" className="gap-1.5 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none text-xs">
+                  <User className="h-4 w-4 shrink-0" />
+                  To you
+                  {directUnread > 0 && (
                     <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground">
-                      {officeUnread}
+                      {directUnread}
                     </span>
                   )}
                 </TabsTrigger>
@@ -153,19 +151,19 @@ export function TechnicianChatFAB() {
                   </div>
                 </ScrollArea>
               </TabsContent>
-              <TabsContent value="office-chat" className="flex-1 m-0 min-h-0">
+              <TabsContent value="direct" className="flex-1 m-0 min-h-0">
                 <div className="p-2">
-                  <p className="text-sm text-muted-foreground mb-2">Direct line to the office without a job.</p>
+                  <p className="text-sm text-muted-foreground mb-2">Private messages sent to you by the office.</p>
                   <Button
                     variant="outline"
                     className="w-full justify-start"
-                    onClick={() => setView('office')}
+                    onClick={() => setView('direct')}
                   >
-                    <Building2 className="h-4 w-4 mr-2" />
-                    Open Office Chat
-                    {officeUnread > 0 && (
+                    <User className="h-4 w-4 mr-2" />
+                    Messages to you
+                    {directUnread > 0 && (
                       <span className="ml-auto rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">
-                        {officeUnread}
+                        {directUnread}
                       </span>
                     )}
                   </Button>
@@ -179,9 +177,9 @@ export function TechnicianChatFAB() {
   );
 }
 
-function OfficeChatThread() {
+function DirectFromOfficeThread() {
   const [draft, setDraft] = useState('');
-  const { messages, sendMessage, isSending, markAsRead } = useOfficeChannelMessages();
+  const { messages, sendMessage, isSending, markAsRead, lastAdminId } = useMyDirectThread();
 
   useEffect(() => {
     markAsRead();
@@ -199,7 +197,9 @@ function OfficeChatThread() {
       <ScrollArea className="flex-1 p-3">
         <div className="space-y-2">
           {messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No messages yet. Say hello to the office.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No private messages yet. When the office sends you a message here, it will appear below.
+            </p>
           ) : (
             messages.map((m) => {
               const name = m.sender
@@ -219,11 +219,11 @@ function OfficeChatThread() {
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Type a message..."
+          placeholder={lastAdminId ? 'Type a message...' : 'Reply after the office messages you here'}
           className="flex-1"
-          disabled={isSending}
+          disabled={isSending || !lastAdminId}
         />
-        <Button type="submit" size="icon" disabled={!draft.trim() || isSending}>
+        <Button type="submit" size="icon" disabled={!draft.trim() || isSending || !lastAdminId}>
           {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </form>
