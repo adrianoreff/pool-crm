@@ -143,6 +143,14 @@ const NavSection = ({
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { business } = useAuth();
+  const notification = useNotificationOptional();
+  const messagesUnread = notification?.totalChatUnread ?? 0;
+  const communicationNavItems: NavItem[] = communicationNavItemsBase.map((item) =>
+    item.label === 'Messages'
+      ? { ...item, badge: messagesUnread > 0 ? messagesUnread : undefined }
+      : { ...item }
+  );
+
   return (
     <aside
       className={cn(
