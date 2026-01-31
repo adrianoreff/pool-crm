@@ -509,6 +509,17 @@ serve(async (req) => {
           const responseText = await response.text();
           errors.push(`${statusCode}: ${responseText}`);
           console.error(`Push failed: ${statusCode} - ${responseText}`);
+
+          // If the push service says our VAPID credentials don't match what was used when
+          // creating this subscription, that subscription is permanently invalid until the
+          // client re-subscribes. Clean it up automatically.
+          if (
+            statusCode === 403 &&
+            /VAPID credentials in the authorization header do not correspond/i.test(responseText)
+          ) {
+            expiredEndpoints.push(sub.endpoint);
+            console.log('Subscription VAPID mismatch; removing endpoint from DB');
+          }
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
