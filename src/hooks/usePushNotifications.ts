@@ -283,7 +283,46 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       // If the function executed but could not deliver, show the returned reason.
       const sent = (data as any)?.sent as number | undefined;
       const total = (data as any)?.total as number | undefined;
+      const expired = (data as any)?.expired as number | undefined;
       const errors = (data as any)?.errors as string[] | undefined;
+
+      // If the backend removed a subscription due to VAPID mismatch, the user MUST re-subscribe.
+      // Make this clear and refresh local state so the UI doesn't stay stuck on "enabled".
+      const hasVapidMismatch = !!errors?.some((e) =>
+        /VAPID credentials in the authorization header do not correspond/i.test(e)
+      );
+
+      if (hasVapidMismatch) {
+        toast({
+          title: 'Inscrição antiga removida',
+          description:
+            'Seu dispositivo estava inscrito com uma chave VAPID antiga. Ative as notificações novamente para recriar a inscrição.',
+          variant: 'destructive',
+        });
+        await checkSubscription();
+        return;
+      }
+
+      if ((sent === 0 || sent == null) && (expired ?? 0) > 0) {
+        toast({
+          title: 'Subscription removida',
+          description:
+            'Uma subscription inválida foi removida. Ative as notificações novamente para se re-inscrever.',
+        });
+        await checkSubscription();
+        return;
+      }
+
+      if (total === 0) {
+        toast({
+          title: 'Sem dispositivos',
+          description:
+            'Nenhuma subscription encontrada. Ative as notificações para cadastrar este dispositivo.',
+          variant: 'destructive',
+        });
+        await checkSubscription();
+        return;
+      }
 
       if (sent === 0 && errors?.length) {
         throw new Error(errors[0]);
@@ -302,8 +341,9 @@ export function usePushNotifications(): UsePushNotificationsReturn {
         description: err instanceof Error ? err.message : 'Please try again',
         variant: 'destructive',
       });
+      await checkSubscription();
     }
-  }, [user, isSubscribed, toast]);
+  }, [user, isSubscribed, toast, checkSubscription]);
 
   return {
     isSupported,
