@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotificationOptional } from '@/contexts/NotificationContext';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -48,8 +49,8 @@ const operationsNavItems: NavItem[] = [
   { label: 'Service Areas', href: '/service-areas', icon: MapPin },
 ];
 
-const communicationNavItems: NavItem[] = [
-  { label: 'Call Logs', href: '/calls', icon: Phone, badge: 3 },
+const communicationNavItemsBase: Omit<NavItem, 'badge'>[] = [
+  { label: 'Call Logs', href: '/calls', icon: Phone },
   { label: 'Messages', href: '/messages', icon: MessageSquare },
 ];
 
