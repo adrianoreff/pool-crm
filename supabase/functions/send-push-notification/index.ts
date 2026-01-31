@@ -476,10 +476,11 @@ serve(async (req) => {
         // Encrypt the payload
         const { body } = await encryptPayload(payloadString, sub.p256dh, sub.auth);
 
-        // VAPID headers (widely supported)
-        // - Authorization: WebPush <JWT>
-        // - Crypto-Key: p256ecdsa=<public key>
-        const authorization = `WebPush ${jwt}`;
+        // VAPID headers (RFC 8292)
+        // Many push services (incl. FCM) expect the "vapid" Authorization scheme with both t + k.
+        // - Authorization: vapid t=<JWT>, k=<VAPID public key>
+        // - Crypto-Key: p256ecdsa=<VAPID public key>
+        const authorization = `vapid t=${jwt}, k=${vapidPublicKey}`;
         const cryptoKey = `p256ecdsa=${vapidPublicKey}`;
         
         // Send the push notification
