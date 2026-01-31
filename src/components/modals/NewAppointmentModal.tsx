@@ -144,6 +144,7 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
 
     if (error) throw error;
 
+    // Send technician assigned email and push notification
     if (created?.id && data.technician_id) {
       try {
         await supabase.functions.invoke('send-notification', {
@@ -155,6 +156,69 @@ export function NewAppointmentModal({ open, onOpenChange, onSuccess, preselected
         });
       } catch (emailError) {
         console.error('Failed to send technician assigned notification:', emailError);
+      }
+
+      // Push notification to technician
+      try {
+        const customer = customers.find(c => c.id === data.customer_id);
+        const customerName = customer ? `${customer.first_name} ${customer.last_name || ''}`.trim() : 'Customer';
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
+            user_id: data.technician_id,
+            business_id: profile.business_id,
+            notification_type: 'assigned',
+            payload: {
+              title: 'New job assigned',
+              body: `${format(data.scheduled_date, 'MMM d')} – ${customerName}`,
+              url: '/technician/jobs',
+            },
+          },
+        });
+      } catch (pushError) {
+        console.error('Failed to send technician assigned push:', pushError);
+      }
+    }
+
+    // Push notification to admins for new appointment
+    if (created?.id) {
+      try {
+        // Get admin notification recipients
+        const { data: recipients } = await supabase
+          .from('notification_recipients')
+          .select('email')
+          .eq('business_id', profile.business_id)
+          .eq('is_active', true)
+          .eq('notify_new_appointment', true);
+
+        if (recipients && recipients.length > 0) {
+          const emails = recipients.map(r => r.email);
+          const { data: adminUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('business_id', profile.business_id)
+            .in('email', emails);
+
+          const customer = customers.find(c => c.id === data.customer_id);
+          const customerName = customer ? `${customer.first_name} ${customer.last_name || ''}`.trim() : 'Customer';
+          const serviceName = data.service_id ? services.find(s => s.id === data.service_id)?.name : null;
+
+          for (const adminUser of adminUsers || []) {
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                user_id: adminUser.id,
+                business_id: profile.business_id,
+                notification_type: 'new_appointment',
+                payload: {
+                  title: 'New appointment',
+                  body: `${customerName}${serviceName ? ` – ${serviceName}` : ''} on ${format(data.scheduled_date, 'MMM d')}`,
+                  url: '/appointments',
+                },
+              },
+            });
+          }
+        }
+      } catch (pushError) {
+        console.error('Failed to send new appointment push to admins:', pushError);
       }
     }
 

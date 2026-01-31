@@ -67,7 +67,7 @@ export default function JobProblem() {
       queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
 
-      // When "Report only", notify admins by email (fire-and-forget)
+      // When "Report only", notify admins by email and push (fire-and-forget)
       if (!cancelJob) {
         supabase.functions.invoke('send-notification', {
           body: { type: 'admin_job_problem', appointmentId: id },
@@ -77,6 +77,47 @@ export default function JobProblem() {
             toast({ title: 'Problem reported', description: 'Office notification could not be sent.', variant: 'destructive' });
           }
         });
+
+        // Send push notification to admins
+        (async () => {
+          try {
+            const { data: recipients } = await supabase
+              .from('notification_recipients')
+              .select('email')
+              .eq('business_id', appointment.business_id)
+              .eq('is_active', true);
+
+            if (recipients && recipients.length > 0) {
+              const emails = recipients.map(r => r.email);
+              const { data: adminUsers } = await supabase
+                .from('users')
+                .select('id')
+                .eq('business_id', appointment.business_id)
+                .in('email', emails);
+
+              const customerName = appointment.customer
+                ? `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim()
+                : 'Customer';
+
+              for (const adminUser of adminUsers || []) {
+                await supabase.functions.invoke('send-push-notification', {
+                  body: {
+                    user_id: adminUser.id,
+                    business_id: appointment.business_id,
+                    notification_type: 'job_problem',
+                    payload: {
+                      title: 'Problem reported',
+                      body: `${typeLabel} – ${customerName}`,
+                      url: `/appointments`,
+                    },
+                  },
+                });
+              }
+            }
+          } catch (pushErr) {
+            console.error('Failed to send job problem push:', pushErr);
+          }
+        })();
       }
 
       toast({

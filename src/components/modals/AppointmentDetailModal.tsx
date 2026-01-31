@@ -169,6 +169,7 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
     const previousTechnicianId = appointment.technician_id ?? '';
     const newTechnicianId = editData.technician_id === 'none' ? '' : (editData.technician_id || '');
     if (newTechnicianId && newTechnicianId !== previousTechnicianId) {
+      // Send email notification
       try {
         await supabase.functions.invoke('send-notification', {
           body: {
@@ -179,6 +180,27 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
         });
       } catch (emailError) {
         console.error('Failed to send technician assigned notification:', emailError);
+      }
+
+      // Send push notification to technician
+      try {
+        const customerName = appointment.customer
+          ? `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim()
+          : 'Customer';
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
+            user_id: newTechnicianId,
+            business_id: appointment.business_id,
+            notification_type: 'assigned',
+            payload: {
+              title: 'New job assigned',
+              body: `${appointment.scheduled_date} – ${customerName}`,
+              url: '/technician/jobs',
+            },
+          },
+        });
+      } catch (pushError) {
+        console.error('Failed to send technician assigned push:', pushError);
       }
     }
 
