@@ -17,6 +17,22 @@ export type OperatingHour = Database['public']['Tables']['operating_hours']['Row
 export type BookingRule = Database['public']['Tables']['booking_rules']['Row'];
 export type NotificationSetting = Database['public']['Tables']['notification_settings']['Row'];
 export type WidgetConfig = Database['public']['Tables']['widget_config']['Row'];
+
+/** Per-user push notification preferences (table: user_push_preferences). */
+export interface UserPushPreferences {
+  id: string;
+  user_id: string;
+  business_id: string;
+  push_new_appointment: boolean;
+  push_cancellation: boolean;
+  push_reschedule: boolean;
+  push_chat_direct: boolean;
+  push_chat_job: boolean;
+  push_job_problem: boolean;
+  push_assigned: boolean;
+  created_at: string;
+  updated_at: string;
+}
 export type AppointmentActivity = Database['public']['Tables']['appointment_activity']['Row'];
 export type NotificationLog = Database['public']['Tables']['notification_log']['Row'];
 

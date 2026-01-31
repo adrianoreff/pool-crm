@@ -14,6 +14,7 @@ import { useBusiness, useBookingRules, useNotificationSettings, useWidgetConfig,
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
+import { PushNotificationPreferences } from '@/components/settings/PushNotificationPreferences';
 
 // Helper to mask sensitive values
 const maskValue = (value: string) => {
@@ -332,6 +333,7 @@ export default function Settings() {
           <div className="space-y-6">
             {/* Push Notifications */}
             <PushNotificationSettings />
+            <PushNotificationPreferences />
 
             {/* Email Notification Settings */}
             <Card className="shadow-card">

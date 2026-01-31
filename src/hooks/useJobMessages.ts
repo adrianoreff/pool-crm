@@ -131,6 +131,50 @@ export function useJobMessages(appointmentId: string | undefined) {
         .single();
 
       if (error) throw error;
+
+      try {
+        const { data: apt } = await supabase
+          .from('appointments')
+          .select('business_id, technician_id')
+          .eq('id', appointmentId)
+          .single();
+        if (apt?.business_id) {
+          const payload = {
+            title: 'Job chat',
+            body: body.trim().slice(0, 60) + (body.length > 60 ? '…' : ''),
+            url: `/appointments?open=${appointmentId}`,
+          };
+          if (apt.technician_id && apt.technician_id !== profile.id) {
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                user_id: apt.technician_id,
+                business_id: apt.business_id,
+                notification_type: 'chat_job',
+                payload,
+              },
+            });
+          }
+          const { data: adminUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('business_id', apt.business_id)
+            .in('role', ['owner', 'admin', 'dispatcher']);
+          const adminIds = (adminUsers || []).map((u) => u.id).filter((id) => id !== profile.id);
+          for (const userId of adminIds) {
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                user_id: userId,
+                business_id: apt.business_id,
+                notification_type: 'chat_job',
+                payload,
+              },
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Job chat push failed:', e);
+      }
+
       return data;
     },
     onSuccess: () => {

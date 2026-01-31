@@ -14,9 +14,24 @@ interface PushPayload {
   tag?: string;
 }
 
+/** notification_type: when provided, we check user_push_preferences and skip if disabled. */
+const NOTIFICATION_TYPE_TO_COLUMN: Record<string, string> = {
+  new_appointment: "push_new_appointment",
+  cancellation: "push_cancellation",
+  reschedule: "push_reschedule",
+  chat_direct: "push_chat_direct",
+  chat_job: "push_chat_job",
+  job_problem: "push_job_problem",
+  assigned: "push_assigned",
+};
+
 interface RequestBody {
   user_id: string;
   payload: PushPayload;
+  /** Optional: if set, we check user_push_preferences and skip sending when disabled. */
+  notification_type?: string;
+  /** Required when notification_type is set (business_id for preferences lookup). */
+  business_id?: string;
 }
 
 interface Subscription {
@@ -382,7 +397,7 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, payload } = (await req.json()) as RequestBody;
+    const { user_id, payload, notification_type, business_id } = (await req.json()) as RequestBody;
 
     if (!user_id || !payload) {
       return new Response(
@@ -395,6 +410,34 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // If notification_type is set, check user preferences and skip if disabled
+    if (notification_type && business_id) {
+      const prefColumn = NOTIFICATION_TYPE_TO_COLUMN[notification_type];
+      if (prefColumn) {
+        const { data: prefs, error: prefsError } = await supabase
+          .from("user_push_preferences")
+          .select(prefColumn)
+          .eq("user_id", user_id)
+          .eq("business_id", business_id)
+          .maybeSingle();
+
+        if (prefsError) {
+          console.error("Error fetching push preferences:", prefsError);
+          // Proceed with send on error (fail open)
+        } else if (prefs && (prefs as Record<string, boolean>)[prefColumn] === false) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              sent: 0,
+              skipped: true,
+              message: "User has disabled this notification type",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
 
     // Fetch user's push subscriptions
     const { data: subscriptions, error: fetchError } = await supabase

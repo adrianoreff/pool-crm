@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { ArrowLeft, Phone, LogOut, User, Bell, Lock, BarChart3 } from 'lucide-react';
 import { useMemo } from 'react';
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
+import { PushNotificationPreferences } from '@/components/settings/PushNotificationPreferences';
 
 function getInitials(firstName: string | null, lastName: string | null) {
   return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
@@ -97,6 +98,7 @@ export default function Profile() {
         </CardHeader>
         <CardContent className="space-y-4">
           <PushNotificationSettings compact />
+          <PushNotificationPreferences />
           <div className="flex items-center justify-between">
             <Label htmlFor="email-notifications" className="flex items-center gap-2">
               Email notifications

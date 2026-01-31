@@ -137,6 +137,35 @@ export function useRescheduleAppointment() {
           });
         }
         console.log(`Reschedule notifications sent to ${adminEmails.length} admins`);
+
+        // Push notifications: admins and assigned technician
+        try {
+          const emails = adminEmails.map((a) => a.email);
+          const { data: adminUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('business_id', profile?.business_id)
+            .in('email', emails);
+          const adminUserIds = (adminUsers || []).map((u) => u.id);
+          const customerName = appointment.customer ? `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim() : 'Customer';
+          const payload = {
+            title: 'Appointment rescheduled',
+            body: `${appointment.ref_code || appointment.id} – ${customerName}`,
+            url: '/appointments',
+          };
+          for (const userId of adminUserIds) {
+            await supabase.functions.invoke('send-push-notification', {
+              body: { user_id: userId, business_id: profile?.business_id, notification_type: 'reschedule', payload },
+            });
+          }
+          if (appointment.technician?.id && profile?.business_id) {
+            await supabase.functions.invoke('send-push-notification', {
+              body: { user_id: appointment.technician.id, business_id: profile.business_id, notification_type: 'reschedule', payload },
+            });
+          }
+        } catch (pushErr) {
+          console.error('Failed to send reschedule push:', pushErr);
+        }
       } catch (adminError) {
         console.error('Failed to send admin reschedule notification:', adminError);
       }

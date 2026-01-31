@@ -231,6 +231,22 @@ export function useDirectThread(recipientUserId: string | undefined) {
         .single();
 
       if (error) throw error;
+      try {
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
+            user_id: recipientUserId,
+            business_id: businessId,
+            notification_type: 'chat_direct',
+            payload: {
+              title: 'New message',
+              body: body.trim().slice(0, 80) + (body.length > 80 ? '…' : ''),
+              url: '/messages',
+            },
+          },
+        });
+      } catch (e) {
+        console.error('Push notification failed:', e);
+      }
       return data;
     },
     onSuccess: () => {
@@ -375,6 +391,22 @@ export function useMyDirectThread() {
         .single();
 
       if (error) throw error;
+      try {
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
+            user_id: recipientId,
+            business_id: profile.business_id,
+            notification_type: 'chat_direct',
+            payload: {
+              title: 'New message',
+              body: body.trim().slice(0, 80) + (body.length > 80 ? '…' : ''),
+              url: '/messages',
+            },
+          },
+        });
+      } catch (e) {
+        console.error('Push notification failed:', e);
+      }
       return data;
     },
     onSuccess: () => {

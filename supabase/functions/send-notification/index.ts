@@ -57,6 +57,49 @@ function replaceTemplateVariables(content: string, data: Record<string, string>)
   return result;
 }
 
+// Call send-push-notification edge function (fire-and-forget; do not block email response)
+async function sendPushToUser(
+  userId: string,
+  businessId: string,
+  notificationType: string,
+  payload: { title: string; body: string; url?: string }
+): Promise<void> {
+  try {
+    const url = `${SUPABASE_URL}/functions/v1/send-push-notification`;
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        business_id: businessId,
+        notification_type: notificationType,
+        payload,
+      }),
+    });
+  } catch (e) {
+    console.error("send-push-notification call failed:", e);
+  }
+}
+
+// Resolve admin recipient emails to user_ids (users in same business)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getUserIdsByEmails(supabase: any, businessId: string, emails: string[]): Promise<string[]> {
+  if (emails.length === 0) return [];
+  const { data, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("business_id", businessId)
+    .in("email", emails);
+  if (error) {
+    console.error("getUserIdsByEmails:", error);
+    return [];
+  }
+  return (data || []).map((r: { id: string }) => r.id);
+}
+
 // Helper to get custom template from database
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getCustomTemplate(
@@ -422,6 +465,17 @@ Deno.serve(async (req: Request) => {
         sent_at: new Date().toISOString(),
       });
 
+      await sendPushToUser(
+        appointment.technician.id,
+        appointment.business_id,
+        "assigned",
+        {
+          title: "New job assigned",
+          body: `${customerName} – ${dateFormatted}`,
+          url: appUrl ? `${appUrl}/technician/jobs/${appointmentId}` : "/technician/jobs",
+        }
+      );
+
       return new Response(JSON.stringify({ success: true, emailId: emailData?.id }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -531,6 +585,13 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const adminUserIds = await getUserIdsByEmails(supabase, appointment.business_id, toRecipients.map((r: { email: string }) => r.email));
+      const pushTitle = "New appointment";
+      const pushBody = `${customerName}${appointment.ref_code ? ` – ${appointment.ref_code}` : ""}`;
+      for (const uid of adminUserIds) {
+        await sendPushToUser(uid, appointment.business_id, "new_appointment", { title: pushTitle, body: pushBody, url: "/appointments" });
+      }
+
       return new Response(JSON.stringify({ success: failed < toRecipients.length, emailIds, failed }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -635,6 +696,14 @@ Deno.serve(async (req: Request) => {
           resend_id: emailData?.id,
           status: "sent",
           sent_at: new Date().toISOString(),
+        });
+      }
+      const jobProblemAdminIds = await getUserIdsByEmails(supabase, appointment.business_id, toRecipients.map((r: { email: string }) => r.email));
+      for (const uid of jobProblemAdminIds) {
+        await sendPushToUser(uid, appointment.business_id, "job_problem", {
+          title: "Job problem reported",
+          body: `${appointment.ref_code || appointmentId} – ${customerName}`,
+          url: "/appointments",
         });
       }
       return new Response(JSON.stringify({ success: failedCount < toRecipients.length, emailIds, failed: failedCount }), {
