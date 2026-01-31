@@ -12,6 +12,8 @@ interface PushPayload {
   body: string;
   url?: string;
   tag?: string;
+  /** Urgency level: 'very-low', 'low', 'normal', 'high' (default: 'high' for immediate delivery) */
+  urgency?: 'very-low' | 'low' | 'normal' | 'high';
 }
 
 /** notification_type: when provided, we check user_push_preferences and skip if disabled. */
@@ -526,17 +528,37 @@ serve(async (req) => {
         const authorization = `vapid t=${jwt}, k=${vapidPublicKey}`;
         const cryptoKey = `p256ecdsa=${vapidPublicKey}`;
         
+        // Determine TTL and urgency based on notification type
+        // Time-sensitive notifications (chat, assignments) use shorter TTL and high urgency
+        // This tells push services to deliver immediately rather than batching
+        const isTimeSensitive = ['chat_direct', 'chat_job', 'assigned', 'job_problem'].includes(notification_type || '');
+        const ttl = isTimeSensitive ? '300' : '3600'; // 5 minutes vs 1 hour
+        const urgency = payload.urgency || 'high'; // Default to high for immediate delivery
+
+        // Topic header helps with message deduplication and allows push service
+        // to replace pending messages with the same topic (useful for updates)
+        const topic = notification_type ? `tradeflow-${notification_type}-${user_id.slice(0, 8)}` : undefined;
+
+        // Build headers
+        const headers: Record<string, string> = {
+          "Content-Type": "application/octet-stream",
+          "Content-Encoding": "aes128gcm",
+          "Content-Length": body.length.toString(),
+          "TTL": ttl,
+          "Urgency": urgency,
+          "Authorization": authorization,
+          "Crypto-Key": cryptoKey,
+        };
+
+        // Add Topic header if available (helps with message replacement)
+        if (topic) {
+          headers["Topic"] = topic;
+        }
+
         // Send the push notification
         const response = await fetch(sub.endpoint, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "Content-Encoding": "aes128gcm",
-            "Content-Length": body.length.toString(),
-            "TTL": "86400",
-            "Authorization": authorization,
-            "Crypto-Key": cryptoKey,
-          },
+          headers,
           body: toArrayBuffer(body),
         });
 

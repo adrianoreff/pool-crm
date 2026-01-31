@@ -83,7 +83,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
     checkSupport();
   }, [isiOS, isPWA]);
 
-  // Check existing subscription on mount
+  // Check existing subscription on mount and sync with database
   const checkSubscription = useCallback(async () => {
     if (!isSupported || !user) {
       setIsSubscribed(false);
@@ -91,9 +91,27 @@ export function usePushNotifications(): UsePushNotificationsReturn {
     }
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      // Ensure service worker is registered and ready
+      let registration: ServiceWorkerRegistration;
+      try {
+        registration = await navigator.serviceWorker.ready;
+
+        // Check if our push service worker is registered, if not register it
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const hasPushSW = registrations.some(r => r.active?.scriptURL.includes('sw-push.js'));
+        if (!hasPushSW) {
+          console.log('[Push] Registering service worker...');
+          await navigator.serviceWorker.register('/sw-push.js');
+          registration = await navigator.serviceWorker.ready;
+        }
+      } catch (swErr) {
+        console.error('[Push] Service worker error:', swErr);
+        setIsSubscribed(false);
+        return;
+      }
+
       const subscription = await registration.pushManager.getSubscription();
-      
+
       if (subscription) {
         // Verify it exists in our database
         const { data, error } = await supabase
@@ -103,7 +121,46 @@ export function usePushNotifications(): UsePushNotificationsReturn {
           .eq('endpoint', subscription.endpoint)
           .maybeSingle();
 
-        setIsSubscribed(!error && !!data);
+        if (!error && data) {
+          setIsSubscribed(true);
+        } else {
+          // Browser has subscription but database doesn't - resync
+          // This can happen if the database entry was deleted but browser still has subscription
+          console.log('[Push] Subscription exists in browser but not in DB, resyncing...');
+          const json = subscription.toJSON();
+          if (json.keys?.p256dh && json.keys?.auth) {
+            let deviceType = 'desktop';
+            if (/Android/i.test(navigator.userAgent)) {
+              deviceType = 'android';
+            } else if (isiOS) {
+              deviceType = 'ios';
+            } else if (/Mobile/i.test(navigator.userAgent)) {
+              deviceType = 'mobile';
+            }
+
+            const { error: upsertError } = await supabase
+              .from('push_subscriptions')
+              .upsert({
+                user_id: user.id,
+                endpoint: subscription.endpoint,
+                p256dh: json.keys.p256dh,
+                auth: json.keys.auth,
+                device_type: deviceType,
+              }, {
+                onConflict: 'user_id,endpoint',
+              });
+
+            if (!upsertError) {
+              console.log('[Push] Resynced subscription to database');
+              setIsSubscribed(true);
+            } else {
+              console.error('[Push] Failed to resync subscription:', upsertError);
+              setIsSubscribed(false);
+            }
+          } else {
+            setIsSubscribed(false);
+          }
+        }
       } else {
         setIsSubscribed(false);
       }
@@ -111,11 +168,28 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       console.error('Error checking push subscription:', err);
       setIsSubscribed(false);
     }
-  }, [isSupported, user]);
+  }, [isSupported, user, isiOS]);
 
   useEffect(() => {
     checkSubscription();
   }, [checkSubscription]);
+
+  // Re-verify subscription when app becomes visible (user returns to app)
+  // This catches stale subscriptions on mobile devices that were backgrounded
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isSupported && user) {
+        // Small delay to avoid hammering the API on rapid tab switches
+        const timeoutId = setTimeout(() => {
+          checkSubscription();
+        }, 1000);
+        return () => clearTimeout(timeoutId);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isSupported, user, checkSubscription]);
 
   // Subscribe to push notifications
   const subscribe = useCallback(async (): Promise<boolean> => {
