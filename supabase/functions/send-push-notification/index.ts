@@ -58,6 +58,62 @@ function concatUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
   return result;
 }
 
+async function validateVapidKeyPair(vapidPublicKey: string, vapidPrivateKey: string): Promise<boolean> {
+  try {
+    const publicKeyBytes = base64UrlToUint8Array(vapidPublicKey);
+    const privateKeyBytes = base64UrlToUint8Array(vapidPrivateKey);
+
+    // Public key: 65 bytes = 0x04 || x(32) || y(32)
+    if (publicKeyBytes.length !== 65 || publicKeyBytes[0] !== 0x04) {
+      console.error(`Invalid VAPID_PUBLIC_KEY format (expected 65 bytes uncompressed, got ${publicKeyBytes.length})`);
+      return false;
+    }
+    if (privateKeyBytes.length !== 32) {
+      console.error(`Invalid VAPID_PRIVATE_KEY format (expected 32 bytes, got ${privateKeyBytes.length})`);
+      return false;
+    }
+
+    const x = publicKeyBytes.subarray(1, 33);
+    const y = publicKeyBytes.subarray(33, 65);
+
+    const publicJwk = {
+      kty: "EC",
+      crv: "P-256",
+      x: uint8ArrayToBase64Url(x),
+      y: uint8ArrayToBase64Url(y),
+    };
+
+    const privateJwk = {
+      ...publicJwk,
+      d: uint8ArrayToBase64Url(privateKeyBytes),
+    };
+
+    const publicKey = await crypto.subtle.importKey(
+      "jwk",
+      publicJwk,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
+    );
+
+    const privateKey = await crypto.subtle.importKey(
+      "jwk",
+      privateJwk,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"],
+    );
+
+    const msg = new TextEncoder().encode("vapid-keypair-selftest");
+    const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, msg);
+    const ok = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, sig, msg);
+    return ok;
+  } catch (e) {
+    console.error("VAPID keypair validation error:", e);
+    return false;
+  }
+}
+
 // Convert Uint8Array to ArrayBuffer (fixes Deno type issues)
 function toArrayBuffer(arr: Uint8Array): ArrayBuffer {
   return arr.buffer.slice(arr.byteOffset, arr.byteOffset + arr.byteLength) as ArrayBuffer;
@@ -373,6 +429,23 @@ serve(async (req) => {
           message: "Configure VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY secrets"
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Fast fail if the secrets are not a matching pair.
+    // This is the most common reason for 403 "credentials do not correspond".
+    const vapidPairOk = await validateVapidKeyPair(vapidPublicKey, vapidPrivateKey);
+    if (!vapidPairOk) {
+      console.error(
+        "VAPID_PUBLIC_KEY does not match VAPID_PRIVATE_KEY. Update secrets with a matching keypair and re-subscribe clients."
+      );
+      return new Response(
+        JSON.stringify({
+          error: "VAPID key mismatch",
+          message:
+            "VAPID_PUBLIC_KEY não corresponde ao VAPID_PRIVATE_KEY. Atualize os secrets com um par VAPID válido e refaça a inscrição (desligar/ligar notificações).",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

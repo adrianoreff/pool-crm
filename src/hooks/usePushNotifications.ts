@@ -149,6 +149,24 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       const registration = await navigator.serviceWorker.register('/sw-push.js');
       await navigator.serviceWorker.ready;
 
+      // Important: if the device still has an old subscription created with a different
+      // applicationServerKey (VAPID public key), the push service will reject sends with 403.
+      // Force a clean re-subscribe.
+      try {
+        const existing = await registration.pushManager.getSubscription();
+        if (existing) {
+          await supabase
+            .from('push_subscriptions')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('endpoint', existing.endpoint);
+          await existing.unsubscribe();
+        }
+      } catch (e) {
+        // Best-effort cleanup; do not block subscription
+        console.warn('Push cleanup before subscribe failed:', e);
+      }
+
       // Subscribe to push
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
