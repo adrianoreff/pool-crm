@@ -42,8 +42,8 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center bg-no-repeat bg-primary/20"
-      style={{ backgroundImage: 'url(/login-bg.png)' }}
+      className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url(/login-bg.webp)' }}
     >
       {/* Overlay for readability */}
       <div className="absolute inset-0 bg-black/40" aria-hidden />
