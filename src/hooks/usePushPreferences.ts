@@ -36,8 +36,8 @@ export function usePushPreferences() {
     queryFn: async (): Promise<UserPushPreferences | null> => {
       if (!user?.id || !businessId) return null;
 
-      const { data, error } = await supabase
-        .from('user_push_preferences')
+      const { data, error } = await (supabase
+        .from('user_push_preferences') as any)
         .select('*')
         .eq('user_id', user.id)
         .eq('business_id', businessId)
@@ -67,8 +67,8 @@ export function useUpdatePushPreferences() {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from('user_push_preferences')
+      const { data, error } = await (supabase
+        .from('user_push_preferences') as any)
         .upsert(row, {
           onConflict: 'user_id,business_id',
           ignoreDuplicates: false,
