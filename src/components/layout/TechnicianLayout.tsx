@@ -13,7 +13,7 @@ import {
 import { Menu, User, LogOut } from 'lucide-react';
 import { TechnicianNav } from '@/components/technician/TechnicianNav';
 import { TechnicianChatFAB } from '@/components/technician/TechnicianChatFAB';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 function getInitials(firstName: string | null, lastName: string | null) {
   return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
@@ -42,6 +42,10 @@ export function TechnicianLayout() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Technician navigation menu</SheetTitle>
+                  <SheetDescription>Open navigation to go to Dashboard, Jobs, History, or Profile.</SheetDescription>
+                </SheetHeader>
                 <nav className="flex flex-col gap-4 mt-8">
                   <Button
                     variant="ghost"

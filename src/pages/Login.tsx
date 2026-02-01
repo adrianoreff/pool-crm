@@ -41,8 +41,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary/30 p-4">
-      <Card className="w-full max-w-md">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center bg-no-repeat bg-primary/20"
+      style={{ backgroundImage: 'url(/login-bg.png)' }}
+    >
+      {/* Overlay for readability */}
+      <div className="absolute inset-0 bg-black/40" aria-hidden />
+      <Card className="w-full max-w-md relative z-10 shadow-xl border-0 bg-card/95 backdrop-blur-sm">
         <CardHeader className="space-y-1 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="bg-primary p-2 rounded-lg">

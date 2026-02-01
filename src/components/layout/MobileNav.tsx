@@ -12,6 +12,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
 
@@ -72,6 +73,10 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
       {/* Full Navigation Sheet */}
       <Sheet open={isOpen} onOpenChange={onClose}>
         <SheetContent side="left" className="w-[280px] p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation menu</SheetTitle>
+            <SheetDescription>Open the main navigation to switch between dashboard, calendar, appointments, and more.</SheetDescription>
+          </SheetHeader>
           <Sidebar collapsed={false} onToggle={() => {}} />
         </SheetContent>
       </Sheet>

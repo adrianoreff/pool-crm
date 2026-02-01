@@ -63,7 +63,7 @@ export function TechnicianChatFAB() {
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" aria-describedby={undefined}>
         <SheetHeader className="p-4 border-b shrink-0">
           <SheetTitle className="flex items-center gap-2">
             {(view === 'job' || view === 'direct') ? (
