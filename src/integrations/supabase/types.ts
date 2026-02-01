@@ -1776,6 +1776,59 @@ export type Database = {
           },
         ]
       }
+      user_push_preferences: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          id: string
+          push_assigned: boolean | null
+          push_cancellation: boolean | null
+          push_chat_direct: boolean | null
+          push_chat_job: boolean | null
+          push_job_problem: boolean | null
+          push_new_appointment: boolean | null
+          push_reschedule: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          id?: string
+          push_assigned?: boolean | null
+          push_cancellation?: boolean | null
+          push_chat_direct?: boolean | null
+          push_chat_job?: boolean | null
+          push_job_problem?: boolean | null
+          push_new_appointment?: boolean | null
+          push_reschedule?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          push_assigned?: boolean | null
+          push_cancellation?: boolean | null
+          push_chat_direct?: boolean | null
+          push_chat_job?: boolean | null
+          push_job_problem?: boolean | null
+          push_new_appointment?: boolean | null
+          push_reschedule?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_preferences_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null

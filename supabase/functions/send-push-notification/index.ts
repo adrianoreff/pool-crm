@@ -427,7 +427,7 @@ serve(async (req) => {
         if (prefsError) {
           console.error("Error fetching push preferences:", prefsError);
           // Proceed with send on error (fail open)
-        } else if (prefs && (prefs as Record<string, boolean>)[prefColumn] === false) {
+        } else if (prefs && (prefs as unknown as Record<string, boolean>)[prefColumn] === false) {
           return new Response(
             JSON.stringify({
               success: true,

@@ -121,16 +121,21 @@ export default function Settings() {
     setLogoUploading(true);
     try {
       const ext = file.name.split('.').pop() || 'png';
-      const path = `${business.id}/logo.${ext}`;
+      // Use timestamp in filename to bust cache and ensure new image shows immediately
+      const timestamp = Date.now();
+      const path = `${business.id}/logo_${timestamp}.${ext}`;
+      
       const { error: uploadError } = await supabase.storage
         .from('business-logos')
-        .upload(path, file, { cacheControl: '3600', upsert: true });
+        .upload(path, file, { cacheControl: '0', upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from('business-logos').getPublicUrl(path);
-      setBusinessLogoUrl(publicUrl);
-      updateBusiness.mutate({ logo_url: publicUrl });
+      // Add cache buster to URL to force browser to load new image
+      const urlWithCacheBuster = `${publicUrl}?t=${timestamp}`;
+      setBusinessLogoUrl(urlWithCacheBuster);
+      updateBusiness.mutate({ logo_url: urlWithCacheBuster });
       toast({ title: 'Logo updated', description: 'Your business logo has been updated.' });
     } catch (err: any) {
       console.error(err);
