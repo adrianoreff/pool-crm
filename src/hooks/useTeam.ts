@@ -15,7 +15,7 @@ export function useTeam() {
 
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, business_id, email, first_name, last_name, phone, avatar_url, role, color, is_active, preferences, created_at, updated_at, last_seen_at')
         .eq('business_id', businessId)
         .eq('is_active', true)
         .order('first_name');
@@ -45,7 +45,7 @@ export function useTeamMember(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, business_id, email, first_name, last_name, phone, avatar_url, role, color, is_active, preferences, created_at, updated_at, last_seen_at')
         .eq('id', id)
         .single();
 

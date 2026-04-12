@@ -2026,6 +2026,7 @@ export type Database = {
         Args: { required_role: Database["public"]["Enums"]["user_role"] }
         Returns: boolean
       }
+      mark_dm_read: { Args: { p_message_ids: string[] }; Returns: undefined }
     }
     Enums: {
       appointment_source: "ai_call" | "widget" | "manual" | "phone"

@@ -94,10 +94,7 @@ export function useOfficeChannelMessages() {
       const messages = query.data ?? [];
       const toUpdate = messages.filter((m) => m.sender_id !== profile.id && !m.read_at).map((m) => m.id);
       if (toUpdate.length === 0) return;
-      await supabase
-        .from('direct_messages')
-        .update({ read_at: new Date().toISOString() })
-        .in('id', toUpdate);
+      await supabase.rpc('mark_dm_read', { p_message_ids: toUpdate });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
@@ -203,10 +200,7 @@ export function useDirectThread(recipientUserId: string | undefined) {
       const messages = query.data ?? [];
       const toUpdate = messages.filter((m) => m.sender_id !== profile.id && !m.read_at).map((m) => m.id);
       if (toUpdate.length === 0) return;
-      await supabase
-        .from('direct_messages')
-        .update({ read_at: new Date().toISOString() })
-        .in('id', toUpdate);
+      await supabase.rpc('mark_dm_read', { p_message_ids: toUpdate });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
@@ -356,10 +350,7 @@ export function useMyDirectThread() {
       const messages = query.data ?? [];
       const toUpdate = messages.filter((m) => m.sender_id !== profile.id && !m.read_at).map((m) => m.id);
       if (toUpdate.length === 0) return;
-      await supabase
-        .from('direct_messages')
-        .update({ read_at: new Date().toISOString() })
-        .in('id', toUpdate);
+      await supabase.rpc('mark_dm_read', { p_message_ids: toUpdate });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
