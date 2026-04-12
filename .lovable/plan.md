@@ -1,49 +1,46 @@
 
 
-# Security Fix Plan - Prioritized by Severity
+# Security Fixes Plan
 
-## Intentional Items to Confirm
+## Fixes to Apply
 
-Before fixing, please confirm these items:
+### Fix 1 (HIGH): Replace DM UPDATE policy with RPC function
 
-1. **`appointment-photos` bucket is public** -- needed for customer portal/external sharing?
-2. **`verify_jwt = false` on `create-appointment`, `widget-*` functions** -- public widget endpoints, expected?
-3. **`verify_jwt = false` on `send-notification`** -- called from external services/crons?
-4. **All business members see full `businesses` row** -- intentional for technicians to see VAPI config?
+The current `WITH CHECK` on `direct_messages` uses self-referencing comparisons (`body = body`) that always evaluate to true, providing no protection.
 
----
+**Steps:**
+1. Create a migration that:
+   - Drops the "Recipients can mark direct messages as read" UPDATE policy
+   - Creates a `SECURITY DEFINER` function `mark_dm_read(p_message_ids uuid[])` that:
+     - Sets `read_at = now()` only on messages where caller is the recipient (or office channel recipient)
+     - Scoped to the user's business
+   - Adds `SET search_path TO 'public'` to the function
+2. Update `src/hooks/useDirectMessages.ts` - replace all three `markAsRead` mutations (in `useOfficeChannelMessages`, `useDirectThread`, `useMyDirectThread`) to call `supabase.rpc('mark_dm_read', { p_message_ids: toUpdate })` instead of `.from('direct_messages').update({ read_at })`
 
-## Fixes in Priority Order
+**Dependencies verified:**
+- `markAsRead` is called from: `Messages.tsx`, `TechnicianChatFAB.tsx`, `AppointmentDetailModal.tsx` (but those use `useJobMessages` which uses `job_chat_read_receipts`, not `direct_messages`)
+- Only `useDirectMessages.ts` calls `.update()` on `direct_messages`
 
-### Fix 1 (CRITICAL): Appointments portal_token policy
-**What**: Drop the "Portal access to appointments" RLS policy. It uses `USING (portal_token IS NOT NULL)` which makes ALL appointments readable by anyone since `portal_token` has a non-null default.
-**Why safe**: The `customer-portal` edge function uses `service_role` key, bypassing RLS entirely. Dropping this policy breaks nothing.
-**Migration**: `DROP POLICY "Portal access to appointments" ON public.appointments;`
+### Fix 2 (MEDIUM): Fix mutable search_path on DB function
 
-### Fix 2 (CRITICAL): Widget analytics self-referencing bug
-**What**: Fix the INSERT policy on `widget_analytics` where `wc.business_id = wc.business_id` compares to itself (always true).
-**Migration**: Drop and recreate policy with correct condition: `wc.business_id = widget_analytics.business_id`.
+Only `update_email_templates_updated_at` lacks `search_path` (the others already have it set).
 
-### Fix 3 (HIGH): Direct messages UPDATE allows content tampering
-**What**: The UPDATE policy has `WITH CHECK (true)`, letting recipients change message body, sender_id, etc.
-**Fix**: Replace with a restrictive WITH CHECK that only allows updating `read_at`. Or create an RPC function `mark_dm_read(message_id)`.
+**Steps:**
+1. In the same migration, recreate `update_email_templates_updated_at` with `SET search_path TO 'public'`
 
-### Fix 4 (HIGH): send-push-notification has no JWT verification
-**What**: Anyone can call this endpoint and trigger push notifications to any user.
-**Fix**: Add `getClaims()` JWT validation inside the function. Internal calls from other edge functions will still work via service_role.
+### Fix 3 (LOW): Replace select('*') with explicit columns
 
-### Fix 5 (MEDIUM): User enumeration via error messages
-**What**: Login/Register pages pass raw Supabase errors that reveal if an email exists.
-**Fix**: Replace error display with generic messages ("Invalid email or password"). Enable leaked password protection in Supabase Dashboard.
-**Files**: `src/pages/Login.tsx`, `src/pages/Register.tsx`
+**Steps:**
+1. `src/contexts/AuthContext.tsx` line 55: Replace `select('*')` with explicit columns matching `UserProfile` interface: `id, business_id, email, first_name, last_name, phone, avatar_url, role, is_active`
+2. `src/hooks/useTeam.ts` lines 18 and 48: Replace `select('*')` with all `users` columns used by the `User` type: `id, business_id, email, first_name, last_name, phone, avatar_url, role, color, is_active, preferences, created_at, updated_at, last_seen_at`
 
-### Fix 6 (MEDIUM): VAPI credentials exposed to technicians
-**What**: `select('*')` on businesses exposes `vapi_api_key_encrypted` to all roles.
-**Fix**: Replace `select('*')` with explicit column lists in `useBusiness.ts` and `AuthContext.tsx`, excluding `vapi_api_key_encrypted`.
+### Fix 4: Ignore confirmed intentional items
+
+Register the 4 confirmed-intentional items in the security tracker as ignored.
 
 ---
 
-## Approach
-
-Each fix will be applied one at a time, verifying dependencies before and after. I will not refactor or reorganize unrelated code.
+**Not included (manual action required):**
+- Enable Leaked Password Protection in Supabase Dashboard > Auth > Providers > Email (Finding #5)
+- VAPI credentials in Vault (Finding #2) - deferred as it requires significant architectural changes to Settings page and edge functions
 
