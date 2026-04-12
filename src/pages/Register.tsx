@@ -43,7 +43,7 @@ export default function Register() {
       });
       
       if (signUpError) {
-        setError(signUpError.message);
+        setError('Unable to create account. Please try again.');
       } else {
         setIsSuccess(true);
       }
