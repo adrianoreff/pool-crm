@@ -41,7 +41,7 @@ export default function TechnicianLogin() {
       const { error: signInError } = await signIn(email, password);
       
       if (signInError) {
-        setError(signInError.message);
+        setError('Invalid email or password');
         setIsLoading(false);
       } else {
         // Profile will be loaded via auth state change listener

@@ -29,7 +29,7 @@ export default function Login() {
       const { error: signInError } = await signIn(email, password);
       
       if (signInError) {
-        setError(signInError.message);
+        setError('Invalid email or password');
       } else {
         navigate(from, { replace: true });
       }

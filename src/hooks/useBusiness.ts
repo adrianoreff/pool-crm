@@ -15,7 +15,7 @@ export function useBusiness() {
 
       const { data, error } = await supabase
         .from('businesses')
-        .select('*')
+        .select('id, name, slug, phone, email, website, address, city, state, zip_code, country, timezone, logo_url, vapi_assistant_id, vapi_phone_number, mapbox_public_token, settings, subscription_status, subscription_ends_at, created_at, updated_at')
         .eq('id', businessId)
         .single();
 
