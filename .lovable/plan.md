@@ -1,99 +1,49 @@
 
 
-# Plano: Corrigir Push Notifications (VAPID 403)
+# Security Fix Plan - Prioritized by Severity
 
-## Problema Identificado
+## Intentional Items to Confirm
 
-O erro `403 - VAPID credentials do not correspond` acontece porque:
+Before fixing, please confirm these items:
 
-1. A subscription foi criada com uma **VAPID key diferente** da atual
-2. O Push Service (Google FCM) **cache-a** a associação entre endpoint e VAPID key
-3. Mesmo recriando a subscription, o FCM pode recusar se o endpoint ainda existe com a key antiga
-
-## Solução
-
-### Etapa 1: Limpar TODAS as subscriptions do banco
-
-Deletar todas as subscriptions existentes para forçar uma reinicialização completa.
-
-```sql
-DELETE FROM push_subscriptions;
-```
-
-### Etapa 2: Gerar um par VAPID NOVO e consistente
-
-Vou gerar um novo par de chaves VAPID e:
-- Atualizar o secret `VAPID_PUBLIC_KEY` no Supabase
-- Atualizar o secret `VAPID_PRIVATE_KEY` no Supabase  
-- Atualizar a constante `VAPID_PUBLIC_KEY` no frontend (`src/hooks/usePushNotifications.ts`)
-
-**Geração de chaves** (exemplo usando web-push):
-```javascript
-const webPush = require('web-push');
-const vapidKeys = webPush.generateVAPIDKeys();
-console.log('Public:', vapidKeys.publicKey);
-console.log('Private:', vapidKeys.privateKey);
-```
-
-### Etapa 3: Forçar Unsubscribe completo no navegador
-
-Modificar o hook para:
-1. Quando o usuário ativar notificações, primeiro **unsubscribe** de QUALQUER subscription existente no navegador
-2. Só então criar uma nova subscription com a nova VAPID key
-3. Isso garante que o navegador obtém um **novo endpoint** do FCM
-
-```typescript
-// No subscribe():
-// 1. Unsubscribe forçado de qualquer subscription existente
-const registration = await navigator.serviceWorker.register('/sw-push.js');
-const existing = await registration.pushManager.getSubscription();
-if (existing) {
-  await existing.unsubscribe(); // Força o browser a pedir um NOVO endpoint
-}
-
-// 2. Limpa do banco qualquer subscription deste usuário
-await supabase.from('push_subscriptions').delete().eq('user_id', user.id);
-
-// 3. Agora cria uma subscription NOVA com a VAPID key atual
-const subscription = await registration.pushManager.subscribe({...});
-```
-
-### Etapa 4: Adicionar logs de diagnóstico no frontend
-
-Mostrar qual VAPID key está sendo usada ao inscrever, para validar que está usando a correta.
+1. **`appointment-photos` bucket is public** -- needed for customer portal/external sharing?
+2. **`verify_jwt = false` on `create-appointment`, `widget-*` functions** -- public widget endpoints, expected?
+3. **`verify_jwt = false` on `send-notification`** -- called from external services/crons?
+4. **All business members see full `businesses` row** -- intentional for technicians to see VAPI config?
 
 ---
 
-## Arquivos a Modificar
+## Fixes in Priority Order
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/usePushNotifications.ts` | Atualizar VAPID_PUBLIC_KEY + forçar unsubscribe completo antes de subscribe |
+### Fix 1 (CRITICAL): Appointments portal_token policy
+**What**: Drop the "Portal access to appointments" RLS policy. It uses `USING (portal_token IS NOT NULL)` which makes ALL appointments readable by anyone since `portal_token` has a non-null default.
+**Why safe**: The `customer-portal` edge function uses `service_role` key, bypassing RLS entirely. Dropping this policy breaks nothing.
+**Migration**: `DROP POLICY "Portal access to appointments" ON public.appointments;`
 
-## Ações Manuais Necessárias
+### Fix 2 (CRITICAL): Widget analytics self-referencing bug
+**What**: Fix the INSERT policy on `widget_analytics` where `wc.business_id = wc.business_id` compares to itself (always true).
+**Migration**: Drop and recreate policy with correct condition: `wc.business_id = widget_analytics.business_id`.
 
-1. **Atualizar Supabase Secrets** com o novo par VAPID (você precisará fornecer as novas chaves ou gerar com web-push)
-2. **Limpar a tabela** `push_subscriptions` no Supabase SQL Editor
-3. **Testar** ativando notificações novamente
+### Fix 3 (HIGH): Direct messages UPDATE allows content tampering
+**What**: The UPDATE policy has `WITH CHECK (true)`, letting recipients change message body, sender_id, etc.
+**Fix**: Replace with a restrictive WITH CHECK that only allows updating `read_at`. Or create an RPC function `mark_dm_read(message_id)`.
+
+### Fix 4 (HIGH): send-push-notification has no JWT verification
+**What**: Anyone can call this endpoint and trigger push notifications to any user.
+**Fix**: Add `getClaims()` JWT validation inside the function. Internal calls from other edge functions will still work via service_role.
+
+### Fix 5 (MEDIUM): User enumeration via error messages
+**What**: Login/Register pages pass raw Supabase errors that reveal if an email exists.
+**Fix**: Replace error display with generic messages ("Invalid email or password"). Enable leaked password protection in Supabase Dashboard.
+**Files**: `src/pages/Login.tsx`, `src/pages/Register.tsx`
+
+### Fix 6 (MEDIUM): VAPI credentials exposed to technicians
+**What**: `select('*')` on businesses exposes `vapi_api_key_encrypted` to all roles.
+**Fix**: Replace `select('*')` with explicit column lists in `useBusiness.ts` and `AuthContext.tsx`, excluding `vapi_api_key_encrypted`.
 
 ---
 
-## Detalhes Técnicos
+## Approach
 
-### Por que o erro 403 persiste mesmo recriando?
-
-Quando você chama `pushManager.subscribe()` com uma `applicationServerKey`, o navegador pode:
-- Reutilizar o mesmo `endpoint` se ainda tiver uma subscription ativa
-- O FCM valida que o `endpoint` foi criado com aquela VAPID key específica
-
-Se a VAPID key mudou, o FCM rejeita com 403 porque o endpoint foi originalmente registrado com outra key.
-
-### Solução definitiva
-
-Ao fazer `existing.unsubscribe()` ANTES de criar uma nova subscription, forçamos o navegador a:
-1. Invalidar o endpoint antigo
-2. Criar um endpoint completamente novo
-3. Registrar esse novo endpoint com a VAPID key atual
-
-Isso "reseta" a associação no FCM e resolve o problema de forma definitiva.
+Each fix will be applied one at a time, verifying dependencies before and after. I will not refactor or reorganize unrelated code.
 
