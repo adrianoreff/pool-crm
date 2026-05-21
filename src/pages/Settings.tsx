@@ -63,8 +63,20 @@ export default function Settings() {
   const [editingMapbox, setEditingMapbox] = useState(false);
 
   // Track if values are saved in DB
-  const savedVapiId = business?.vapi_assistant_id || '';
+  const [savedVapiId, setSavedVapiId] = useState('');
   const savedMapboxToken = (business as any)?.mapbox_public_token || '';
+
+  // Fetch VAPI assistant ID via secure RPC (admin/owner only)
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase.rpc('get_business_vapi_settings');
+      if (!error && data && data.length > 0) {
+        const id = data[0]?.vapi_assistant_id || '';
+        setSavedVapiId(id);
+        setVapiAssistantId(id);
+      }
+    })();
+  }, [business?.id]);
 
   // Sync state with fetched data
   useEffect(() => {
@@ -75,7 +87,6 @@ export default function Settings() {
       setBusinessWebsite(business.website || '');
       setBusinessAddress(business.address || '');
       setBusinessLogoUrl(business.logo_url ?? null);
-      setVapiAssistantId(business.vapi_assistant_id || '');
       setMapboxToken((business as any).mapbox_public_token || '');
     }
   }, [business]);
