@@ -184,7 +184,10 @@ export default function Settings() {
     updateBusiness.mutate({
       vapi_assistant_id: vapiAssistantId || null,
     } as any, {
-      onSuccess: () => setEditingVapi(false),
+      onSuccess: () => {
+        setSavedVapiId(vapiAssistantId);
+        setEditingVapi(false);
+      },
     });
   };
 
