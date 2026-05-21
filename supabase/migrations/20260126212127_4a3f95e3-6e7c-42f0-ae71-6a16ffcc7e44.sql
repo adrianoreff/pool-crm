@@ -2,9 +2,12 @@
 -- TradeFlow CRM - Phase 2: Complete Database Schema
 -- ============================================
 
--- Enable required extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Enable required extensions (Supabase hosts these in the extensions schema)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
+
+-- Make extension functions visible for defaults and triggers in this migration
+SET search_path TO public, extensions;
 
 -- ============================================
 -- 1. Custom Types/Enums
@@ -24,7 +27,7 @@ CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'cancell
 
 -- Businesses (Tenants)
 CREATE TABLE businesses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   slug TEXT UNIQUE,
   phone TEXT,
@@ -86,7 +89,7 @@ CREATE INDEX idx_users_email ON users(email);
 
 -- Team Invitations
 CREATE TABLE team_invitations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   email TEXT NOT NULL,
@@ -107,7 +110,7 @@ CREATE TABLE team_invitations (
 -- ============================================
 
 CREATE TABLE service_categories (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   name TEXT NOT NULL,
@@ -126,7 +129,7 @@ CREATE TABLE service_categories (
 CREATE INDEX idx_service_categories_business ON service_categories(business_id);
 
 CREATE TABLE services (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   category_id UUID REFERENCES service_categories(id) ON DELETE SET NULL,
   
@@ -156,7 +159,7 @@ CREATE INDEX idx_services_category ON services(category_id);
 -- ============================================
 
 CREATE TABLE customers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   first_name TEXT NOT NULL,
@@ -195,7 +198,7 @@ CREATE INDEX idx_customers_search ON customers USING gin(
 );
 
 CREATE TABLE customer_addresses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   
   label TEXT,
@@ -218,7 +221,7 @@ CREATE INDEX idx_customer_addresses_customer ON customer_addresses(customer_id);
 -- ============================================
 
 CREATE TABLE appointments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   service_id UUID REFERENCES services(id) ON DELETE SET NULL,
@@ -271,7 +274,7 @@ CREATE INDEX idx_appointments_ref_code ON appointments(ref_code);
 CREATE INDEX idx_appointments_portal_token ON appointments(portal_token);
 
 CREATE TABLE appointment_activity (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
   
   action TEXT NOT NULL,
@@ -288,7 +291,7 @@ CREATE TABLE appointment_activity (
 CREATE INDEX idx_appointment_activity ON appointment_activity(appointment_id);
 
 CREATE TABLE appointment_photos (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
   
   url TEXT NOT NULL,
@@ -306,7 +309,7 @@ CREATE INDEX idx_appointment_photos ON appointment_photos(appointment_id);
 -- ============================================
 
 CREATE TABLE call_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   vapi_call_id TEXT UNIQUE NOT NULL,
@@ -342,7 +345,7 @@ CREATE INDEX idx_call_logs_customer ON call_logs(customer_id);
 CREATE INDEX idx_call_logs_started_at ON call_logs(started_at);
 
 CREATE TABLE call_messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   call_log_id UUID NOT NULL REFERENCES call_logs(id) ON DELETE CASCADE,
   
   role TEXT NOT NULL,
@@ -364,7 +367,7 @@ CREATE INDEX idx_call_messages_call ON call_messages(call_log_id);
 -- ============================================
 
 CREATE TABLE operating_hours (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   day_of_week day_of_week NOT NULL,
@@ -377,7 +380,7 @@ CREATE TABLE operating_hours (
 );
 
 CREATE TABLE booking_rules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID UNIQUE NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   time_slot_interval INTEGER DEFAULT 30,
@@ -399,7 +402,7 @@ CREATE TABLE booking_rules (
 );
 
 CREATE TABLE technician_availability (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   technician_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   
   date DATE NOT NULL,
@@ -416,7 +419,7 @@ CREATE TABLE technician_availability (
 CREATE INDEX idx_technician_availability ON technician_availability(technician_id, date);
 
 CREATE TABLE availability_overrides (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   date DATE NOT NULL,
@@ -437,7 +440,7 @@ CREATE INDEX idx_availability_overrides ON availability_overrides(business_id, d
 -- ============================================
 
 CREATE TABLE service_areas (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   name TEXT NOT NULL,
@@ -463,7 +466,7 @@ CREATE INDEX idx_service_areas_zip ON service_areas USING gin(zip_codes);
 -- ============================================
 
 CREATE TABLE invoices (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
@@ -496,7 +499,7 @@ CREATE INDEX idx_invoices_customer ON invoices(customer_id);
 CREATE INDEX idx_invoices_appointment ON invoices(appointment_id);
 
 CREATE TABLE invoice_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
   
   description TEXT NOT NULL,
@@ -521,7 +524,7 @@ ALTER TABLE appointments
 -- ============================================
 
 CREATE TABLE notification_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   name TEXT NOT NULL,
@@ -540,7 +543,7 @@ CREATE TABLE notification_templates (
 );
 
 CREATE TABLE notification_recipients (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   email TEXT NOT NULL,
@@ -558,7 +561,7 @@ CREATE TABLE notification_recipients (
 CREATE INDEX idx_notification_recipients ON notification_recipients(business_id);
 
 CREATE TABLE notification_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   type notification_type NOT NULL,
@@ -587,7 +590,7 @@ CREATE INDEX idx_notification_log_business ON notification_log(business_id);
 CREATE INDEX idx_notification_log_appointment ON notification_log(appointment_id);
 
 CREATE TABLE notification_settings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID UNIQUE NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   send_confirmation BOOLEAN DEFAULT true,
@@ -610,7 +613,7 @@ CREATE TABLE notification_settings (
 -- ============================================
 
 CREATE TABLE widget_config (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID UNIQUE NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   embed_code TEXT UNIQUE DEFAULT 'wgt_' || encode(gen_random_bytes(12), 'hex'),
@@ -633,7 +636,7 @@ CREATE TABLE widget_config (
 );
 
 CREATE TABLE widget_analytics (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   
   event_type TEXT NOT NULL,
