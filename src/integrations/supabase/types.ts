@@ -2021,6 +2021,13 @@ export type Database = {
           technicians_available: string[]
         }[]
       }
+      get_business_vapi_settings: {
+        Args: never
+        Returns: {
+          vapi_assistant_id: string
+          vapi_phone_number: string
+        }[]
+      }
       get_user_business_id: { Args: never; Returns: string }
       has_role: {
         Args: { required_role: Database["public"]["Enums"]["user_role"] }
