@@ -1,73 +1,84 @@
-# Welcome to your Lovable project
+# Pool CRM (TradeFlow)
 
-## Project info
+Multi-tenant field service CRM for trade businesses—scheduling, customers, technicians, invoicing, email, voice calls, and an embeddable booking widget.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Built with **React**, **TypeScript**, **Vite**, **shadcn/ui**, and **Supabase**.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **Office app** — dashboard, calendar, appointments, customers, team, services, service areas (Mapbox), invoices, analytics, settings, email templates
+- **Technician PWA** — jobs, maps, checklists, job completion, office chat, push notifications
+- **Booking widget** — public `/widget/:embedCode` + `widget-loader.js` embed
+- **Integrations** — Resend (email), VAPI (calls), web push (VAPID)
 
-**Use Lovable**
+## Quick start
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
+cp .env.example .env
+# Edit .env with your Supabase URL and anon key
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+App runs at [http://localhost:8080](http://localhost:8080).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Environment variables
 
-**Use GitHub Codespaces**
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon (publishable) key |
+| `VITE_SUPABASE_PROJECT_ID` | Optional project ref |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Scripts
 
-## What technologies are used for this project?
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |
+| `npm run test` | Vitest |
 
-This project is built with:
+## Project structure
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
+src/
+  pages/          # Routes (admin + technician + auth + widget)
+  components/     # UI, layout, modals, maps
+  hooks/          # Supabase data hooks
+  contexts/       # Auth
+  lib/            # Email templates, Mapbox, services
+supabase/
+  migrations/     # Database schema & RLS
+  functions/      # Edge Functions (Deno)
+docs/
+  PROJECT_ANALYSIS.md   # Deep architecture & security notes
+```
 
-## How can I deploy this project?
+## Roles
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+| Role | Access |
+|------|--------|
+| `owner`, `admin`, `dispatcher` | Main app (`/dashboard`, …) |
+| `technician` | `/technician/*` |
 
-## Can I connect a custom domain to my Lovable project?
+## Documentation
 
-Yes, you can!
+See **[docs/PROJECT_ANALYSIS.md](docs/PROJECT_ANALYSIS.md)** for architecture, data model, edge functions, and security recommendations.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Supabase
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Link your own project or use the included migrations:
+
+```bash
+npx supabase link --project-ref <your-ref>
+npx supabase db push
+npx supabase functions deploy
+```
+
+Configure Edge Function secrets: `RESEND_API_KEY`, `VAPI_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, etc.
+
+## License
+
+Private / proprietary unless otherwise specified.
