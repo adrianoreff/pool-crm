@@ -4,6 +4,13 @@ import { Resend } from "npm:resend@2.0.0";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+/** Verified Resend sender (Brothers Pool and Spa) */
+const RESEND_FROM_EMAIL =
+  Deno.env.get("RESEND_FROM_EMAIL") ?? "oliver@brotherspoolandspa.com";
+
+function formatFromAddress(displayName: string): string {
+  return `${displayName} <${RESEND_FROM_EMAIL}>`;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -151,11 +158,11 @@ Deno.serve(async (req: Request) => {
         .eq("id", businessId)
         .single();
 
-      const businessName = business?.name || "Trade Services";
+      const businessName = business?.name || "Brothers Pool and Spa";
       
       // Send email via Resend
       const { data: emailData, error: emailError } = await resend.emails.send({
-        from: `${businessName} <promo@metricflow.space>`,
+        from: formatFromAddress(businessName),
         to: [to],
         subject,
         html,
@@ -342,7 +349,7 @@ Deno.serve(async (req: Request) => {
       const emailIds: string[] = [];
       for (const r of toRecipients) {
         const { data: emailData, error: emailError } = await resend.emails.send({
-          from: `${businessName} <promo@metricflow.space>`,
+          from: formatFromAddress(businessName),
           to: [r.email],
           subject,
           html: htmlContent,
@@ -427,7 +434,7 @@ Deno.serve(async (req: Request) => {
       `;
 
       const { data: emailData, error: emailError } = await resend.emails.send({
-        from: `${businessName} <promo@metricflow.space>`,
+        from: formatFromAddress(businessName),
         to: [appointment.technician.email],
         subject,
         html: htmlContent,
@@ -543,7 +550,7 @@ Deno.serve(async (req: Request) => {
 
       for (const r of toRecipients) {
         const { data: emailData, error: emailError } = await resend.emails.send({
-          from: `${businessName} <promo@metricflow.space>`,
+          from: formatFromAddress(businessName),
           to: [r.email],
           subject,
           html: htmlContent,
@@ -661,7 +668,7 @@ Deno.serve(async (req: Request) => {
       let failedCount = 0;
       for (const r of toRecipients) {
         const { data: emailData, error: emailError } = await resend.emails.send({
-          from: `${businessName} <promo@metricflow.space>`,
+          from: formatFromAddress(businessName),
           to: [r.email],
           subject,
           html: htmlContent,
@@ -938,7 +945,7 @@ Deno.serve(async (req: Request) => {
 
     // Send email via Resend
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: `${businessName} <promo@metricflow.space>`,
+      from: formatFromAddress(businessName),
       to: appointment.customer.email,
       subject,
       html: htmlContent,
