@@ -48,8 +48,18 @@ function normalizeHeader(h: string): string {
   return h.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-/** Parse CSV text with quoted fields and commas. */
-export function parseCsv(text: string): string[][] {
+function detectDelimiter(sampleLine: string): string {
+  const counts = [
+    { d: ',', n: (sampleLine.match(/,/g) || []).length },
+    { d: ';', n: (sampleLine.match(/;/g) || []).length },
+    { d: '\t', n: (sampleLine.match(/\t/g) || []).length },
+  ];
+  counts.sort((a, b) => b.n - a.n);
+  return counts[0].n > 0 ? counts[0].d : ',';
+}
+
+/** Parse CSV text with quoted fields (comma, semicolon, or tab). */
+export function parseCsv(text: string, delimiter = ','): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
@@ -81,7 +91,7 @@ export function parseCsv(text: string): string[][] {
       }
     } else if (c === '"') {
       inQuotes = true;
-    } else if (c === ',') {
+    } else if (c === delimiter) {
       pushCell();
     } else if (c === '\n' || (c === '\r' && text[i + 1] === '\n')) {
       pushRow();
@@ -96,8 +106,30 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
+/** Placeholder when CSV has no phone (DB requires phone). */
+export function placeholderPhoneForLine(line: number): string {
+  const suffix = String(line).padStart(7, '0').slice(-7);
+  return `555${suffix}`;
+}
+
 export function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '');
+  let s = (raw ?? '').trim();
+  if (!s) return null;
+
+  // Excel scientific notation (e.g. 1.7608896392E+10)
+  if (/^[\d.]+[eE][+-]?\d+$/.test(s)) {
+    const n = Number(s);
+    if (!Number.isNaN(n) && n > 0) {
+      s = String(Math.round(n));
+    }
+  }
+
+  // Excel float export (7602379011.0)
+  if (/^\d+\.0+$/.test(s)) {
+    s = s.replace(/\.0+$/, '');
+  }
+
+  const digits = s.replace(/\D/g, '');
   if (digits.length < 10) return null;
   if (digits.length === 11 && digits.startsWith('1')) return digits;
   if (digits.length === 10) return digits;
@@ -118,15 +150,29 @@ function mapRow(
   line: number
 ): { row?: CsvCustomerRow; error?: string } {
   const first = raw.first_name?.trim();
-  const phone = raw.phone ? normalizePhone(raw.phone) : null;
+  const phoneRaw = raw.phone?.trim() ?? '';
+  let phone = phoneRaw ? normalizePhone(phoneRaw) : null;
+  let phoneWasPlaceholder = false;
 
   if (!first) return { error: `Line ${line}: First name is required` };
-  if (!phone) return { error: `Line ${line}: Valid phone (10+ digits) is required` };
+
+  if (!phone) {
+    if (phoneRaw) {
+      return {
+        error: `Line ${line}: Could not read phone "${phoneRaw}" — use 10+ digits or format like (619) 920-2807`,
+      };
+    }
+    phone = placeholderPhoneForLine(line);
+    phoneWasPlaceholder = true;
+  }
 
   const tags: string[] = [];
   if (raw.list?.trim()) tags.push(raw.list.trim());
 
   const noteParts: string[] = [];
+  if (phoneWasPlaceholder) {
+    noteParts.push('Phone missing in CSV import — please update');
+  }
   if (raw.country?.trim() && raw.country.trim().toUpperCase() !== 'US') {
     noteParts.push(`Country: ${raw.country.trim()}`);
   }
@@ -153,7 +199,10 @@ function mapRow(
 }
 
 export function parseCustomerCsv(fileText: string): ParsedCsvImport {
-  const grid = parseCsv(fileText.replace(/^\uFEFF/, ''));
+  const cleaned = fileText.replace(/^\uFEFF/, '');
+  const firstLine = cleaned.split(/\r?\n/)[0] ?? '';
+  const delimiter = detectDelimiter(firstLine);
+  const grid = parseCsv(cleaned, delimiter);
   if (grid.length < 2) {
     return { rows: [], errors: [{ line: 1, message: 'CSV must include a header row and at least one data row' }], skipped: 0 };
   }

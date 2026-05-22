@@ -97,7 +97,8 @@ export function ImportCustomersModal({ open, onOpenChange }: ImportCustomersModa
         <div className="space-y-4 flex-1 overflow-hidden">
           <p className="text-sm text-muted-foreground">
             Expected columns: FirstName, LastName, Email, Address Line 1, Postal Code, City, State,
-            Country, Phone, Status, List
+            Country, Phone, Status, List (or Lists). Empty phone cells are imported with a temporary
+            number — update them later in the customer profile.
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -141,6 +142,11 @@ export function ImportCustomersModal({ open, onOpenChange }: ImportCustomersModa
               )}
               {parsed.skipped > 0 && (
                 <Badge variant="outline">{parsed.skipped} empty rows skipped</Badge>
+              )}
+              {parsed.rows.some((r) => r.notes?.includes('Phone missing')) && (
+                <Badge variant="outline" className="text-amber-700 border-amber-300">
+                  Some rows imported without phone — update in customer profile
+                </Badge>
               )}
             </div>
           )}
