@@ -56,7 +56,7 @@ function SortableRow({
         completed && 'opacity-70'
       )}
     >
-      <div className="flex w-14 shrink-0 flex-col items-center justify-center bg-slate-400 text-white">
+      <div className="flex w-14 shrink-0 flex-col items-center justify-center bg-[#F97316] text-white">
         {stop.canReorder ? (
           <button
             type="button"

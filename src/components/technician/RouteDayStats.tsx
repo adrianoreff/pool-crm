@@ -24,8 +24,7 @@ export function RouteDayStats({
       ? `-${formatMiles(remainingMiles).replace(' mi', '')} mi`
       : formatMiles(totalMiles)
     : '—';
-  const milesWidth = total > 0 && hasMapbox ? Math.min(100, (remainingMiles / Math.max(totalMiles, 0.1)) * 100) : 0;
-  const timeWidth = total > 0 ? Math.min(100, (totalMinutes / Math.max(totalMinutes, 60)) * 100) : 0;
+  const barWidth = pct;
 
   return (
     <div className="flex gap-4 px-3 py-4 bg-white border-b">
@@ -37,9 +36,9 @@ export function RouteDayStats({
             cy="18"
             r="15.5"
             fill="none"
-            className="stroke-sky-500"
+            className="stroke-[#F97316]"
             strokeWidth="3"
-            strokeDasharray={`${pct} 100`}
+            strokeDasharray={`${barWidth} 100`}
             strokeLinecap="round"
           />
         </svg>
@@ -55,8 +54,8 @@ export function RouteDayStats({
           </div>
           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="h-full bg-sky-500 rounded-full transition-all"
-              style={{ width: `${hasMapbox ? Math.max(milesWidth, 8) : 0}%` }}
+              className="h-full bg-[#F97316] rounded-full transition-all"
+              style={{ width: `${barWidth}%` }}
             />
           </div>
         </div>
@@ -67,8 +66,8 @@ export function RouteDayStats({
           </div>
           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="h-full bg-sky-400 rounded-full transition-all"
-              style={{ width: `${Math.max(timeWidth, 8)}%` }}
+              className="h-full bg-[#F97316] rounded-full transition-all"
+              style={{ width: `${barWidth}%` }}
             />
           </div>
         </div>

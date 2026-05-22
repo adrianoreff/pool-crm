@@ -9,9 +9,10 @@ export type ScheduledStop = {
   estArrivalLabel: string;
 };
 
-function minutesToLabel(totalMinutes: number): string {
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
+export function minutesToLabel(totalMinutes: number): string {
+  const total = Math.round(totalMinutes);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   const hour12 = h % 12 || 12;
   const ampm = h >= 12 ? 'pm' : 'am';
   return `est ${hour12}:${m.toString().padStart(2, '0')}${ampm}`;
@@ -31,7 +32,7 @@ export function buildRouteSchedule(
   let cursor = startMinutes;
 
   for (let i = 0; i < stopCount; i++) {
-    const driveMin = i === 0 ? 0 : (driveLegMinutes[i] ?? 0);
+    const driveMin = i === 0 ? 0 : Math.round(driveLegMinutes[i] ?? 0);
     const serviceMin = serviceMinutesPerStop[i] ?? DEFAULT_SERVICE_MINUTES;
     const arrival = cursor + driveMin;
     const end = arrival + serviceMin;

@@ -9,6 +9,10 @@ import { parseLocalDate } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { RouteDayStop } from '@/hooks/useRouteDay';
 
+function buildFullAddress(stop: RouteDayStop): string {
+  return [stop.address, stop.city, stop.state, stop.zip_code].filter(Boolean).join(', ');
+}
+
 export default function RouteDay() {
   const { date } = useParams<{ date: string }>();
   const navigate = useNavigate();
@@ -56,7 +60,7 @@ export default function RouteDay() {
 
   const handleDirections = () => {
     if (!nextStop) return;
-    const address = `${nextStop.address}, ${nextStop.city || ''} ${nextStop.state || ''} ${nextStop.zip_code || ''}`.trim();
+    const address = buildFullAddress(nextStop);
     if (mapboxToken && nextStop.latitude && nextStop.longitude) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -78,14 +82,16 @@ export default function RouteDay() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#F97316]" />
       </div>
     );
   }
 
+  const nextStopAddress = nextStop ? buildFullAddress(nextStop) : '';
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-8rem)] -mx-0 bg-slate-100">
-      <header className="bg-sky-600 text-white px-3 py-3 flex items-center gap-3 sticky top-0 z-20">
+      <header className="bg-[#F97316] text-white px-3 py-3 flex items-center gap-3 sticky top-0 z-20">
         <button
           type="button"
           onClick={() => navigate('/technician/dashboard')}
@@ -96,7 +102,7 @@ export default function RouteDay() {
         </button>
         <div className="flex-1 min-w-0">
           <div className="font-semibold truncate">{techName}</div>
-          <div className="text-sm text-sky-100">{dateLabel}</div>
+          <div className="text-sm text-orange-100">{dateLabel}</div>
         </div>
       </header>
 
@@ -112,7 +118,7 @@ export default function RouteDay() {
 
       {metricsLoading && (
         <div className="flex items-center justify-center gap-2 py-2 text-xs text-slate-500 bg-white border-b">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Loader2 className="h-3 w-3 animate-spin text-[#F97316]" />
           Updating route…
         </div>
       )}
@@ -127,19 +133,25 @@ export default function RouteDay() {
 
       {nextStop && (
         <div
-          className="fixed left-0 right-0 z-30 bg-sky-600 text-white px-4 py-3 flex items-center gap-3 cursor-pointer active:bg-sky-700"
+          className="fixed left-0 right-0 z-30 bg-[#F97316] text-white px-4 py-3 flex items-start gap-3"
           style={{ bottom: '4rem' }}
-          onClick={handleDirections}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && handleDirections()}
         >
-          <Zap className="h-5 w-5 shrink-0 opacity-90" />
+          <Zap className="h-5 w-5 shrink-0 opacity-90 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">
+            <button
+              type="button"
+              onClick={handleDirections}
+              className="text-sm font-medium truncate w-full text-left hover:opacity-90 active:opacity-80"
+            >
               Directions to {nextStop.customer?.first_name} {nextStop.customer?.last_name} &gt;
-            </div>
-            <div className="text-xs text-sky-100 truncate">{nextStop.address}</div>
+            </button>
+            <button
+              type="button"
+              onClick={handleDirections}
+              className="text-xs text-orange-100 underline text-left w-full truncate mt-1 hover:text-white active:text-white"
+            >
+              {nextStopAddress}
+            </button>
           </div>
         </div>
       )}
