@@ -63,6 +63,13 @@ export function getLocalDateString(date: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Add days to a YYYY-MM-DD string (local calendar). */
+export function addDaysToDateString(dateStr: string, days: number): string {
+  const d = parseLocalDate(dateStr);
+  d.setDate(d.getDate() + days);
+  return getLocalDateString(d);
+}
+
 /** Get local YYYY-MM-DD from an ISO date string (for filtering call_logs etc by "today"). */
 export function getLocalDateStringFromISO(isoString: string): string {
   const d = new Date(isoString);

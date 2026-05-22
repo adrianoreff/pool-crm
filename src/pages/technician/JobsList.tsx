@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppointmentWithRelations } from '@/types/database';
+import { addDaysToDateString, getLocalDateString, parseLocalDate } from '@/lib/utils';
 
-type DateFilter = 'today' | 'tomorrow' | 'week';
+type DateFilter = 'today' | 'tomorrow' | 'upcoming' | 'week';
 
 export default function JobsList() {
   const navigate = useNavigate();
@@ -15,30 +16,31 @@ export default function JobsList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const dateRange = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
+    const todayStr = getLocalDateString();
+
     if (dateFilter === 'today') {
-      const todayStr = today.toISOString().split('T')[0];
       return { from: todayStr, to: todayStr };
     }
-    
+
     if (dateFilter === 'tomorrow') {
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const tomorrowStr = addDaysToDateString(todayStr, 1);
       return { from: tomorrowStr, to: tomorrowStr };
     }
-    
-    // This week
-    const weekStart = new Date(today);
+
+    if (dateFilter === 'upcoming') {
+      return {
+        from: addDaysToDateString(todayStr, 1),
+        to: addDaysToDateString(todayStr, 21),
+      };
+    }
+
+    const weekStart = parseLocalDate(todayStr);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    
     return {
-      from: weekStart.toISOString().split('T')[0],
-      to: weekEnd.toISOString().split('T')[0],
+      from: getLocalDateString(weekStart),
+      to: getLocalDateString(weekEnd),
     };
   }, [dateFilter]);
 
@@ -88,17 +90,18 @@ export default function JobsList() {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">My Jobs</h1>
-        <p className="text-muted-foreground">View and manage your assigned jobs</p>
+        <h1 className="text-2xl font-bold">Stops</h1>
+        <p className="text-muted-foreground">Today, upcoming, and weekly visits</p>
       </div>
 
       {/* Filters */}
       <div className="space-y-3">
         <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="today">Today</TabsTrigger>
             <TabsTrigger value="tomorrow">Tomorrow</TabsTrigger>
-            <TabsTrigger value="week">This Week</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+            <TabsTrigger value="week">Week</TabsTrigger>
           </TabsList>
         </Tabs>
 

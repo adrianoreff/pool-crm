@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppointmentWithRelations } from '@/types/database';
-import { getLocalDateString } from '@/lib/utils';
+import { addDaysToDateString, getLocalDateString } from '@/lib/utils';
 
 interface TechnicianAppointmentFilters {
   dateFrom?: string;
@@ -73,4 +73,31 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
 export function useTodayTechnicianAppointments() {
   const today = getLocalDateString();
   return useTechnicianAppointments({ dateFrom: today, dateTo: today });
+}
+
+/** Future stops from tomorrow through the next N days (default 3 weeks). */
+export function useUpcomingTechnicianAppointments(daysAhead = 21) {
+  const today = getLocalDateString();
+  return useTechnicianAppointments({
+    dateFrom: addDaysToDateString(today, 1),
+    dateTo: addDaysToDateString(today, daysAhead),
+  });
+}
+
+export function sortTechnicianRouteStops<
+  T extends {
+    scheduled_date: string;
+    scheduled_start_time: string;
+    route_stop?: { sort_order: number } | null;
+  },
+>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    if (a.scheduled_date !== b.scheduled_date) {
+      return a.scheduled_date.localeCompare(b.scheduled_date);
+    }
+    const orderA = a.route_stop?.sort_order ?? 9999;
+    const orderB = b.route_stop?.sort_order ?? 9999;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.scheduled_start_time.localeCompare(b.scheduled_start_time);
+  });
 }
