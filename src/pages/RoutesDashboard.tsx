@@ -49,12 +49,40 @@ export default function RoutesDashboard() {
   }, [routesForDay, appointments, team, date]);
 
   const handleGenerate = async () => {
+    if (routesForDay.length === 0) {
+      toast({
+        title: `No routes for ${dayOfWeek}`,
+        description: 'Pick a date that matches your route weekday, or add routes in Route Manager.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const stopCount = routesForDay.reduce(
+      (n, r) => n + (r.stops?.filter((s) => s.is_active).length ?? 0),
+      0
+    );
+    if (stopCount === 0) {
+      toast({
+        title: 'No customers on route',
+        description: 'Open Route Manager and add customers to your route before generating stops.',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
-      await generateVisits.mutateAsync({ date });
-      toast({ title: `Generated visits for ${date}` });
+      let created = 0;
+      for (const route of routesForDay) {
+        const result = await generateVisits.mutateAsync({ routeId: route.id, date });
+        created += Array.isArray(result) ? result.filter((r: { created?: boolean }) => r.created).length : 0;
+      }
+      toast({
+        title: 'Stops generated',
+        description: `${created} new visit(s) on ${date} across ${routesForDay.length} route(s).`,
+      });
     } catch (e: unknown) {
       toast({
-        title: e instanceof Error ? e.message : 'Failed to generate',
+        title: 'Failed to generate stops',
+        description: e instanceof Error ? e.message : 'Unknown error',
         variant: 'destructive',
       });
     }
@@ -81,7 +109,10 @@ export default function RoutesDashboard() {
               className="w-40"
             />
           </div>
-          <Button onClick={handleGenerate} disabled={generateVisits.isPending}>
+          <Button
+            onClick={handleGenerate}
+            disabled={generateVisits.isPending || routesForDay.length === 0}
+          >
             {generateVisits.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

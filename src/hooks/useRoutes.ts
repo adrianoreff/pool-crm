@@ -69,19 +69,22 @@ export function useGenerateRouteVisits() {
 
   return useMutation({
     mutationFn: async ({ routeId, date }: { routeId?: string; date: string }) => {
+      if (!profile?.business_id) {
+        throw new Error('Business not found. Complete onboarding first.');
+      }
       if (routeId) {
         const { data, error } = await supabase.rpc('generate_route_visits', {
           p_route_id: routeId,
           p_scheduled_date: date,
         });
-        if (error) throw error;
+        if (error) throw new Error(error.message);
         return data;
       }
       const { data, error } = await supabase.rpc('generate_all_route_visits_for_date', {
-        p_business_id: profile!.business_id,
+        p_business_id: profile.business_id,
         p_scheduled_date: date,
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: () => {
