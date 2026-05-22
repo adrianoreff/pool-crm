@@ -23,6 +23,7 @@ import { cn, formatAppointmentDate } from '@/lib/utils';
 import { useCustomer, useCustomerAppointments } from '@/hooks/useCustomers';
 import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
 import { EditCustomerModal, SendEmailModal } from '@/components/modals';
+import { CustomerRouteCard } from '@/components/customers/CustomerRouteCard';
 import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -63,6 +64,7 @@ const getEmailTypeLabel = (type: string) => {
     'appointment_completed': 'Completed',
     'technician_en_route': 'Tech En Route',
     'custom_email': 'Manual Email',
+    'pool_service_report': 'Pool service report',
   };
   return labels[type] || type.replace(/_/g, ' ');
 };
@@ -190,6 +192,11 @@ export default function CustomerDetail() {
               </CardContent>
             </Card>
           </div>
+
+          <CustomerRouteCard
+            customerId={customer.id}
+            customerName={`${customer.first_name} ${customer.last_name || ''}`.trim()}
+          />
 
           {/* Contact Info */}
           <div>

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Wrench, Loader2, Mail, Lock } from 'lucide-react';
+import { Waves, Loader2, Mail, Lock } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -51,9 +51,9 @@ export default function Login() {
         <CardHeader className="space-y-1 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="bg-primary p-2 rounded-lg">
-              <Wrench className="h-6 w-6 text-primary-foreground" />
+              <Waves className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-foreground">TradeFlow</span>
+            <span className="text-2xl font-bold text-foreground">Pool CRM</span>
           </div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
           <CardDescription>

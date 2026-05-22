@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MapPin, Clock, Wrench, Navigation, Play, CheckCircle2, Circle } from 'lucide-react';
-import { formatTime, formatAppointmentDateShort, getLocalDateString, cn } from '@/lib/utils';
+import { formatTime, getLocalDateString, cn } from '@/lib/utils';
 import { TechnicianJobsMap } from '@/components/technician/TechnicianJobsMap';
 import { EnablePushBanner } from '@/components/technician/EnablePushBanner';
 
@@ -46,10 +46,12 @@ export default function TechnicianDashboard() {
   const mapboxToken = business?.mapbox_public_token;
 
   const stats = useMemo(() => {
-    const total = appointments.length;
-    const completed = appointments.filter(a => a.status === 'completed').length;
+    const active = appointments.filter((a) => a.status !== 'cancelled');
+    const total = active.length;
+    const completed = active.filter((a) => a.status === 'completed').length;
     const remaining = total - completed;
-    return { total, completed, remaining };
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, remaining, pct };
   }, [appointments]);
 
   const nextJob = useMemo(() => {
@@ -74,17 +76,11 @@ export default function TechnicianDashboard() {
   
   const todaySchedule = useMemo(() => {
     return appointments
-      .filter(a => a.status !== 'cancelled' && a.scheduled_date === today)
-      .sort((a, b) => a.scheduled_start_time.localeCompare(b.scheduled_start_time));
-  }, [appointments, today]);
-  
-  const upcomingSchedule = useMemo(() => {
-    return appointments
-      .filter(a => a.status !== 'cancelled' && a.scheduled_date > today)
+      .filter((a) => a.status !== 'cancelled' && a.scheduled_date === today)
       .sort((a, b) => {
-        if (a.scheduled_date !== b.scheduled_date) {
-          return a.scheduled_date.localeCompare(b.scheduled_date);
-        }
+        const orderA = (a as { route_stop?: { sort_order: number } | null }).route_stop?.sort_order ?? 9999;
+        const orderB = (b as { route_stop?: { sort_order: number } | null }).route_stop?.sort_order ?? 9999;
+        if (orderA !== orderB) return orderA - orderB;
         return a.scheduled_start_time.localeCompare(b.scheduled_start_time);
       });
   }, [appointments, today]);
@@ -163,41 +159,32 @@ export default function TechnicianDashboard() {
       {/* Enable Push Banner */}
       <EnablePushBanner />
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">
-          {getGreeting()}, {profile?.first_name || 'Technician'}!
-        </h1>
-        <p className="text-muted-foreground">
-          {new Date().toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
-        </p>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-sm text-muted-foreground">Total</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
-            <div className="text-sm text-muted-foreground">Done</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600">{stats.remaining}</div>
-            <div className="text-sm text-muted-foreground">Left</div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">My route</h1>
+          <p className="text-muted-foreground">
+            {getGreeting()}, {profile?.first_name || 'Technician'} ·{' '}
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+          <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15.5" fill="none" className="stroke-muted" strokeWidth="3" />
+            <circle
+              cx="18"
+              cy="18"
+              r="15.5"
+              fill="none"
+              className="stroke-[#F97316]"
+              strokeWidth="3"
+              strokeDasharray={`${stats.pct} 100`}
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="absolute text-sm font-bold">
+            {stats.completed}/{stats.total}
+          </span>
+        </div>
       </div>
 
       {/* Jobs Map */}
@@ -259,24 +246,32 @@ export default function TechnicianDashboard() {
         </Card>
       )}
 
-      {/* Today's Schedule */}
       <Card>
         <CardHeader>
-          <CardTitle>Today's Schedule</CardTitle>
+          <CardTitle>Today&apos;s stops</CardTitle>
         </CardHeader>
         <CardContent>
           {todaySchedule.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No appointments scheduled for today</p>
+            <p className="text-center text-muted-foreground py-8">No pools on your route today</p>
           ) : (
             <div className="space-y-3">
-              {todaySchedule.map((apt) => {
+              {todaySchedule.map((apt, index) => {
                 const statusBadge = getStatusBadge(apt.status);
+                const completedLabel =
+                  apt.status === 'completed' && apt.completed_at
+                    ? `Completed at ${new Date(apt.completed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}${
+                        apt.time_spent_minutes != null ? ` · ${apt.time_spent_minutes} min` : ''
+                      }`
+                    : null;
                 return (
                   <div
                     key={apt.id}
                     className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
                     onClick={() => navigate(`/technician/jobs/${apt.id}`)}
                   >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                      {index + 1}
+                    </div>
                     <div className="flex-shrink-0">
                       {apt.status === 'completed' ? (
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -288,11 +283,18 @@ export default function TechnicianDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium">
-                        {formatTimeShort(apt.scheduled_start_time)} - {apt.customer?.first_name} {apt.customer?.last_name}
+                        {apt.customer?.first_name} {apt.customer?.last_name}
                       </div>
-                      <div className="text-sm text-muted-foreground">{apt.service?.name}</div>
+                      <div className="text-sm text-muted-foreground truncate">{apt.address}</div>
+                      {completedLabel ? (
+                        <div className="text-xs text-green-700 mt-0.5">{completedLabel}</div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {formatTimeShort(apt.scheduled_start_time)}
+                        </div>
+                      )}
                     </div>
-                    <Badge className={cn('text-xs', statusBadge.color)}>
+                    <Badge className={cn('text-xs shrink-0', statusBadge.color)}>
                       {statusBadge.label}
                     </Badge>
                   </div>
@@ -302,44 +304,6 @@ export default function TechnicianDashboard() {
           )}
         </CardContent>
       </Card>
-
-      {/* Upcoming Schedule */}
-      {upcomingSchedule.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Appointments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {upcomingSchedule.map((apt) => {
-                const statusBadge = getStatusBadge(apt.status);
-                const dateStr = formatAppointmentDateShort(apt.scheduled_date);
-                
-                return (
-                  <div
-                    key={apt.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/technician/jobs/${apt.id}`)}
-                  >
-                    <div className="flex-shrink-0">
-                      <Circle className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium">
-                        {dateStr} - {formatTimeShort(apt.scheduled_start_time)} - {apt.customer?.first_name} {apt.customer?.last_name}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{apt.service?.name}</div>
-                    </div>
-                    <Badge className={cn('text-xs', statusBadge.color)}>
-                      {statusBadge.label}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, History } from 'lucide-react';
+import { Route, ClipboardList, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function TechnicianNav() {
@@ -8,12 +8,12 @@ export function TechnicianNav() {
 
   const navItems = [
     {
-      label: 'Dashboard',
-      icon: LayoutDashboard,
+      label: 'Route',
+      icon: Route,
       path: '/technician/dashboard',
     },
     {
-      label: 'Jobs',
+      label: 'Stops',
       icon: ClipboardList,
       path: '/technician/jobs',
     },

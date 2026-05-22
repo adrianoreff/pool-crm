@@ -8,10 +8,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/technician/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { MapPreview } from '@/components/technician/MapPreview';
-import { MapPin, Phone, Mail, Clock, Wrench, Navigation, CheckCircle2, AlertCircle, FileText, Camera, History, MessageSquare, Send } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Wrench, CheckCircle2, AlertCircle, FileText, MessageSquare, Send, Droplets, Undo2 } from 'lucide-react';
+import { useCustomerVisitHistory, useVisitReport, useUnfinishVisit } from '@/hooks/useVisitData';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useBusiness } from '@/hooks/useBusiness';
@@ -33,37 +44,15 @@ export default function JobDetails() {
   const updateStatus = useUpdateJobStatus();
   const { messages, sendMessage, isSending, markAsRead } = useJobMessages(id);
   const [messageDraft, setMessageDraft] = useState('');
+  const { toast } = useToast();
+  const customerId = appointment?.customer_id;
+  const { data: visitHistory = [], isLoading: historyLoading } = useCustomerVisitHistory(customerId);
+  const { data: visitReport } = useVisitReport(id);
+  const unfinishVisit = useUnfinishVisit();
 
   useEffect(() => {
     if (id) markAsRead();
   }, [id, markAsRead]);
-
-  // Debug logging
-  useEffect(() => {
-    console.log('JobDetails - Component state:', {
-      id,
-      isLoading,
-      hasAppointment: !!appointment,
-      hasError: !!error,
-      errorMessage: error?.message,
-    });
-
-    if (appointment) {
-      console.log('JobDetails - Appointment loaded:', {
-        id: appointment.id,
-        hasCustomer: !!appointment.customer,
-        customerName: appointment.customer ? `${appointment.customer.first_name} ${appointment.customer.last_name}` : 'No customer',
-        hasService: !!appointment.service,
-        serviceName: appointment.service?.name || 'No service',
-        address: appointment.address,
-        customer: appointment.customer,
-        service: appointment.service,
-      });
-    }
-    if (error) {
-      console.error('JobDetails - Error loading appointment:', error);
-    }
-  }, [id, appointment, isLoading, error]);
 
   // Show loading state
   if (isLoading) {
@@ -239,7 +228,7 @@ export default function JobDetails() {
             className="bg-[#F97316] hover:bg-[#EA580C]"
             onClick={() => navigate(`/technician/jobs/${id}/complete`)}
           >
-            Complete Job
+            Finish visit
           </Button>
           <Button
             variant="destructive"
@@ -254,69 +243,127 @@ export default function JobDetails() {
     return null;
   };
 
+  const handleUnfinish = async () => {
+    if (!id) return;
+    try {
+      await unfinishVisit.mutateAsync(id);
+      toast({ title: 'Visit reopened', description: 'You can edit readings and finish again.' });
+    } catch (e) {
+      toast({
+        title: 'Could not unfinish',
+        description: e instanceof Error ? e.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const formatCompletedAt = (iso: string | null) => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
+
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Job Details</h1>
+          <h1 className="text-2xl font-bold">
+            {appointment.customer
+              ? `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim()
+              : 'Stop'}
+          </h1>
           <StatusBadge status={appointment.status} className="mt-2" />
+          {appointment.status === 'completed' && appointment.completed_at && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Completed at {formatCompletedAt(appointment.completed_at)}
+              {appointment.time_spent_minutes != null && ` · ${appointment.time_spent_minutes} min`}
+            </p>
+          )}
         </div>
         <Button variant="ghost" onClick={() => navigate(-1)}>
           Back
         </Button>
       </div>
 
-      {/* Status Actions */}
       {getStatusActions() && (
         <Card>
-          <CardContent className="p-4">
-            {getStatusActions()}
-          </CardContent>
+          <CardContent className="p-4">{getStatusActions()}</CardContent>
         </Card>
       )}
 
-      {/* Customer Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span>👤</span> Customer
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {appointment.customer ? (
-            <>
-              <div className="font-semibold text-lg">
-                {appointment.customer.first_name || ''} {appointment.customer.last_name || ''}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {appointment.customer.phone && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(`tel:${appointment.customer?.phone}`, '_self')}
-                  >
-                    <Phone className="h-4 w-4 mr-2" />
-                    {appointment.customer.phone}
-                  </Button>
-                )}
-                {appointment.customer.email && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(`mailto:${appointment.customer?.email}`, '_self')}
-                  >
-                    <Mail className="h-4 w-4 mr-2" />
-                    Email
-                  </Button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="text-muted-foreground">Customer information not available</div>
+      {appointment.status === 'completed' && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={handleUnfinish}
+            disabled={unfinishVisit.isPending}
+          >
+            <Undo2 className="h-4 w-4 mr-2" />
+            Unfinish visit
+          </Button>
+          <Button
+            className="flex-1 bg-[#F97316] hover:bg-[#EA580C]"
+            onClick={() => navigate(`/technician/jobs/${id}/complete`)}
+          >
+            View / resend report
+          </Button>
+        </div>
+      )}
+
+      <Tabs defaultValue="info" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="info">Info</TabsTrigger>
+          <TabsTrigger value="pool" className="gap-1">
+            <Droplets className="h-4 w-4" />
+            Pool
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="info" className="space-y-4 mt-0">
+          {appointment.customer && (
+            <div className="grid grid-cols-2 gap-2">
+              {appointment.customer.phone && (
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-12"
+                  onClick={() => window.open(`tel:${appointment.customer?.phone}`, '_self')}
+                >
+                  <Phone className="h-5 w-5 mr-2" />
+                  Call
+                </Button>
+              )}
+              {appointment.customer.email && (
+                <Button
+                  className="bg-sky-600 hover:bg-sky-700 text-white h-12"
+                  onClick={() => window.open(`mailto:${appointment.customer?.email}`, '_self')}
+                >
+                  <Mail className="h-5 w-5 mr-2" />
+                  Email
+                </Button>
+              )}
+            </div>
           )}
-        </CardContent>
-      </Card>
+
+          {(appointment.customer?.notes || visitReport?.internal_notes) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Access & notes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm whitespace-pre-wrap">
+                {appointment.customer?.notes && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Gate / access: </span>
+                    {appointment.customer.notes}
+                  </div>
+                )}
+                {visitReport?.internal_notes && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Internal: </span>
+                    {visitReport.internal_notes}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
       {/* Location */}
       <Card>
@@ -397,25 +444,6 @@ export default function JobDetails() {
         </Card>
       )}
 
-      {/* Service Checklist */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5" />
-            Service Checklist
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigate(`/technician/jobs/${id}/checklist`)}
-          >
-            Open Checklist →
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* Messages with office */}
       <Card>
         <CardHeader>
@@ -465,35 +493,78 @@ export default function JobDetails() {
         </CardContent>
       </Card>
 
-      {/* Photos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Camera className="h-5 w-5" />
-            Photos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => {/* Photo upload will be handled in complete job */}}
-          >
-            + Add Photo
-          </Button>
-          <div className="text-sm text-muted-foreground mt-2 text-center">
-            (No photos yet)
-          </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      {/* Complete Job Button */}
+        <TabsContent value="pool" className="space-y-4 mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Droplets className="h-4 w-4" />
+                Reading history
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {historyLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              ) : visitHistory.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No completed visits yet.</p>
+              ) : (
+                <ScrollArea className="h-[280px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Readings</TableHead>
+                        <TableHead>Chemicals</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visitHistory.map((visit) => {
+                        const readings = (visit.visit_readings || [])
+                          .map((r: { definition?: { label: string }; value_numeric: number | null; value_text: string | null }) => {
+                            const val = r.value_text ?? (r.value_numeric != null ? String(r.value_numeric) : '');
+                            return r.definition?.label && val ? `${r.definition.label}: ${val}` : null;
+                          })
+                          .filter(Boolean)
+                          .join(', ');
+                        const dosages = (visit.visit_dosages || [])
+                          .map((d: { definition?: { label: string }; amount_display: string | null }) =>
+                            d.definition?.label && d.amount_display
+                              ? `${d.definition.label}: ${d.amount_display}`
+                              : null
+                          )
+                          .filter(Boolean)
+                          .join(', ');
+                        return (
+                          <TableRow key={visit.id}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {visit.scheduled_date}
+                            </TableCell>
+                            <TableCell className="text-xs">{readings || '—'}</TableCell>
+                            <TableCell className="text-xs">{dosages || '—'}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+          {visitReport?.email_status === 'sent' && visitReport.email_sent_at && (
+            <Badge variant="secondary" className="w-full justify-center py-2">
+              Service report sent {formatCompletedAt(visitReport.email_sent_at)}
+            </Badge>
+          )}
+        </TabsContent>
+      </Tabs>
+
       {appointment.status === 'in_progress' && (
         <Button
           className="w-full bg-[#F97316] hover:bg-[#EA580C] h-12 text-lg"
           onClick={() => navigate(`/technician/jobs/${id}/complete`)}
         >
-          ✅ Complete Job
+          Finish visit
         </Button>
       )}
     </div>

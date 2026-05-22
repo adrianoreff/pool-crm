@@ -62,7 +62,7 @@ export default function TechnicianLogin() {
               <Wrench className="h-6 w-6 text-white" />
             </div>
             <span className="text-2xl font-bold text-foreground">
-              TradeFlow
+              Pool CRM
             </span>
           </div>
           <CardTitle className="text-2xl">Technician Portal</CardTitle>

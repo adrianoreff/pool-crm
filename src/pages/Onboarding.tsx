@@ -188,14 +188,14 @@ export default function Onboarding() {
             <div className="bg-primary p-2 rounded-lg">
               <Wrench className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-foreground">TradeFlow</span>
+            <span className="text-2xl font-bold text-foreground">Pool CRM</span>
           </div>
           <CardTitle className="text-2xl">
             {step === 1 ? 'Set up your business' : 'Almost there!'}
           </CardTitle>
           <CardDescription>
             {step === 1 
-              ? "Let's get your business set up in TradeFlow"
+              ? "Let's get your pool service business set up"
               : "Add your details to complete setup"
             }
           </CardDescription>

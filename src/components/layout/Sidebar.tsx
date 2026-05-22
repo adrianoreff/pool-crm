@@ -5,11 +5,14 @@ import {
   LayoutDashboard,
   Calendar,
   ClipboardList,
+  ListChecks,
   Users,
   UserCog,
   Briefcase,
   MapPin,
-  Phone,
+  Route,
+  Map,
+  FlaskConical,
   MessageSquare,
   Receipt,
   BarChart3,
@@ -17,6 +20,7 @@ import {
   Mail,
   ChevronLeft,
   ChevronRight,
+  Waves,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,19 +42,23 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Route Dashboard', href: '/routes/dashboard', icon: Route },
+  { label: 'Routes Map', href: '/routes/map', icon: Map },
   { label: 'Calendar', href: '/calendar', icon: Calendar },
-  { label: 'Appointments', href: '/appointments', icon: ClipboardList },
+  { label: 'Visits', href: '/appointments', icon: ClipboardList },
   { label: 'Customers', href: '/customers', icon: Users },
 ];
 
 const operationsNavItems: NavItem[] = [
+  { label: 'Admin Panel', href: '/admin/panel', icon: ListChecks },
+  { label: 'Route Manager', href: '/routes/manage', icon: MapPin },
   { label: 'Team', href: '/team', icon: UserCog },
-  { label: 'Services', href: '/services', icon: Briefcase },
+  { label: 'Service Types', href: '/services', icon: Briefcase },
   { label: 'Service Areas', href: '/service-areas', icon: MapPin },
+  { label: 'Pool Chemistry', href: '/pool/chemistry', icon: FlaskConical },
 ];
 
 const communicationNavItemsBase: Omit<NavItem, 'badge'>[] = [
-  { label: 'Call Logs', href: '/calls', icon: Phone },
   { label: 'Messages', href: '/messages', icon: MessageSquare },
 ];
 
@@ -168,13 +176,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {business?.logo_url ? (
               <img src={business.logo_url} alt="" className="h-full w-full object-contain" />
             ) : (
-              <Wrench className="h-5 w-5 text-primary-foreground" />
+              <Waves className="h-5 w-5 text-primary-foreground" />
             )}
           </div>
           {!collapsed && (
             <div className="flex flex-col min-w-0">
-              <span className="text-lg font-bold text-sidebar-foreground truncate">{business?.name || 'TradeFlow'}</span>
-              <span className="text-xs text-sidebar-muted">CRM</span>
+              <span className="text-lg font-bold text-sidebar-foreground truncate">{business?.name || 'Pool CRM'}</span>
+              <span className="text-xs text-sidebar-muted">Pool Service</span>
             </div>
           )}
         </div>

@@ -1,15 +1,15 @@
-# Pool CRM (TradeFlow)
+# Pool CRM
 
-Multi-tenant field service CRM for trade businesses—scheduling, customers, technicians, invoicing, email, voice calls, and an embeddable booking widget.
+Pool service operations platform—weekly routes, visit readings/dosages, service report emails, and a technician mobile PWA.
 
-Built with **React**, **TypeScript**, **Vite**, **shadcn/ui**, and **Supabase**.
+Built with **React**, **TypeScript**, **Vite**, **shadcn/ui**, and **Supabase** (`qqhykrjmlaibimuynijp`).
 
 ## Features
 
-- **Office app** — dashboard, calendar, appointments, customers, team, services, service areas (Mapbox), invoices, analytics, settings, email templates
-- **Technician PWA** — jobs, maps, checklists, job completion, office chat, push notifications
-- **Booking widget** — public `/widget/:embedCode` + `widget-loader.js` embed
-- **Integrations** — Resend (email), VAPI (calls), web push (VAPID)
+- **Admin web** — route dashboard, routes map, route manager, pool chemistry settings, customers with assign-to-route, invoices & analytics
+- **Technician PWA** — today’s route (ordered stops), Info/Pool tabs, finish visit wizard (readings → dosages → photo → email), unfinish visit
+- **Routes** — fixed weekly `route_stops`, generate visits RPC, `pool_service_report` emails via Resend
+- **Optional** — shopping list & work orders (Admin Panel), booking widget, voice (VAPI)
 
 ## Quick start
 

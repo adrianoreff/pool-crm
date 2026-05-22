@@ -212,7 +212,7 @@ export function InviteTeamModal({ open, onOpenChange, onSuccess }: InviteTeamMod
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: #F97316; color: white; padding: 20px; text-align: center;">
-              <h1 style="margin: 0;">You've been invited to ${business?.name || 'TradeFlow'}</h1>
+              <h1 style="margin: 0;">You've been invited to ${business?.name || 'Pool CRM'}</h1>
             </div>
             <div style="padding: 20px; background: #fff;">
               <p>Hi there,</p>
@@ -247,7 +247,7 @@ export function InviteTeamModal({ open, onOpenChange, onSuccess }: InviteTeamMod
             type: 'custom_email',
             to: data.email.toLowerCase().trim(),
             toName: data.email.split('@')[0],
-            subject: `Invitation to join ${business?.name || 'TradeFlow'}`,
+            subject: `Invitation to join ${business?.name || 'Pool CRM'}`,
             html: emailHtml,
             businessId: profile.business_id,
             emailType: 'team_invitation',

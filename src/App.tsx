@@ -35,9 +35,15 @@ import JobsList from "./pages/technician/JobsList";
 import JobDetails from "./pages/technician/JobDetails";
 import JobChecklist from "./pages/technician/JobChecklist";
 import CompleteJob from "./pages/technician/CompleteJob";
+import VisitFinish from "./pages/technician/VisitFinish";
 import JobProblem from "./pages/technician/JobProblem";
 import History from "./pages/technician/History";
 import Profile from "./pages/technician/Profile";
+import RoutesDashboard from "./pages/RoutesDashboard";
+import RoutesMap from "./pages/RoutesMap";
+import RouteManager from "./pages/RouteManager";
+import PoolChemistrySettings from "./pages/PoolChemistrySettings";
+import AdminPanel from "./pages/AdminPanel";
 
 const queryClient = new QueryClient();
 
@@ -91,6 +97,11 @@ const App = () => (
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/email-templates" element={<EmailTemplates />} />
+              <Route path="/routes/dashboard" element={<RoutesDashboard />} />
+              <Route path="/routes/map" element={<RoutesMap />} />
+              <Route path="/routes/manage" element={<RouteManager />} />
+              <Route path="/pool/chemistry" element={<PoolChemistrySettings />} />
+              <Route path="/admin/panel" element={<AdminPanel />} />
             </Route>
 
             {/* Technician Routes */}
@@ -106,7 +117,8 @@ const App = () => (
               <Route path="/technician/jobs" element={<JobsList />} />
               <Route path="/technician/jobs/:id" element={<JobDetails />} />
               <Route path="/technician/jobs/:id/checklist" element={<JobChecklist />} />
-              <Route path="/technician/jobs/:id/complete" element={<CompleteJob />} />
+              <Route path="/technician/jobs/:id/complete" element={<VisitFinish />} />
+              <Route path="/technician/jobs/:id/finish" element={<VisitFinish />} />
               <Route path="/technician/jobs/:id/problem" element={<JobProblem />} />
               <Route path="/technician/history" element={<History />} />
               <Route path="/technician/profile" element={<Profile />} />

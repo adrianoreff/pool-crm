@@ -25,7 +25,8 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
           *,
           customer:customers(*),
           service:services(*),
-          technician:users!appointments_technician_id_fkey(id, first_name, last_name, avatar_url, color)
+          technician:users!appointments_technician_id_fkey(id, first_name, last_name, avatar_url, color),
+          route_stop:route_stops(sort_order)
         `)
         .eq('technician_id', technicianId)
         .order('scheduled_date', { ascending: true })
@@ -54,7 +55,16 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
         appointments: data?.map(a => ({ id: a.id, date: a.scheduled_date, status: a.status }))
       });
       
-      return data as AppointmentWithRelations[];
+      const sorted = [...(data || [])].sort((a, b) => {
+        if (a.scheduled_date !== b.scheduled_date) {
+          return a.scheduled_date.localeCompare(b.scheduled_date);
+        }
+        const orderA = (a as { route_stop?: { sort_order: number } | null }).route_stop?.sort_order ?? 9999;
+        const orderB = (b as { route_stop?: { sort_order: number } | null }).route_stop?.sort_order ?? 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.scheduled_start_time.localeCompare(b.scheduled_start_time);
+      });
+      return sorted as AppointmentWithRelations[];
     },
     enabled: !!technicianId,
   });
@@ -62,6 +72,5 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
 
 export function useTodayTechnicianAppointments() {
   const today = getLocalDateString();
-  // Include today and future appointments
-  return useTechnicianAppointments({ dateFrom: today });
+  return useTechnicianAppointments({ dateFrom: today, dateTo: today });
 }

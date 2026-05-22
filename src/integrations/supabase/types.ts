@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -108,6 +133,7 @@ export type Database = {
           appointment_id: string
           caption: string | null
           id: string
+          is_primary: boolean | null
           thumbnail_url: string | null
           uploaded_at: string | null
           uploaded_by: string | null
@@ -117,6 +143,7 @@ export type Database = {
           appointment_id: string
           caption?: string | null
           id?: string
+          is_primary?: boolean | null
           thumbnail_url?: string | null
           uploaded_at?: string | null
           uploaded_by?: string | null
@@ -126,6 +153,7 @@ export type Database = {
           appointment_id?: string
           caption?: string | null
           id?: string
+          is_primary?: boolean | null
           thumbnail_url?: string | null
           uploaded_at?: string | null
           uploaded_by?: string | null
@@ -173,6 +201,7 @@ export type Database = {
           longitude: number | null
           portal_token: string | null
           ref_code: string | null
+          route_stop_id: string | null
           scheduled_date: string
           scheduled_end_time: string
           scheduled_start_time: string
@@ -186,6 +215,7 @@ export type Database = {
           technician_notes: string | null
           time_spent_minutes: number | null
           updated_at: string | null
+          visit_type: string | null
           work_summary: string | null
           zip_code: string | null
         }
@@ -213,6 +243,7 @@ export type Database = {
           longitude?: number | null
           portal_token?: string | null
           ref_code?: string | null
+          route_stop_id?: string | null
           scheduled_date: string
           scheduled_end_time: string
           scheduled_start_time: string
@@ -226,6 +257,7 @@ export type Database = {
           technician_notes?: string | null
           time_spent_minutes?: number | null
           updated_at?: string | null
+          visit_type?: string | null
           work_summary?: string | null
           zip_code?: string | null
         }
@@ -253,6 +285,7 @@ export type Database = {
           longitude?: number | null
           portal_token?: string | null
           ref_code?: string | null
+          route_stop_id?: string | null
           scheduled_date?: string
           scheduled_end_time?: string
           scheduled_start_time?: string
@@ -266,6 +299,7 @@ export type Database = {
           technician_notes?: string | null
           time_spent_minutes?: number | null
           updated_at?: string | null
+          visit_type?: string | null
           work_summary?: string | null
           zip_code?: string | null
         }
@@ -296,6 +330,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_route_stop_id_fkey"
+            columns: ["route_stop_id"]
+            isOneToOne: false
+            referencedRelation: "route_stops"
             referencedColumns: ["id"]
           },
           {
@@ -1442,6 +1483,283 @@ export type Database = {
           },
         ]
       }
+      pool_dosage_definitions: {
+        Row: {
+          business_id: string
+          cost_per_uom: number | null
+          created_at: string | null
+          direction: string | null
+          id: string
+          is_active: boolean | null
+          key: string
+          label: string
+          preset_values: Json | null
+          price_per_uom: number | null
+          sort_order: number
+          unit: string | null
+        }
+        Insert: {
+          business_id: string
+          cost_per_uom?: number | null
+          created_at?: string | null
+          direction?: string | null
+          id?: string
+          is_active?: boolean | null
+          key: string
+          label: string
+          preset_values?: Json | null
+          price_per_uom?: number | null
+          sort_order?: number
+          unit?: string | null
+        }
+        Update: {
+          business_id?: string
+          cost_per_uom?: number | null
+          created_at?: string | null
+          direction?: string | null
+          id?: string
+          is_active?: boolean | null
+          key?: string
+          label?: string
+          preset_values?: Json | null
+          price_per_uom?: number | null
+          sort_order?: number
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_dosage_definitions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pool_profiles: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          customer_id: string
+          equipment_json: Json | null
+          gallons: number | null
+          id: string
+          notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          customer_id: string
+          equipment_json?: Json | null
+          gallons?: number | null
+          id?: string
+          notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          customer_id?: string
+          equipment_json?: Json | null
+          gallons?: number | null
+          id?: string
+          notes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_profiles_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_profiles_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pool_reading_definitions: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          key: string
+          label: string
+          sort_order: number
+          unit: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key: string
+          label: string
+          sort_order?: number
+          unit?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key?: string
+          label?: string
+          sort_order?: number
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_reading_definitions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pool_shopping_items: {
+        Row: {
+          added_by: string | null
+          business_id: string
+          created_at: string | null
+          id: string
+          is_purchased: boolean | null
+          label: string
+          purchased_at: string | null
+        }
+        Insert: {
+          added_by?: string | null
+          business_id: string
+          created_at?: string | null
+          id?: string
+          is_purchased?: boolean | null
+          label: string
+          purchased_at?: string | null
+        }
+        Update: {
+          added_by?: string | null
+          business_id?: string
+          created_at?: string | null
+          id?: string
+          is_purchased?: boolean | null
+          label?: string
+          purchased_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_shopping_items_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_shopping_items_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pool_work_orders: {
+        Row: {
+          appointment_id: string | null
+          assigned_technician_id: string | null
+          business_id: string
+          created_at: string | null
+          created_by: string | null
+          customer_id: string
+          description: string | null
+          id: string
+          labor_cost: number | null
+          price: number | null
+          scheduled_date: string | null
+          status: string
+          title: string
+          updated_at: string | null
+          work_type: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          assigned_technician_id?: string | null
+          business_id: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_id: string
+          description?: string | null
+          id?: string
+          labor_cost?: number | null
+          price?: number | null
+          scheduled_date?: string | null
+          status?: string
+          title: string
+          updated_at?: string | null
+          work_type?: string
+        }
+        Update: {
+          appointment_id?: string | null
+          assigned_technician_id?: string | null
+          business_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: string
+          description?: string | null
+          id?: string
+          labor_cost?: number | null
+          price?: number | null
+          scheduled_date?: string | null
+          status?: string
+          title?: string
+          updated_at?: string | null
+          work_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_work_orders_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_work_orders_assigned_technician_id_fkey"
+            columns: ["assigned_technician_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_work_orders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_work_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_work_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1471,6 +1789,162 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      route_day_stats: {
+        Row: {
+          completed_stops: number | null
+          ended_at: string | null
+          id: string
+          miles_remaining: number | null
+          miles_total: number | null
+          route_id: string
+          skipped_stops: number | null
+          started_at: string | null
+          stats_date: string
+          total_stops: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          completed_stops?: number | null
+          ended_at?: string | null
+          id?: string
+          miles_remaining?: number | null
+          miles_total?: number | null
+          route_id: string
+          skipped_stops?: number | null
+          started_at?: string | null
+          stats_date: string
+          total_stops?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          completed_stops?: number | null
+          ended_at?: string | null
+          id?: string
+          miles_remaining?: number | null
+          miles_total?: number | null
+          route_id?: string
+          skipped_stops?: number | null
+          started_at?: string | null
+          stats_date?: string
+          total_stops?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_day_stats_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_stops: {
+        Row: {
+          address_id: string | null
+          created_at: string | null
+          customer_id: string
+          est_minutes: number | null
+          id: string
+          is_active: boolean | null
+          route_id: string
+          sort_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          address_id?: string | null
+          created_at?: string | null
+          customer_id: string
+          est_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          route_id: string
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Update: {
+          address_id?: string | null
+          created_at?: string | null
+          customer_id?: string
+          est_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          route_id?: string
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "customer_addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routes: {
+        Row: {
+          business_id: string
+          created_at: string | null
+          day_of_week: Database["public"]["Enums"]["day_of_week"]
+          id: string
+          is_active: boolean | null
+          name: string
+          technician_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string | null
+          day_of_week: Database["public"]["Enums"]["day_of_week"]
+          id?: string
+          is_active?: boolean | null
+          name: string
+          technician_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string | null
+          day_of_week?: Database["public"]["Enums"]["day_of_week"]
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          technician_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routes_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routes_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_areas: {
         Row: {
@@ -1888,6 +2362,134 @@ export type Database = {
           },
         ]
       }
+      visit_dosages: {
+        Row: {
+          amount_display: string | null
+          amount_numeric: number | null
+          appointment_id: string
+          created_at: string | null
+          definition_id: string
+          id: string
+        }
+        Insert: {
+          amount_display?: string | null
+          amount_numeric?: number | null
+          appointment_id: string
+          created_at?: string | null
+          definition_id: string
+          id?: string
+        }
+        Update: {
+          amount_display?: string | null
+          amount_numeric?: number | null
+          appointment_id?: string
+          created_at?: string | null
+          definition_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_dosages_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visit_dosages_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "pool_dosage_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_readings: {
+        Row: {
+          appointment_id: string
+          created_at: string | null
+          definition_id: string
+          id: string
+          value_numeric: number | null
+          value_text: string | null
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string | null
+          definition_id: string
+          id?: string
+          value_numeric?: number | null
+          value_text?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string | null
+          definition_id?: string
+          id?: string
+          value_numeric?: number | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_readings_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visit_readings_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "pool_reading_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_reports: {
+        Row: {
+          appointment_id: string
+          created_at: string | null
+          customer_visible_notes: string | null
+          email_sent_at: string | null
+          email_status: string | null
+          email_subject: string | null
+          id: string
+          internal_notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string | null
+          customer_visible_notes?: string | null
+          email_sent_at?: string | null
+          email_status?: string | null
+          email_subject?: string | null
+          id?: string
+          internal_notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string | null
+          customer_visible_notes?: string | null
+          email_sent_at?: string | null
+          email_status?: string | null
+          email_subject?: string | null
+          id?: string
+          internal_notes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_reports_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       widget_analytics: {
         Row: {
           appointment_id: string | null
@@ -2009,6 +2611,18 @@ export type Database = {
         }
         Returns: string
       }
+      generate_all_route_visits_for_date: {
+        Args: { p_business_id: string; p_scheduled_date: string }
+        Returns: number
+      }
+      generate_route_visits: {
+        Args: { p_route_id: string; p_scheduled_date: string }
+        Returns: {
+          appointment_id: string
+          created: boolean
+          customer_id: string
+        }[]
+      }
       get_available_slots: {
         Args: {
           p_business_id: string
@@ -2034,9 +2648,13 @@ export type Database = {
         Returns: boolean
       }
       mark_dm_read: { Args: { p_message_ids: string[] }; Returns: undefined }
+      seed_pool_business_defaults: {
+        Args: { p_business_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      appointment_source: "ai_call" | "widget" | "manual" | "phone"
+      appointment_source: "ai_call" | "widget" | "manual" | "phone" | "route"
       appointment_status:
         | "pending_confirmation"
         | "scheduled"
@@ -2188,9 +2806,12 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
-      appointment_source: ["ai_call", "widget", "manual", "phone"],
+      appointment_source: ["ai_call", "widget", "manual", "phone", "route"],
       appointment_status: [
         "pending_confirmation",
         "scheduled",

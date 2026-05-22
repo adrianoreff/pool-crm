@@ -20,9 +20,9 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "icon-192.png", "icon-512.png"],
       manifest: {
-        name: "TradeFlow CRM",
-        short_name: "TradeFlow",
-        description: "Field Service Management CRM",
+        name: "Pool CRM",
+        short_name: "Pool CRM",
+        description: "Pool service routing, visits, and customer reports",
         theme_color: "#F97316",
         background_color: "#FFFFFF",
         display: "standalone",

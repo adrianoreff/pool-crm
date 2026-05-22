@@ -14,9 +14,21 @@ export function usePhotoUpload() {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
 
+  const setPrimaryPhoto = async (appointmentId: string, photoId: string) => {
+    await supabase
+      .from('appointment_photos')
+      .update({ is_primary: false })
+      .eq('appointment_id', appointmentId);
+    await supabase
+      .from('appointment_photos')
+      .update({ is_primary: true })
+      .eq('id', photoId);
+  };
+
   const uploadPhoto = async (
     file: File,
-    appointmentId: string
+    appointmentId: string,
+    options?: { setAsPrimary?: boolean }
   ): Promise<PhotoUploadResult | null> => {
     setIsUploading(true);
     try {
@@ -52,7 +64,13 @@ export function usePhotoUpload() {
       // Create thumbnail (simplified - in production, generate actual thumbnail)
       const thumbnailUrl = publicUrl;
 
-      // Insert record in appointment_photos table
+      if (options?.setAsPrimary) {
+        await supabase
+          .from('appointment_photos')
+          .update({ is_primary: false })
+          .eq('appointment_id', appointmentId);
+      }
+
       const { data: photoRecord, error: insertError } = await supabase
         .from('appointment_photos')
         .insert({
@@ -60,6 +78,7 @@ export function usePhotoUpload() {
           url: publicUrl,
           thumbnail_url: thumbnailUrl,
           uploaded_by: profile?.id,
+          is_primary: options?.setAsPrimary ?? false,
         })
         .select()
         .single();
@@ -86,7 +105,7 @@ export function usePhotoUpload() {
     }
   };
 
-  return { uploadPhoto, isUploading };
+  return { uploadPhoto, setPrimaryPhoto, isUploading };
 }
 
 // Basic image compression using canvas

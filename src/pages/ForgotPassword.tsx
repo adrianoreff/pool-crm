@@ -73,7 +73,7 @@ export default function ForgotPassword() {
             <div className="bg-primary p-2 rounded-lg">
               <Wrench className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-foreground">TradeFlow</span>
+            <span className="text-2xl font-bold text-foreground">Pool CRM</span>
           </div>
           <CardTitle className="text-2xl">Reset your password</CardTitle>
           <CardDescription>

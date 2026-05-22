@@ -40,12 +40,9 @@ const categorySchema = z.object({
 type CategoryFormData = z.infer<typeof categorySchema>;
 
 const icons = [
-  { name: 'Droplets', label: 'Plumbing' },
-  { name: 'Zap', label: 'Electrical' },
-  { name: 'Thermometer', label: 'HVAC' },
-  { name: 'Home', label: 'Roofing' },
-  { name: 'Waves', label: 'Pool' },
-  { name: 'Wrench', label: 'General' },
+  { name: 'Waves', label: 'Pool Cleaning' },
+  { name: 'Droplets', label: 'Chemicals' },
+  { name: 'Wrench', label: 'Equipment Repair' },
 ];
 
 const colors = [
