@@ -301,14 +301,21 @@ AS $$
 BEGIN
   INSERT INTO public.service_categories (business_id, name, slug, icon, color, sort_order)
   VALUES (p_business_id, 'Pool Service', 'pool', 'Waves', '#0EA5E9', 0)
-  ON CONFLICT DO NOTHING;
+  ON CONFLICT (business_id, slug) DO NOTHING;
 
-  INSERT INTO public.services (business_id, name, description, duration_minutes, price, is_active, category_id)
-  SELECT p_business_id, 'Weekly Pool Service', 'Regular weekly pool cleaning and chemical balance',
-    30, 0, true, sc.id
+  INSERT INTO public.services (
+    business_id, name, description, duration_min, duration_max,
+    base_price_min, base_price_max, is_active, category_id
+  )
+  SELECT
+    p_business_id, 'Weekly Pool Service', 'Regular weekly pool cleaning and chemical balance',
+    30, 30, 0, 0, true, sc.id
   FROM public.service_categories sc
   WHERE sc.business_id = p_business_id AND sc.slug = 'pool'
-  ON CONFLICT DO NOTHING;
+    AND NOT EXISTS (
+      SELECT 1 FROM public.services s
+      WHERE s.business_id = p_business_id AND s.name = 'Weekly Pool Service'
+    );
 
   INSERT INTO public.pool_reading_definitions (business_id, key, label, unit, sort_order) VALUES
     (p_business_id, 'free_chlorine', 'Free Chlorine', 'ppm', 0),
