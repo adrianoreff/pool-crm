@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
-  Plus, 
+  Plus,
+  Upload,
   MoreHorizontal,
   Phone,
   Mail,
@@ -46,7 +47,7 @@ import { cn, formatAppointmentDate } from '@/lib/utils';
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers';
 import { useCustomersLatestEmailStatus } from '@/hooks/useLatestEmailStatus';
 import { CustomerWithAddresses } from '@/types/database';
-import { AddCustomerModal, EditCustomerModal, SendEmailModal } from '@/components/modals';
+import { AddCustomerModal, EditCustomerModal, SendEmailModal, ImportCustomersModal } from '@/components/modals';
 import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 
 const formatCurrency = (amount: number | null) => {
@@ -70,6 +71,7 @@ export default function Customers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'appointments' | 'spent'>('name');
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<CustomerWithAddresses | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -130,10 +132,16 @@ export default function Customers() {
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
           <p className="text-muted-foreground">{customers.length} customers in your database</p>
         </div>
-        <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsAddCustomerOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add Customer
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setIsImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button className="gap-2 bg-primary hover:bg-primary-hover" onClick={() => setIsAddCustomerOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
       {/* Search & Filter */}
@@ -332,6 +340,7 @@ export default function Customers() {
         open={isAddCustomerOpen} 
         onOpenChange={setIsAddCustomerOpen} 
       />
+      <ImportCustomersModal open={isImportOpen} onOpenChange={setIsImportOpen} />
       <EditCustomerModal
         open={isEditCustomerOpen}
         onOpenChange={setIsEditCustomerOpen}

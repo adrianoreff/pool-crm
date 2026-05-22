@@ -1,4 +1,5 @@
 export { AddCustomerModal } from './AddCustomerModal';
+export { ImportCustomersModal } from './ImportCustomersModal';
 export { NewAppointmentModal } from './NewAppointmentModal';
 export { InviteTeamModal } from './InviteTeamModal';
 export { AddServiceModal } from './AddServiceModal';
