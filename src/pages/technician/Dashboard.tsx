@@ -11,11 +11,10 @@ import { useBusiness } from '@/hooks/useBusiness';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MapPin, Clock, Wrench, Navigation, Play } from 'lucide-react';
+import { MapPin, Clock, Wrench, Navigation, Play, ChevronRight } from 'lucide-react';
 import { formatAppointmentDateLong, getLocalDateString } from '@/lib/utils';
 import { TechnicianJobsMap } from '@/components/technician/TechnicianJobsMap';
 import { EnablePushBanner } from '@/components/technician/EnablePushBanner';
-import { TechnicianStopList } from '@/components/technician/TechnicianStopList';
 
 function formatTimeShort(time: string) {
   const [hours, minutes] = time.split(':');
@@ -187,9 +186,19 @@ export default function TechnicianDashboard() {
         </TabsList>
 
         <TabsContent value="today" className="space-y-6 mt-4">
-          <p className="text-sm text-muted-foreground">
-            {formatAppointmentDateLong(today)}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">{formatAppointmentDateLong(today)}</p>
+            {todaySchedule.length > 0 && (
+              <Button
+                size="sm"
+                className="bg-[#F97316] hover:bg-[#EA580C] shrink-0"
+                onClick={() => navigate(`/technician/route/${today}`)}
+              >
+                Open route
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            )}
+          </div>
 
           <TechnicianJobsMap
             appointments={todayAppointments}
@@ -243,17 +252,22 @@ export default function TechnicianDashboard() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Today&apos;s stops</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <TechnicianStopList
-                stops={todaySchedule}
-                emptyMessage="No pools on your route today. Check Upcoming or ask the office to generate stops."
-              />
-            </CardContent>
-          </Card>
+          {todaySchedule.length > 0 ? (
+            <Button
+              variant="outline"
+              className="w-full h-12"
+              onClick={() => navigate(`/technician/route/${today}`)}
+            >
+              View full route ({todaySchedule.length} stops)
+              <ChevronRight className="h-4 w-4 ml-2" />
+            </Button>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No pools on your route today. Check Upcoming or ask the office to generate stops.
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="upcoming" className="space-y-4 mt-4">
@@ -269,14 +283,22 @@ export default function TechnicianDashboard() {
             </Card>
           ) : (
             upcomingByDate.map(({ date, stops }) => (
-              <Card key={date}>
+              <Card
+                key={date}
+                className="cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => navigate(`/technician/route/${date}`)}
+              >
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{formatAppointmentDateLong(date)}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{stops.length} pool{stops.length === 1 ? '' : 's'}</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">{formatAppointmentDateLong(date)}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {stops.length} pool{stops.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <TechnicianStopList stops={stops} />
-                </CardContent>
               </Card>
             ))
           )}

@@ -31,6 +31,7 @@ import BookingWidget from "./pages/BookingWidget";
 import NotFound from "./pages/NotFound";
 import TechnicianLogin from "./pages/technician/Login";
 import TechnicianDashboard from "./pages/technician/Dashboard";
+import RouteDay from "./pages/technician/RouteDay";
 import JobsList from "./pages/technician/JobsList";
 import JobDetails from "./pages/technician/JobDetails";
 import JobChecklist from "./pages/technician/JobChecklist";
@@ -114,6 +115,7 @@ const App = () => (
               }
             >
               <Route path="/technician/dashboard" element={<TechnicianDashboard />} />
+              <Route path="/technician/route/:date" element={<RouteDay />} />
               <Route path="/technician/jobs" element={<JobsList />} />
               <Route path="/technician/jobs/:id" element={<JobDetails />} />
               <Route path="/technician/jobs/:id/checklist" element={<JobChecklist />} />

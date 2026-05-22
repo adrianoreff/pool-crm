@@ -26,7 +26,7 @@ export function useTechnicianAppointments(filters?: TechnicianAppointmentFilters
           customer:customers(*),
           service:services(*),
           technician:users!appointments_technician_id_fkey(id, first_name, last_name, avatar_url, color),
-          route_stop:route_stops(sort_order)
+          route_stop:route_stops(sort_order, est_minutes)
         `)
         .eq('technician_id', technicianId)
         .order('scheduled_date', { ascending: true })

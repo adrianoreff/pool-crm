@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,8 @@ function getInitials(firstName: string | null, lastName: string | null) {
 export function TechnicianLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isRouteDayPage = /^\/technician\/route\/[^/]+$/.test(location.pathname);
 
   const handleLogout = async () => {
     await signOut();
@@ -31,7 +33,7 @@ export function TechnicianLayout() {
   return (
     <NotificationProvider>
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
+      {!isRouteDayPage && (
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
@@ -120,9 +122,16 @@ export function TechnicianLayout() {
           </DropdownMenu>
         </div>
       </header>
+      )}
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 py-6 pb-24">
+      <main
+        className={
+          isRouteDayPage
+            ? 'flex-1 w-full max-w-none p-0 pb-24'
+            : 'flex-1 container mx-auto px-4 py-6 pb-24'
+        }
+      >
         <Outlet />
       </main>
 

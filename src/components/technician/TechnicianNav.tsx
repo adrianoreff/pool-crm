@@ -30,7 +30,11 @@ export function TechnicianNav() {
         <div className="flex items-center justify-around h-16">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path || 
+            const isActive =
+              location.pathname === item.path ||
+              (item.path === '/technician/dashboard' &&
+                (location.pathname === '/technician/dashboard' ||
+                  location.pathname.startsWith('/technician/route/'))) ||
               (item.path !== '/technician/dashboard' && location.pathname.startsWith(item.path));
             
             return (

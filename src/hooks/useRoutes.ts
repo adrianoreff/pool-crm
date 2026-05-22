@@ -171,7 +171,10 @@ export function useRemoveRouteStop() {
         .eq('id', stopId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['routes'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
+    },
   });
 }
 
@@ -186,6 +189,9 @@ export function useReorderRouteStops() {
         )
       );
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['routes'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
+    },
   });
 }
