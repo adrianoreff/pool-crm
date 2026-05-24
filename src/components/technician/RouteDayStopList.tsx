@@ -52,15 +52,22 @@ function SortableRow({
       className={cn(
         'flex items-stretch border-b border-slate-200/80 bg-white',
         index % 2 === 1 && 'bg-slate-50/80',
-        isDragging && 'opacity-90 shadow-lg z-10',
-        completed && 'opacity-70'
+        isDragging && 'opacity-90 shadow-lg z-10'
       )}
     >
-      <div className="flex w-14 shrink-0 flex-col items-center justify-center bg-[#F97316] text-white">
+      <div
+        className={cn(
+          'flex w-14 shrink-0 flex-col items-center justify-center transition-colors',
+          completed ? 'bg-[#F97316] text-white' : 'bg-slate-200 text-slate-600'
+        )}
+      >
         {stop.canReorder ? (
           <button
             type="button"
-            className="touch-none p-1 mb-0.5 text-white/80 hover:text-white"
+            className={cn(
+              'touch-none p-1 mb-0.5',
+              completed ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-slate-600'
+            )}
             {...attributes}
             {...listeners}
             aria-label="Drag to reorder"
