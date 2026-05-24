@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AddressAutocomplete, AddressResult } from '@/components/ui/address-autocomplete';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, KeyRound, Dog } from 'lucide-react';
 import { CustomerWithAddresses } from '@/types/database';
 import { useUpdateCustomer } from '@/hooks/useCustomers';
 
@@ -32,6 +32,8 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
     city: '',
     state: '',
     zip_code: '',
+    gate_code: '',
+    dog_name: '',
   });
 
   const updateCustomer = useUpdateCustomer();
@@ -48,6 +50,8 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
         city: customer.city || '',
         state: customer.state || '',
         zip_code: customer.zip_code || '',
+        gate_code: customer.gate_code || '',
+        dog_name: customer.dog_name || '',
       });
     }
   }, [customer]);
@@ -57,7 +61,12 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
     if (!customer) return;
 
     updateCustomer.mutate(
-      { id: customer.id, ...formData },
+      {
+        id: customer.id,
+        ...formData,
+        gate_code: formData.gate_code.trim() || null,
+        dog_name: formData.dog_name.trim() || null,
+      },
       {
         onSuccess: () => {
           onOpenChange(false);
@@ -163,6 +172,33 @@ export function EditCustomerModal({ open, onOpenChange, customer }: EditCustomer
                 value={formData.zip_code}
                 onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
                 placeholder="92101"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="gate_code" className="flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5" />
+                Gate code
+              </Label>
+              <Input
+                id="gate_code"
+                value={formData.gate_code}
+                onChange={(e) => setFormData({ ...formData, gate_code: e.target.value })}
+                placeholder="#1234 or access notes"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dog_name" className="flex items-center gap-1.5">
+                <Dog className="h-3.5 w-3.5" />
+                Dog&apos;s name
+              </Label>
+              <Input
+                id="dog_name"
+                value={formData.dog_name}
+                onChange={(e) => setFormData({ ...formData, dog_name: e.target.value })}
+                placeholder="e.g. Max"
               />
             </div>
           </div>

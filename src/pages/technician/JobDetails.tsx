@@ -343,15 +343,30 @@ export default function JobDetails() {
             </div>
           )}
 
-          {(appointment.customer?.notes || visitReport?.internal_notes) && (
+          {(appointment.customer?.gate_code ||
+            appointment.customer?.dog_name ||
+            appointment.customer?.notes ||
+            visitReport?.internal_notes) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Access & notes</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm whitespace-pre-wrap">
+                {appointment.customer?.gate_code && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Gate code: </span>
+                    {appointment.customer.gate_code}
+                  </div>
+                )}
+                {appointment.customer?.dog_name && (
+                  <div>
+                    <span className="font-medium text-muted-foreground">Dog&apos;s name: </span>
+                    {appointment.customer.dog_name}
+                  </div>
+                )}
                 {appointment.customer?.notes && (
                   <div>
-                    <span className="font-medium text-muted-foreground">Gate / access: </span>
+                    <span className="font-medium text-muted-foreground">Notes: </span>
                     {appointment.customer.notes}
                   </div>
                 )}

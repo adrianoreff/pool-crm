@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -13,9 +13,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -43,8 +42,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn, formatAppointmentDate } from '@/lib/utils';
+import { formatAppointmentDate } from '@/lib/utils';
+import {
+  matchesCustomerStatusFilter,
+  getCustomerDisplayStatus,
+  CUSTOMER_STATUS_LABELS,
+  type CustomerStatusFilter,
+} from '@/lib/customer-status';
+import { cn } from '@/lib/utils';
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useCustomersLatestEmailStatus } from '@/hooks/useLatestEmailStatus';
 import { CustomerWithAddresses } from '@/types/database';
 import { AddCustomerModal, EditCustomerModal, SendEmailModal, ImportCustomersModal } from '@/components/modals';
@@ -69,7 +83,7 @@ const getInitials = (firstName: string, lastName: string | null) => {
 export default function Customers() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'name' | 'date' | 'appointments' | 'spent'>('name');
+  const [statusFilter, setStatusFilter] = useState<CustomerStatusFilter>('all');
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
@@ -79,11 +93,15 @@ export default function Customers() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailRecipient, setEmailRecipient] = useState<{ id: string; name: string; email: string } | null>(null);
 
-  const { data: customers = [], isLoading } = useCustomers({
+  const { data: allCustomers = [], isLoading } = useCustomers({
     search: searchQuery,
-    sortBy,
   });
   const deleteCustomer = useDeleteCustomer();
+
+  const customers = useMemo(
+    () => allCustomers.filter((c) => matchesCustomerStatusFilter(c, statusFilter)),
+    [allCustomers, statusFilter]
+  );
 
   // Get customer IDs for email status lookup
   const customerIds = customers.map(c => c.id);
@@ -159,21 +177,24 @@ export default function Customers() {
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Sort by:</span>
-              <div className="flex rounded-lg border p-1">
-                {(['name', 'date', 'appointments', 'spent'] as const).map((option) => (
-                  <Button
-                    key={option}
-                    variant={sortBy === option ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setSortBy(option)}
-                    className="capitalize text-xs"
-                  >
-                    {option === 'spent' ? 'Total Spent' : option}
-                  </Button>
-                ))}
-              </div>
+            <div className="w-full sm:w-56">
+              <Label htmlFor="customer-status-filter" className="sr-only">
+                Status
+              </Label>
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as CustomerStatusFilter)}
+              >
+                <SelectTrigger id="customer-status-filter" className="w-full">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Active Customers</SelectItem>
+                  <SelectItem value="inactive">Inactive Customers</SelectItem>
+                  <SelectItem value="lead">Lead Customers</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -188,7 +209,7 @@ export default function Customers() {
                 <TableHead>Customer</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead className="hidden md:table-cell">Address</TableHead>
-                <TableHead className="text-center hidden sm:table-cell">Appointments</TableHead>
+                <TableHead className="hidden sm:table-cell">Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Last Service</TableHead>
                 <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead className="text-right hidden sm:table-cell">Total Spent</TableHead>
@@ -270,8 +291,22 @@ export default function Customers() {
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-center hidden sm:table-cell">
-                        <Badge variant="secondary">{customer.total_appointments || 0}</Badge>
+                      <TableCell className="hidden sm:table-cell">
+                        {(() => {
+                          const status = getCustomerDisplayStatus(customer);
+                          return (
+                            <span
+                              className={cn(
+                                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                status === 'active' && 'bg-emerald-100 text-emerald-800',
+                                status === 'inactive' && 'bg-slate-100 text-slate-600',
+                                status === 'lead' && 'bg-amber-100 text-amber-800'
+                              )}
+                            >
+                              {CUSTOMER_STATUS_LABELS[status]}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <span className="text-sm text-muted-foreground">

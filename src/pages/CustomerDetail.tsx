@@ -10,6 +10,8 @@ import {
   Clock,
   FileText,
   ArrowLeft,
+  KeyRound,
+  Dog,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +38,15 @@ const formatCurrency = (amount: number | null) => {
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return 'Never';
-  return formatAppointmentDate(dateStr);
+  const datePart = dateStr.includes('T') ? dateStr.split('T')[0]! : dateStr.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+  return formatAppointmentDate(datePart);
 };
 
 const getInitials = (firstName: string, lastName: string | null) => {
@@ -229,14 +239,14 @@ export default function CustomerDetail() {
             </Card>
           </div>
 
-          {/* Address - Direct from customer record */}
-          {(customer.address || customer.city || customer.state || customer.zip_code) && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Primary Address</h3>
-              <Card className="shadow-card">
-                <CardContent className="p-4">
+          {/* Primary address + gate / dog */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Primary Address</h3>
+            <Card className="shadow-card">
+              <CardContent className="p-4 space-y-4">
+                {(customer.address || customer.city || customer.state || customer.zip_code) ? (
                   <div className="flex items-start gap-3">
-                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div>
                       {customer.address && <p className="font-medium">{customer.address}</p>}
                       <p className="text-sm text-muted-foreground">
@@ -244,10 +254,49 @@ export default function CustomerDetail() {
                       </p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+                ) : (
+                  <p className="text-sm text-muted-foreground">No street address on file</p>
+                )}
+
+                {(customer.gate_code || customer.dog_name) && <Separator />}
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex items-start gap-3">
+                    <KeyRound className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Gate code
+                      </p>
+                      <p className="text-sm font-medium mt-0.5">
+                        {customer.gate_code || (
+                          <span className="text-muted-foreground font-normal">Not set</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Dog className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Dog&apos;s name
+                      </p>
+                      <p className="text-sm font-medium mt-0.5">
+                        {customer.dog_name || (
+                          <span className="text-muted-foreground font-normal">Not set</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {!customer.gate_code && !customer.dog_name && (
+                  <p className="text-xs text-muted-foreground">
+                    Use Edit to add gate code or dog information for technicians.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Additional Addresses - From customer_addresses table */}
           {customer.customer_addresses && customer.customer_addresses.length > 0 && (

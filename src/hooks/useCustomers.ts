@@ -162,6 +162,12 @@ export function useUpdateCustomer() {
       phone: string;
       email: string;
       notes: string;
+      address: string;
+      city: string;
+      state: string;
+      zip_code: string;
+      gate_code: string | null;
+      dog_name: string | null;
     }>) => {
       const { error } = await supabase
         .from('customers')

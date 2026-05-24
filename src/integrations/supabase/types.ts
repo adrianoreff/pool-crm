@@ -721,6 +721,8 @@ export type Database = {
           created_at: string | null
           email: string | null
           first_name: string
+          gate_code: string | null
+          dog_name: string | null
           id: string
           is_active: boolean | null
           last_appointment_at: string | null
@@ -745,6 +747,8 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           first_name: string
+          gate_code?: string | null
+          dog_name?: string | null
           id?: string
           is_active?: boolean | null
           last_appointment_at?: string | null
@@ -769,6 +773,8 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           first_name?: string
+          gate_code?: string | null
+          dog_name?: string | null
           id?: string
           is_active?: boolean | null
           last_appointment_at?: string | null
