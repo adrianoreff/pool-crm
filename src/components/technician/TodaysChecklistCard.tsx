@@ -26,8 +26,8 @@ export function TodaysChecklistCard({
     <Card className="border shadow-sm">
       <CardHeader className="pb-0 pt-4 px-4">
         <div className="flex items-start justify-between gap-2 flex-wrap">
-          <CardTitle className="text-base font-semibold text-sky-700">Today&apos;s Checklist</CardTitle>
-          <span className="text-xs text-sky-600/90">(Swipe right to complete or undo)</span>
+          <CardTitle className="text-base font-semibold text-[#F97316]">Today&apos;s Checklist</CardTitle>
+          <span className="text-xs text-muted-foreground">(Swipe right to complete or undo)</span>
         </div>
       </CardHeader>
       <CardContent className="p-0 pb-1">

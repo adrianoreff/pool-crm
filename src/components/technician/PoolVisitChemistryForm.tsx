@@ -226,14 +226,14 @@ export function PoolVisitChemistryForm({
   return (
     <div className={cn('space-y-4', className)}>
       <Card className="border shadow-sm overflow-hidden">
-        <CardHeader className="pb-0 pt-3 px-4 bg-sky-600 text-white rounded-t-lg">
+        <CardHeader className="pb-0 pt-3 px-4 bg-[#F97316] text-white rounded-t-lg">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base font-semibold text-white">Readings</CardTitle>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="text-white hover:bg-sky-500 hover:text-white h-8 px-2"
+              className="text-white hover:bg-[#EA580C] hover:text-white h-8 px-2"
               onClick={() => setExpandedReadings((v) => !v)}
             >
               {expandedReadings ? (
@@ -276,14 +276,14 @@ export function PoolVisitChemistryForm({
       </Card>
 
       <Card className="border shadow-sm overflow-hidden">
-        <CardHeader className="pb-0 pt-3 px-4 bg-sky-600 text-white rounded-t-lg">
+        <CardHeader className="pb-0 pt-3 px-4 bg-[#F97316] text-white rounded-t-lg">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base font-semibold text-white">Dosages</CardTitle>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="text-white hover:bg-sky-500 hover:text-white h-8 px-2"
+              className="text-white hover:bg-[#EA580C] hover:text-white h-8 px-2"
               onClick={() => setExpandedDosages((v) => !v)}
             >
               {expandedDosages ? (

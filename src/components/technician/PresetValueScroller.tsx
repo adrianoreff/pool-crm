@@ -16,7 +16,7 @@ export function PresetValueScroller({ presets, onSelect, disabled }: PresetValue
   return (
     <div
       className={cn(
-        'flex gap-6 overflow-x-auto py-2 px-1 scroll-smooth snap-x snap-mandatory',
+        'flex gap-4 overflow-x-auto py-1.5 px-1 scroll-smooth snap-x snap-mandatory',
         '[-webkit-overflow-scrolling:touch]'
       )}
     >
@@ -27,8 +27,8 @@ export function PresetValueScroller({ presets, onSelect, disabled }: PresetValue
           disabled={disabled}
           onClick={() => onSelect(p)}
           className={cn(
-            'shrink-0 snap-start text-3xl font-semibold text-sky-600',
-            'min-w-[2rem] px-1 active:opacity-70 disabled:opacity-50'
+            'shrink-0 snap-start text-xl font-semibold text-[#F97316]',
+            'min-w-[1.75rem] px-1 active:opacity-70 disabled:opacity-50'
           )}
         >
           {p}

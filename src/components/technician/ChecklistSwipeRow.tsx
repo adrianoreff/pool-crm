@@ -1,8 +1,8 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 
 const SWIPE_THRESHOLD = 56;
-const MAX_OFFSET = 100;
+const MAX_OFFSET = 88;
 
 interface ChecklistSwipeRowProps {
   label: string;
@@ -21,14 +21,11 @@ export function ChecklistSwipeRow({
 }: ChecklistSwipeRowProps) {
   const startX = useRef(0);
   const startOffset = useRef(0);
-  const [offset, setOffset] = useState(completed ? MAX_OFFSET : 0);
+  const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  useEffect(() => {
-    setOffset(completed ? MAX_OFFSET : 0);
-  }, [completed]);
-
-  const clamp = (value: number) => Math.max(0, Math.min(MAX_OFFSET, value));
+  const clampRight = (value: number) => Math.max(0, Math.min(MAX_OFFSET, value));
+  const clampLeft = (value: number) => Math.max(-MAX_OFFSET, Math.min(0, value));
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (disabled) return;
@@ -41,7 +38,11 @@ export function ChecklistSwipeRow({
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging || disabled) return;
     const delta = e.clientX - startX.current;
-    setOffset(clamp(startOffset.current + delta));
+    if (completed) {
+      setOffset(clampLeft(startOffset.current + delta));
+    } else {
+      setOffset(clampRight(startOffset.current + delta));
+    }
   };
 
   const finishDrag = useCallback(() => {
@@ -49,44 +50,60 @@ export function ChecklistSwipeRow({
     setDragging(false);
 
     if (!completed && offset >= SWIPE_THRESHOLD) {
-      setOffset(MAX_OFFSET);
+      setOffset(0);
       onToggle(true);
       return;
     }
-    if (completed && offset <= MAX_OFFSET - SWIPE_THRESHOLD) {
+    if (completed && offset <= -SWIPE_THRESHOLD) {
       setOffset(0);
       onToggle(false);
       return;
     }
-    setOffset(completed ? MAX_OFFSET : 0);
+    setOffset(0);
   }, [dragging, offset, completed, onToggle]);
+
+  const draggingRight = !completed && dragging && offset > 0;
+  const draggingLeft = completed && dragging && offset < 0;
 
   return (
     <div className="relative overflow-hidden border-b border-border/60 last:border-b-0 select-none touch-pan-y">
-      <div
-        className={cn(
-          'absolute inset-0 flex items-center justify-end px-4 text-sm',
-          completed ? 'bg-muted/80' : 'bg-emerald-500/85 text-white'
-        )}
-        aria-hidden
-      >
-        {completed ? 'Swipe left to undo' : 'Complete'}
-      </div>
+      {draggingRight && (
+        <div
+          className="absolute inset-y-0 left-0 flex items-center bg-[#F97316] px-4 text-sm font-medium text-white"
+          style={{ width: offset }}
+          aria-hidden
+        >
+          {offset >= SWIPE_THRESHOLD && <span className="whitespace-nowrap pl-1">Complete</span>}
+        </div>
+      )}
+
+      {draggingLeft && (
+        <div
+          className="absolute inset-y-0 right-0 flex items-center justify-end bg-muted px-4 text-sm text-muted-foreground"
+          style={{ width: Math.abs(offset) }}
+          aria-hidden
+        >
+          {Math.abs(offset) >= SWIPE_THRESHOLD && <span className="whitespace-nowrap pr-1">Undo</span>}
+        </div>
+      )}
 
       <div
         className={cn(
-          'relative z-10 flex items-center gap-3 bg-background py-3.5 px-3',
+          'relative z-10 flex w-full items-center gap-3 bg-background py-3.5 px-3',
           !dragging && 'transition-transform duration-200 ease-out',
-          completed && 'opacity-75'
+          completed && 'opacity-80'
         )}
-        style={{ transform: `translateX(${offset}px)` }}
+        style={offset !== 0 ? { transform: `translateX(${offset}px)` } : undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
       >
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-500"
+          className={cn(
+            'h-2.5 w-2.5 shrink-0 rounded-full',
+            completed ? 'bg-[#F97316]' : 'bg-muted-foreground/35'
+          )}
           aria-hidden
         />
         <span className={cn('flex-1 font-semibold text-sm text-foreground', completed && 'line-through')}>
@@ -94,6 +111,8 @@ export function ChecklistSwipeRow({
         </span>
         {!completed && statusLabel ? (
           <span className="text-sm text-muted-foreground shrink-0">{statusLabel}</span>
+        ) : completed ? (
+          <span className="text-xs text-muted-foreground shrink-0">Swipe ← undo</span>
         ) : null}
       </div>
     </div>

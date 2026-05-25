@@ -33,7 +33,7 @@ export function ChemistryDefinitionRow({
     <div
       className={cn(
         'border-b border-border/60 last:border-b-0 py-3 px-3',
-        isActive && 'bg-sky-50/50'
+        isActive && 'bg-orange-50/60'
       )}
     >
       <div className="flex items-center justify-between gap-2 min-h-[28px]">
@@ -51,7 +51,7 @@ export function ChemistryDefinitionRow({
 
         {hasValue ? (
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-sky-600 font-semibold text-sm">
+            <span className="text-[#F97316] font-semibold text-sm">
               {value}
               {unit ? ` ${unit}` : ''}
             </span>
@@ -59,7 +59,7 @@ export function ChemistryDefinitionRow({
               <button
                 type="button"
                 onClick={onClear}
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-600 text-white"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F97316] text-white hover:bg-[#EA580C]"
                 aria-label="Clear value"
               >
                 <X className="h-3.5 w-3.5" />
