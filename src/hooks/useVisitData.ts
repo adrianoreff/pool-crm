@@ -79,8 +79,11 @@ export function useSaveVisitData() {
       readings: { definition_id: string; value_numeric?: number | null; value_text?: string | null }[];
       dosages: { definition_id: string; amount_numeric?: number | null; amount_display?: string | null }[];
       internalNotes?: string;
+      emailSubject?: string;
+      emailMessage?: string;
     }) => {
-      const { appointmentId, readings, dosages, internalNotes } = payload;
+      const { appointmentId, readings, dosages, internalNotes, emailSubject, emailMessage } =
+        payload;
 
       if (readings.length) {
         const { error } = await supabase.from('visit_readings').upsert(
@@ -108,11 +111,18 @@ export function useSaveVisitData() {
         if (error) throw error;
       }
 
-      if (internalNotes !== undefined) {
-        const { error } = await supabase.from('visit_reports').upsert({
-          appointment_id: appointmentId,
-          internal_notes: internalNotes,
-        }, { onConflict: 'appointment_id' });
+      if (
+        internalNotes !== undefined ||
+        emailSubject !== undefined ||
+        emailMessage !== undefined
+      ) {
+        const reportPatch: Record<string, unknown> = { appointment_id: appointmentId };
+        if (internalNotes !== undefined) reportPatch.internal_notes = internalNotes;
+        if (emailSubject !== undefined) reportPatch.email_subject = emailSubject;
+        if (emailMessage !== undefined) reportPatch.email_message = emailMessage;
+        const { error } = await supabase
+          .from('visit_reports')
+          .upsert(reportPatch, { onConflict: 'appointment_id' });
         if (error) throw error;
       }
     },
@@ -134,6 +144,7 @@ export function useCompletePoolVisit() {
       customerEmail: string;
       customerName: string;
       photoUrl?: string;
+      extraPhotoUrl?: string;
       readings: { label: string; value: string; unit?: string | null }[];
       dosages: { label: string; amount: string }[];
       emailSubject?: string;
@@ -168,10 +179,13 @@ export function useCompletePoolVisit() {
         businessName: business?.name || 'Pool CRM',
         businessPhone: business?.phone || '',
         photoUrl: payload.photoUrl,
+        extraPhotoUrl: payload.extraPhotoUrl,
         readings: payload.readings,
         dosages: payload.dosages,
         subject,
-        bodyMessage: payload.emailBody || 'Thanks for choosing us to keep your pool looking great!',
+        bodyMessage:
+          payload.emailBody || 'Thanks for choosing us to keep your pool looking great!',
+        emailHeader: subject.replace(/\s*-\s*[^-]+$/, '').trim() || subject,
       });
 
       const { error: emailError } = await supabase.functions.invoke('send-notification', {

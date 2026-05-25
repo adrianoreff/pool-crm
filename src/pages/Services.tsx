@@ -16,6 +16,7 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { ServiceChecklistManager } from '@/components/services/ServiceChecklistManager';
+import { WeeklyPoolChecklistSection } from '@/components/services/WeeklyPoolChecklistSection';
 import { ReadingsManager } from '@/components/services/ReadingsManager';
 import { DosagesManager } from '@/components/services/DosagesManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -361,6 +362,7 @@ export default function Services() {
         </TabsList>
 
         <TabsContent value="services" className="space-y-6 mt-6">
+          <WeeklyPoolChecklistSection />
           {serviceTypesContent}
         </TabsContent>
 

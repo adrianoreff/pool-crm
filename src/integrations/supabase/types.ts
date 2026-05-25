@@ -1598,6 +1598,7 @@ export type Database = {
           is_active: boolean | null
           key: string
           label: string
+          preset_values: Json | null
           sort_order: number
           unit: string | null
         }
@@ -1608,6 +1609,7 @@ export type Database = {
           is_active?: boolean | null
           key: string
           label: string
+          preset_values?: Json | null
           sort_order?: number
           unit?: string | null
         }
@@ -1618,6 +1620,7 @@ export type Database = {
           is_active?: boolean | null
           key?: string
           label?: string
+          preset_values?: Json | null
           sort_order?: number
           unit?: string | null
         }

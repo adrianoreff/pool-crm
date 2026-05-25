@@ -24,7 +24,11 @@ export default function CompleteJob() {
   const { data: appointment, isLoading: isLoadingAppointment } = useAppointment(id || '');
   const { progress, checklistTemplate, requiredIncomplete } = useJobChecklist(
     id || '',
-    appointment?.service_id || null
+    appointment?.service_id || null,
+    {
+      serviceName: appointment?.service?.name,
+      customerId: appointment?.customer_id,
+    }
   );
   const { uploadPhoto, isUploading } = usePhotoUpload();
 

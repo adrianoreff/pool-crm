@@ -82,6 +82,11 @@ function SortableRow({
       </TableCell>
       <TableCell className="font-medium">{reading.label}</TableCell>
       <TableCell className="text-muted-foreground">{reading.unit || '—'}</TableCell>
+      <TableCell className="text-sm text-muted-foreground hidden md:table-cell max-w-[200px] truncate">
+        {Array.isArray(reading.preset_values) && (reading.preset_values as string[]).length > 0
+          ? (reading.preset_values as string[]).join(', ')
+          : '—'}
+      </TableCell>
       <TableCell className="text-right space-x-2">
         <Button type="button" variant="outline" size="sm" onClick={onEdit}>
           <Pencil className="mr-1 h-3.5 w-3.5" />
@@ -131,7 +136,12 @@ export function ReadingsManager() {
     [localItems, reorder]
   );
 
-  const handleSave = async (data: { key: string; label: string; unit: string | null }) => {
+  const handleSave = async (data: {
+    key: string;
+    label: string;
+    unit: string | null;
+    preset_values: string[];
+  }) => {
     if (editing) {
       await updateReading.mutateAsync({ id: editing.id, ...data });
     } else {
@@ -189,6 +199,7 @@ export function ReadingsManager() {
                     <TableHead className="w-10" />
                     <TableHead>Description</TableHead>
                     <TableHead>UOM</TableHead>
+                    <TableHead className="hidden md:table-cell">Presets</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

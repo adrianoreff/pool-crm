@@ -5,14 +5,19 @@ export interface PoolServiceReportData {
   businessName: string;
   businessPhone: string;
   photoUrl?: string;
+  extraPhotoUrl?: string;
   readings: { label: string; value: string; unit?: string | null }[];
   dosages: { label: string; amount: string }[];
   subject?: string;
   bodyMessage?: string;
+  emailHeader?: string;
 }
 
 export function poolServiceReportEmail(data: PoolServiceReportData) {
-  const subject = data.subject || `Your Pool Is Now Sparkling Clean! - ${data.businessName}`;
+  const header =
+    data.emailHeader || data.subject?.replace(/\s*-\s*[^-]+$/, '').trim() || 'Your Pool Is Now Sparkling Clean!';
+  const subject =
+    data.subject || `${header} - ${data.businessName}`;
 
   const readingsRows = data.readings
     .filter((r) => r.value)
@@ -30,9 +35,13 @@ export function poolServiceReportEmail(data: PoolServiceReportData) {
     )
     .join('');
 
-  const photoBlock = data.photoUrl
-    ? `<div style="margin:24px 0;text-align:center;"><img src="${data.photoUrl}" alt="Your pool after service" style="max-width:100%;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);" /></div>`
-    : '';
+  const photoBlocks = [data.photoUrl, data.extraPhotoUrl]
+    .filter(Boolean)
+    .map(
+      (url, i) =>
+        `<div style="margin:16px 0;text-align:center;"><img src="${url}" alt="Pool photo ${i + 1}" style="max-width:100%;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);" /></div>`
+    )
+    .join('');
 
   const html = `
     <!DOCTYPE html>
@@ -41,12 +50,12 @@ export function poolServiceReportEmail(data: PoolServiceReportData) {
     <body>
       <div class="container">
         <div class="header" style="background:#0EA5E9;">
-          <h1 style="margin:0;">Your Pool Is Now Sparkling Clean!</h1>
+          <h1 style="margin:0;">${header}</h1>
         </div>
         <div class="content">
           <p>Hi ${data.customerName},</p>
           <p>${data.bodyMessage || 'Thanks for choosing us to keep your pool looking great!'}</p>
-          ${photoBlock}
+          ${photoBlocks}
           ${readingsRows ? `<h3 style="margin-top:24px;">Water readings</h3><table style="width:100%;border-collapse:collapse;">${readingsRows}</table>` : ''}
           ${dosageRows ? `<h3 style="margin-top:24px;">Chemicals applied</h3><table style="width:100%;border-collapse:collapse;">${dosageRows}</table>` : ''}
           <p style="margin-top:24px;">If you have any questions, call us at ${data.businessPhone}.</p>

@@ -167,6 +167,34 @@ const DEFAULT_TEMPLATES: Omit<EmailTemplate, 'id' | 'business_id' | 'created_at'
     is_default: true,
   },
   {
+    name: 'Pool Service Report',
+    slug: 'pool_service_report',
+    description:
+      'Email sent when a technician finishes a pool visit. Header = subject line; Message = intro text in the email.',
+    category: 'customer',
+    trigger_event: 'pool_service_report',
+    recipient_type: 'customer',
+    subject: 'Your Pool Is Now Sparkling Clean!',
+    body_text:
+      'Thanks for choosing us to keep your pool looking great!',
+    body_html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #0EA5E9; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin:0;">{{email_header}}</h1>
+      </div>
+      <div style="background: #fff; padding: 30px; border: 1px solid #e5e5e5;">
+        <p>Hi {{customer_name}},</p>
+        <p>{{email_message}}</p>
+        <p style="margin-top:24px;">Water readings, chemicals applied, and pool photos are included below.</p>
+        <p>If you have any questions, call us at <strong>{{business_phone}}</strong>.</p>
+      </div>
+      <div style="background: #f9f9f9; padding: 20px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 8px 8px;">
+        <p>{{business_name}} | {{business_phone}}</p>
+      </div>
+    </div>`,
+    is_active: true,
+    is_default: true,
+  },
+  {
     name: 'Service Completed',
     slug: 'appointment_completed',
     description: 'Sent when the service is marked as completed',
@@ -415,6 +443,12 @@ export function useEmailTemplates() {
     },
     enabled: !!businessId,
   });
+}
+
+export function useEmailTemplateBySlug(slug: string) {
+  const { data: templates = [], isLoading } = useEmailTemplates();
+  const template = templates.find((t) => t.slug === slug && t.is_active) ?? null;
+  return { template, isLoading };
 }
 
 export function useEmailTemplate(id: string) {

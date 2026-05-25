@@ -14,6 +14,26 @@ export const DEFAULT_WEEKLY_POOL_CHECKLIST_DESCRIPTIONS = [
   'Filled Tab Floater',
 ] as const;
 
+/** Stable IDs — must match seed migration `20260524120000`. */
+export const WEEKLY_POOL_CHECKLIST_SEED: readonly {
+  id: string;
+  description: string;
+  descriptionWhenComplete: string;
+}[] = [
+  { id: 'empty-baskets', description: 'Empty Baskets', descriptionWhenComplete: 'Emptied Baskets' },
+  { id: 'skim-surface', description: 'Skim Surface', descriptionWhenComplete: 'Skimmed Surface' },
+  { id: 'vacuum', description: 'Vacuum', descriptionWhenComplete: 'Vacuumed' },
+  { id: 'backwash', description: 'Backwash', descriptionWhenComplete: 'Backwashed' },
+  { id: 'brushed-walls', description: 'Brushed Walls', descriptionWhenComplete: 'Brushed Walls' },
+  { id: 'filled-tab-floater', description: 'Filled Tab Floater', descriptionWhenComplete: 'Filled Tab Floater' },
+];
+
+export const WEEKLY_POOL_SERVICE_NAME = 'Weekly Pool Service';
+
+export function isWeeklyPoolServiceName(name: string | null | undefined): boolean {
+  return name?.trim().toLowerCase() === WEEKLY_POOL_SERVICE_NAME.toLowerCase();
+}
+
 export function createChecklistItem(
   partial: Partial<ServiceChecklistItem> & Pick<ServiceChecklistItem, 'description'>
 ): ServiceChecklistItem {
@@ -33,8 +53,13 @@ export function createChecklistItem(
 }
 
 export function createDefaultWeeklyPoolChecklistItems(): ServiceChecklistItem[] {
-  return DEFAULT_WEEKLY_POOL_CHECKLIST_DESCRIPTIONS.map((description, index) =>
-    createChecklistItem({ description, sortOrder: index })
+  return WEEKLY_POOL_CHECKLIST_SEED.map((row, index) =>
+    createChecklistItem({
+      id: row.id,
+      description: row.description,
+      descriptionWhenComplete: row.descriptionWhenComplete,
+      sortOrder: index,
+    })
   );
 }
 

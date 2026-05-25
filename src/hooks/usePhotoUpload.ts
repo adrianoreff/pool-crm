@@ -28,7 +28,7 @@ export function usePhotoUpload() {
   const uploadPhoto = async (
     file: File,
     appointmentId: string,
-    options?: { setAsPrimary?: boolean }
+    options?: { setAsPrimary?: boolean; photoRole?: string; replaceExistingRole?: boolean }
   ): Promise<PhotoUploadResult | null> => {
     setIsUploading(true);
     try {
@@ -71,6 +71,14 @@ export function usePhotoUpload() {
           .eq('appointment_id', appointmentId);
       }
 
+      if (options?.photoRole && options?.replaceExistingRole) {
+        await supabase
+          .from('appointment_photos')
+          .delete()
+          .eq('appointment_id', appointmentId)
+          .eq('photo_role', options.photoRole);
+      }
+
       const { data: photoRecord, error: insertError } = await supabase
         .from('appointment_photos')
         .insert({
@@ -79,6 +87,7 @@ export function usePhotoUpload() {
           thumbnail_url: thumbnailUrl,
           uploaded_by: profile?.id,
           is_primary: options?.setAsPrimary ?? false,
+          photo_role: options?.photoRole ?? 'general',
         })
         .select()
         .single();

@@ -4,13 +4,20 @@ import { useAppointment } from '@/hooks/useAppointments';
 import { usePoolReadingDefinitions, usePoolDosageDefinitions } from '@/hooks/usePoolChemistry';
 import { useSaveVisitData, useCompletePoolVisit } from '@/hooks/useVisitData';
 import { useJobChecklist } from '@/hooks/useJobChecklist';
-import { usePhotoUpload } from '@/hooks/usePhotoUpload';
+import {
+  PoolVisitEmailSection,
+  usePoolVisitEmailState,
+} from '@/components/technician/PoolVisitEmailSection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PoolVisitChemistryForm, type PoolVisitChemistryState } from '@/components/technician/PoolVisitChemistryForm';
-import { ArrowLeft, Camera, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  DEFAULT_POOL_REPORT_HEADER,
+  DEFAULT_POOL_REPORT_MESSAGE,
+} from '@/lib/pool-service-report-template';
 
 export default function VisitFinish() {
   const { id } = useParams<{ id: string }>();
@@ -19,35 +26,28 @@ export default function VisitFinish() {
   const { data: appointment, isLoading } = useAppointment(id || '');
   const { data: readingDefs = [] } = usePoolReadingDefinitions();
   const { data: dosageDefs = [] } = usePoolDosageDefinitions();
-  const { requiredIncomplete } = useJobChecklist(id || '', appointment?.service_id || null);
+  const { requiredIncomplete } = useJobChecklist(id || '', appointment?.service_id || null, {
+    serviceName: appointment?.service?.name,
+    customerId: appointment?.customer_id,
+  });
+  const emailState = usePoolVisitEmailState(id);
   const saveVisit = useSaveVisitData();
   const completeVisit = useCompletePoolVisit();
-  const { uploadPhoto, isUploading } = usePhotoUpload();
 
   const [chemistryState, setChemistryState] = useState<PoolVisitChemistryState>({
     readingValues: {},
     dosageEntries: [],
     internalNotes: '',
   });
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-
-  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !id) return;
-    const result = await uploadPhoto(file, id, { setAsPrimary: true });
-    if (result) {
-      setPhotoUrl(result.url);
-    }
-  };
 
   const handleFinish = async () => {
     if (!id || !appointment?.customer?.email) {
       toast({ title: 'Customer email required', variant: 'destructive' });
       return;
     }
-    if (!photoUrl) {
-      toast({ title: 'Please add a pool photo', variant: 'destructive' });
+    if (!emailState.hasTopPhoto || !emailState.topPhotoUrl) {
+      toast({ title: 'Please add the top email photo', variant: 'destructive' });
       return;
     }
     if (requiredIncomplete.length > 0) {
@@ -58,6 +58,11 @@ export default function VisitFinish() {
       });
       return;
     }
+
+    const emailSubject =
+      emailState.emailSubject || DEFAULT_POOL_REPORT_HEADER;
+    const emailMessage =
+      emailState.emailMessage || DEFAULT_POOL_REPORT_MESSAGE;
 
     try {
       await saveVisit.mutateAsync({
@@ -74,6 +79,8 @@ export default function VisitFinish() {
           amount_display: d.amount_display,
         })),
         internalNotes: chemistryState.internalNotes,
+        emailSubject,
+        emailMessage,
       });
 
       const readingsForEmail = readingDefs
@@ -93,9 +100,12 @@ export default function VisitFinish() {
         appointmentId: id,
         customerEmail: appointment.customer.email,
         customerName: `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim(),
-        photoUrl,
+        photoUrl: emailState.topPhotoUrl,
+        extraPhotoUrl: emailState.extraPhotoUrl,
         readings: readingsForEmail,
         dosages: dosagesForEmail,
+        emailSubject,
+        emailBody: emailMessage,
         timeSpentMinutes: appointment.time_spent_minutes ?? undefined,
       });
 
@@ -115,7 +125,7 @@ export default function VisitFinish() {
     );
   }
 
-  const steps = ['Chemistry', 'Photo', 'Send'];
+  const steps = ['Chemistry', 'Email & photos', 'Send'];
   const isSubmitting = saveVisit.isPending || completeVisit.isPending;
 
   return (
@@ -134,7 +144,7 @@ export default function VisitFinish() {
 
       {requiredIncomplete.length > 0 && (
         <p className="text-sm text-amber-600 px-1">
-          {requiredIncomplete.length} required checklist item(s) remaining — go back to Pool tab to complete.
+          {requiredIncomplete.length} required checklist item(s) remaining — complete on the Pool tab.
         </p>
       )}
 
@@ -160,30 +170,28 @@ export default function VisitFinish() {
           <CardContent className="space-y-4">
             <PoolVisitChemistryForm
               appointmentId={id}
+              customerId={appointment?.customer_id}
               onStateChange={setChemistryState}
             />
-            <Button className="w-full" onClick={() => setStep(1)}>Next: Photo</Button>
+            <Button className="w-full" onClick={() => setStep(1)}>Next: Email &amp; photos</Button>
           </CardContent>
         </Card>
       )}
 
-      {step === 1 && (
-        <Card>
-          <CardHeader><CardTitle>Pool photo</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {photoUrl ? (
-              <img src={photoUrl} alt="Pool" className="w-full rounded-lg" />
-            ) : (
-              <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50">
-                <Camera className="h-10 w-10 text-muted-foreground mb-2" />
-                <span className="text-sm font-medium">Take a photo</span>
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
-              </label>
-            )}
-            {isUploading && <Loader2 className="h-6 w-6 animate-spin mx-auto" />}
-            <Button className="w-full" disabled={!photoUrl} onClick={() => setStep(2)}>Next: Send report</Button>
-          </CardContent>
-        </Card>
+      {step === 1 && id && (
+        <div className="space-y-4">
+          <PoolVisitEmailSection
+            appointmentId={id}
+            customerEmail={appointment.customer?.email}
+          />
+          <Button
+            className="w-full"
+            disabled={!emailState.hasTopPhoto}
+            onClick={() => setStep(2)}
+          >
+            Next: Send report
+          </Button>
+        </div>
       )}
 
       {step === 2 && (
@@ -191,16 +199,27 @@ export default function VisitFinish() {
           <CardHeader><CardTitle>Send service report</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Email to <strong>{appointment.customer?.email}</strong> with subject
-              &quot;Your Pool Is Now Sparkling Clean!&quot;
+              Email to <strong>{appointment.customer?.email}</strong>
             </p>
-            {photoUrl && <img src={photoUrl} alt="Preview" className="w-full rounded-lg max-h-40 object-cover" />}
+            <p className="text-sm">
+              <span className="text-muted-foreground">Subject: </span>
+              {emailState.emailSubject || DEFAULT_POOL_REPORT_HEADER}
+            </p>
+            {emailState.topPhotoUrl && (
+              <img src={emailState.topPhotoUrl} alt="Top" className="w-full rounded-lg max-h-40 object-cover" />
+            )}
             <Button
               className="w-full h-12 bg-[#F97316] hover:bg-[#EA580C]"
               onClick={handleFinish}
-              disabled={isSubmitting || requiredIncomplete.length > 0}
+              disabled={isSubmitting || requiredIncomplete.length > 0 || !emailState.hasTopPhoto}
             >
-              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="h-5 w-5 mr-2" /> Finish &amp; email customer</>}
+              {isSubmitting ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <Send className="h-5 w-5 mr-2" /> Finish &amp; email customer
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>

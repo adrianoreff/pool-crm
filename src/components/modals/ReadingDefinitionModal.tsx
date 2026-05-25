@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Form,
   FormControl,
@@ -27,7 +29,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { READING_TYPE_OPTIONS, slugifyKey } from '@/lib/pool-chemistry-types';
+import { DEFAULT_READING_PRESETS } from '@/lib/pool-reading-presets';
 import type { ReadingDef } from '@/hooks/usePoolChemistry';
+import { X } from 'lucide-react';
 
 const schema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -42,7 +46,12 @@ interface ReadingDefinitionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   reading?: ReadingDef | null;
-  onSave: (data: { key: string; label: string; unit: string | null }) => void;
+  onSave: (data: {
+    key: string;
+    label: string;
+    unit: string | null;
+    preset_values: string[];
+  }) => void;
   isSaving?: boolean;
 }
 
@@ -54,6 +63,8 @@ export function ReadingDefinitionModal({
   isSaving,
 }: ReadingDefinitionModalProps) {
   const isEdit = !!reading;
+  const [presets, setPresets] = useState<string[]>([]);
+  const [presetInput, setPresetInput] = useState('');
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -77,6 +88,11 @@ export function ReadingDefinitionModal({
         readingType: known ? reading.key : 'custom',
         customKey: known ? '' : reading.key,
       });
+      setPresets(
+        Array.isArray(reading.preset_values) && reading.preset_values.length > 0
+          ? (reading.preset_values as string[])
+          : DEFAULT_READING_PRESETS[reading.key] ?? []
+      );
     } else {
       form.reset({
         description: '',
@@ -84,8 +100,25 @@ export function ReadingDefinitionModal({
         readingType: 'free_chlorine',
         customKey: '',
       });
+      setPresets(DEFAULT_READING_PRESETS.free_chlorine);
     }
+    setPresetInput('');
   }, [open, reading, form]);
+
+  useEffect(() => {
+    if (!open || reading) return;
+    const key = readingType === 'custom' ? form.getValues('customKey') : readingType;
+    if (key && key !== 'custom' && DEFAULT_READING_PRESETS[key]) {
+      setPresets(DEFAULT_READING_PRESETS[key]);
+    }
+  }, [readingType, open, reading, form]);
+
+  const addPreset = () => {
+    const v = presetInput.trim();
+    if (!v || presets.includes(v)) return;
+    setPresets([...presets, v]);
+    setPresetInput('');
+  };
 
   const handleSubmit = (values: FormData) => {
     let key = values.readingType;
@@ -96,12 +129,13 @@ export function ReadingDefinitionModal({
       key,
       label: values.description.trim(),
       unit: values.unit?.trim() || null,
+      preset_values: presets,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Reading' : 'Add Reading'}</DialogTitle>
         </DialogHeader>
@@ -198,12 +232,40 @@ export function ReadingDefinitionModal({
             </form>
           </Form>
 
-          <div className="rounded-lg border p-4 space-y-2">
+          <div className="rounded-lg border p-4 space-y-3">
             <h3 className="font-semibold text-primary border-b pb-2">Values</h3>
-            <p className="text-sm text-primary">
-              After you save this Reading, target ranges use defaults by reading type. Custom ranges
-              can be configured in a future update.
+            <p className="text-sm text-muted-foreground">
+              Tap values technicians scroll through on each visit (Skimmer-style).
             </p>
+            <div className="space-y-2">
+              <Label>Preset values</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={presetInput}
+                  onChange={(e) => setPresetInput(e.target.value)}
+                  placeholder="3"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addPreset();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={addPreset}>
+                  Add
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                {presets.map((p) => (
+                  <Badge key={p} variant="secondary" className="gap-1">
+                    {p}
+                    <button type="button" onClick={() => setPresets(presets.filter((x) => x !== p))}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>

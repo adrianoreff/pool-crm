@@ -76,6 +76,7 @@ export function useCreateReadingDef() {
       key: string;
       label: string;
       unit?: string | null;
+      preset_values?: string[];
       sort_order?: number;
     }) => {
       const { error } = await supabase.from('pool_reading_definitions').insert({
@@ -83,6 +84,7 @@ export function useCreateReadingDef() {
         key: input.key,
         label: input.label,
         unit: input.unit ?? null,
+        preset_values: input.preset_values ?? [],
         sort_order: input.sort_order ?? 0,
         is_active: true,
       });
@@ -108,6 +110,7 @@ export function useUpdateReadingDef() {
       key: string;
       label: string;
       unit?: string | null;
+      preset_values?: string[];
     }) => {
       const { error } = await supabase
         .from('pool_reading_definitions')
@@ -115,6 +118,7 @@ export function useUpdateReadingDef() {
           key: input.key,
           label: input.label,
           unit: input.unit ?? null,
+          preset_values: input.preset_values ?? [],
         })
         .eq('id', input.id);
       if (error) throw error;

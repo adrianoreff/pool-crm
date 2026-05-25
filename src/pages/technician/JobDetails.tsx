@@ -12,14 +12,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/technician/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { MapPreview } from '@/components/technician/MapPreview';
-import { MapPin, Phone, Mail, Clock, Wrench, CheckCircle2, AlertCircle, FileText, MessageSquare, Send, Droplets, Undo2, ListChecks, Camera } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Wrench, CheckCircle2, AlertCircle, FileText, MessageSquare, Send, Droplets, Undo2 } from 'lucide-react';
 import { useVisitReport, useUnfinishVisit } from '@/hooks/useVisitData';
 import { useJobChecklist } from '@/hooks/useJobChecklist';
-import { ChecklistSwipeItem } from '@/components/technician/ChecklistSwipeItem';
+import { TodaysChecklistCard } from '@/components/technician/TodaysChecklistCard';
 import { PoolRecentActivityTable } from '@/components/technician/PoolRecentActivityTable';
 import { PoolVisitChemistryForm } from '@/components/technician/PoolVisitChemistryForm';
-import { Progress } from '@/components/ui/progress';
-import { Textarea } from '@/components/ui/textarea';
+import { PoolVisitEmailSection } from '@/components/technician/PoolVisitEmailSection';
+import { formatDoneAgo } from '@/lib/format-relative-time';
 import type { ServiceChecklistItem } from '@/types/service-checklist';
 import { useToast } from '@/hooks/use-toast';
 import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
@@ -43,20 +43,25 @@ export default function JobDetails() {
   const updateStatus = useUpdateJobStatus();
   const { messages, sendMessage, isSending, markAsRead } = useJobMessages(id);
   const [messageDraft, setMessageDraft] = useState('');
-  const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('pool');
   const { toast } = useToast();
   const customerId = appointment?.customer_id;
   const { data: visitReport } = useVisitReport(id);
   const unfinishVisit = useUnfinishVisit();
+  const serviceName = appointment?.service?.name ?? null;
   const {
-    checklistTemplate,
+    checklistItems,
     completedItems,
-    progress: checklistProgress,
+    lastDoneByItem,
+    templateLoading,
     toggleItem,
     getDisplayText,
     requiredIncomplete,
-  } = useJobChecklist(id || '', appointment?.service_id || null);
+    showChecklist,
+  } = useJobChecklist(id || '', appointment?.service_id || null, {
+    serviceName,
+    customerId: appointment?.customer_id,
+  });
 
   useEffect(() => {
     if (appointment?.status === 'in_progress') {
@@ -279,17 +284,19 @@ export default function JobDetails() {
   const isItemCompleted = (itemId: string) =>
     completedItems.find((ci) => ci.item_id === itemId)?.completed ?? false;
 
-  const getItemNotes = (itemId: string) =>
-    completedItems.find((ci) => ci.item_id === itemId)?.notes || '';
-
   const handleChecklistToggle = async (item: ServiceChecklistItem, completed: boolean) => {
     const itemText = getDisplayText(item, completed);
     await toggleItem.mutateAsync({
       itemId: item.id,
       itemText,
       completed,
-      notes: itemNotes[item.id],
     });
+  };
+
+  const getChecklistStatusLabel = (item: ServiceChecklistItem) => {
+    const lastDone = lastDoneByItem[item.id];
+    if (!lastDone) return undefined;
+    return formatDoneAgo(lastDone);
   };
 
   const chemistryReadOnly =
@@ -544,75 +551,16 @@ export default function JobDetails() {
         </TabsContent>
 
         <TabsContent value="pool" className="space-y-4 mt-0">
-          {checklistTemplate && checklistTemplate.items.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <ListChecks className="h-4 w-4" />
-                    Today&apos;s Checklist
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground">(Swipe right to complete or undo)</span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Progress</span>
-                    <span>{checklistProgress}%</span>
-                  </div>
-                  <Progress value={checklistProgress} className="h-2" />
-                </div>
-                {requiredIncomplete.length > 0 && (
-                  <p className="text-xs text-amber-600">
-                    {requiredIncomplete.length} required item(s) before finishing stop.
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {checklistTemplate.items.map((item) => {
-                    const completed = isItemCompleted(item.id);
-                    const notes = getItemNotes(item.id);
-                    return (
-                      <div key={item.id} className="space-y-1">
-                        <ChecklistSwipeItem
-                          label={item.description}
-                          completedLabel={item.descriptionWhenComplete}
-                          completed={completed}
-                          disabled={toggleItem.isPending || chemistryReadOnly}
-                          onToggle={(next) => handleChecklistToggle(item, next)}
-                        />
-                        {item.requirePhoto && (
-                          <div className="flex items-center gap-1 px-1 text-xs text-muted-foreground">
-                            <Camera className="h-3 w-3" />
-                            Photo required
-                          </div>
-                        )}
-                        {completed && !chemistryReadOnly && (
-                          <Textarea
-                            placeholder="Notes..."
-                            value={itemNotes[item.id] ?? notes}
-                            onChange={(e) => setItemNotes({ ...itemNotes, [item.id]: e.target.value })}
-                            onBlur={() => {
-                              const draft = itemNotes[item.id];
-                              if (draft !== undefined && draft !== notes) {
-                                toggleItem.mutate({
-                                  itemId: item.id,
-                                  itemText: getDisplayText(item, true),
-                                  completed: true,
-                                  notes: draft,
-                                });
-                              }
-                            }}
-                            className="text-sm"
-                            rows={2}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+          {showChecklist && (
+            <TodaysChecklistCard
+              items={checklistItems}
+              isLoading={templateLoading}
+              isItemCompleted={isItemCompleted}
+              getStatusLabel={getChecklistStatusLabel}
+              onToggle={handleChecklistToggle}
+              disabled={toggleItem.isPending || chemistryReadOnly}
+              requiredIncompleteCount={requiredIncomplete.length}
+            />
           )}
 
           <Card>
@@ -652,20 +600,19 @@ export default function JobDetails() {
           </Card>
 
           {id && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Droplets className="h-4 w-4" />
-                  Today&apos;s readings &amp; dosages
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PoolVisitChemistryForm
-                  appointmentId={id}
-                  readOnly={chemistryReadOnly}
-                />
-              </CardContent>
-            </Card>
+            <PoolVisitChemistryForm
+              appointmentId={id}
+              customerId={customerId}
+              readOnly={chemistryReadOnly}
+            />
+          )}
+
+          {id && appointment.customer?.email && (
+            <PoolVisitEmailSection
+              appointmentId={id}
+              customerEmail={appointment.customer.email}
+              readOnly={chemistryReadOnly}
+            />
           )}
 
           {visitReport?.email_status === 'sent' && visitReport.email_sent_at && (

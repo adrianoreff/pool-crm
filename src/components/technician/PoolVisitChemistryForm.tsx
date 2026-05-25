@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePoolReadingDefinitions, usePoolDosageDefinitions } from '@/hooks/usePoolChemistry';
 import { useSaveVisitData, useVisitReadings, useVisitDosages } from '@/hooks/useVisitData';
-import { Input } from '@/components/ui/input';
+import { useCustomerLastChemistry } from '@/hooks/useCustomerLastChemistry';
+import { ChemistryDefinitionRow } from '@/components/technician/ChemistryDefinitionRow';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { X, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { getReadingPresets, getDosagePresets } from '@/lib/pool-reading-presets';
 import { cn } from '@/lib/utils';
 
 export interface PoolVisitChemistryState {
@@ -15,16 +17,71 @@ export interface PoolVisitChemistryState {
   internalNotes: string;
 }
 
+type ActiveTarget = { type: 'reading' | 'dosage'; id: string } | null;
+
 interface PoolVisitChemistryFormProps {
   appointmentId: string;
+  customerId?: string;
   readOnly?: boolean;
   showInternalNotes?: boolean;
   className?: string;
   onStateChange?: (state: PoolVisitChemistryState) => void;
 }
 
+function findFirstEmptyReading(
+  defs: { id: string }[],
+  values: Record<string, string>
+): string | null {
+  const empty = defs.find((d) => !values[d.id]);
+  return empty?.id ?? null;
+}
+
+function findFirstEmptyDosage(
+  defs: { id: string }[],
+  entries: { definition_id: string; amount_display: string }[]
+): string | null {
+  const empty = defs.find((d) => !entries.some((e) => e.definition_id === d.id && e.amount_display));
+  return empty?.id ?? null;
+}
+
+function findNextTarget(
+  readingDefs: { id: string }[],
+  dosageDefs: { id: string }[],
+  readingValues: Record<string, string>,
+  dosageEntries: { definition_id: string; amount_display: string }[],
+  after?: ActiveTarget
+): ActiveTarget {
+  if (after?.type === 'reading') {
+    const idx = readingDefs.findIndex((d) => d.id === after.id);
+    for (let i = idx + 1; i < readingDefs.length; i++) {
+      if (!readingValues[readingDefs[i].id]) return { type: 'reading', id: readingDefs[i].id };
+    }
+    const dosageId = findFirstEmptyDosage(dosageDefs, dosageEntries);
+    if (dosageId) return { type: 'dosage', id: dosageId };
+    return null;
+  }
+
+  if (after?.type === 'dosage') {
+    const idx = dosageDefs.findIndex((d) => d.id === after.id);
+    for (let i = idx + 1; i < dosageDefs.length; i++) {
+      const filled = dosageEntries.some(
+        (e) => e.definition_id === dosageDefs[i].id && e.amount_display
+      );
+      if (!filled) return { type: 'dosage', id: dosageDefs[i].id };
+    }
+    return null;
+  }
+
+  const readingId = findFirstEmptyReading(readingDefs, readingValues);
+  if (readingId) return { type: 'reading', id: readingId };
+  const dosageId = findFirstEmptyDosage(dosageDefs, dosageEntries);
+  if (dosageId) return { type: 'dosage', id: dosageId };
+  return null;
+}
+
 export function PoolVisitChemistryForm({
   appointmentId,
+  customerId,
   readOnly = false,
   showInternalNotes = true,
   className,
@@ -34,12 +91,16 @@ export function PoolVisitChemistryForm({
   const { data: dosageDefs = [] } = usePoolDosageDefinitions();
   const { data: existingReadings = [] } = useVisitReadings(appointmentId);
   const { data: existingDosages = [] } = useVisitDosages(appointmentId);
+  const { data: lastChemistry } = useCustomerLastChemistry(customerId, appointmentId);
   const saveVisit = useSaveVisitData();
 
   const [readingValues, setReadingValues] = useState<Record<string, string>>({});
   const [dosageEntries, setDosageEntries] = useState<{ definition_id: string; amount_display: string }[]>([]);
   const [internalNotes, setInternalNotes] = useState('');
   const [initialized, setInitialized] = useState(false);
+  const [activeTarget, setActiveTarget] = useState<ActiveTarget>(null);
+  const [expandedReadings, setExpandedReadings] = useState(true);
+  const [expandedDosages, setExpandedDosages] = useState(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -48,14 +109,27 @@ export function PoolVisitChemistryForm({
       r[row.definition_id] = row.value_text ?? (row.value_numeric != null ? String(row.value_numeric) : '');
     });
     setReadingValues(r);
-    setDosageEntries(
-      existingDosages.map((row: { definition_id: string; amount_display: string | null }) => ({
-        definition_id: row.definition_id,
-        amount_display: row.amount_display || '',
-      }))
-    );
+    const dosages = existingDosages.map((row: { definition_id: string; amount_display: string | null }) => ({
+      definition_id: row.definition_id,
+      amount_display: row.amount_display || '',
+    }));
+    setDosageEntries(dosages);
     setInitialized(true);
   }, [existingReadings, existingDosages]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    setActiveTarget((prev) => {
+      if (prev) {
+        const stillEmpty =
+          prev.type === 'reading'
+            ? !readingValues[prev.id]
+            : !dosageEntries.some((e) => e.definition_id === prev.id && e.amount_display);
+        if (stillEmpty) return prev;
+      }
+      return findNextTarget(readingDefs, dosageDefs, readingValues, dosageEntries);
+    });
+  }, [initialized, readingDefs, dosageDefs, readingValues, dosageEntries]);
 
   useEffect(() => {
     onStateChange?.({ readingValues, dosageEntries, internalNotes });
@@ -100,24 +174,42 @@ export function PoolVisitChemistryForm({
     [readOnly, persist]
   );
 
-  const updateReading = (defId: string, value: string) => {
+  const focusNext = useCallback(
+    (from: ActiveTarget) => {
+      const next = findNextTarget(readingDefs, dosageDefs, readingValues, dosageEntries, from ?? undefined);
+      setActiveTarget(next);
+    },
+    [readingDefs, dosageDefs, readingValues, dosageEntries]
+  );
+
+  const selectReading = (defId: string, value: string) => {
     const next = { ...readingValues, [defId]: value };
     setReadingValues(next);
     scheduleSave(next, dosageEntries, internalNotes);
+    focusNext({ type: 'reading', id: defId });
   };
 
-  const addDosage = (definitionId: string, amount: string) => {
-    if (!amount || readOnly) return;
-    const filtered = dosageEntries.filter((d) => d.definition_id !== definitionId);
-    const next = [...filtered, { definition_id: definitionId, amount_display: amount }];
-    setDosageEntries(next);
-    scheduleSave(readingValues, next, internalNotes);
+  const clearReading = (defId: string) => {
+    const next = { ...readingValues };
+    delete next[defId];
+    setReadingValues(next);
+    scheduleSave(next, dosageEntries, internalNotes);
+    setActiveTarget({ type: 'reading', id: defId });
   };
 
-  const removeDosage = (definitionId: string) => {
-    const next = dosageEntries.filter((d) => d.definition_id !== definitionId);
+  const selectDosage = (defId: string, value: string) => {
+    const filtered = dosageEntries.filter((d) => d.definition_id !== defId);
+    const next = [...filtered, { definition_id: defId, amount_display: value }];
     setDosageEntries(next);
     scheduleSave(readingValues, next, internalNotes);
+    focusNext({ type: 'dosage', id: defId });
+  };
+
+  const clearDosage = (defId: string) => {
+    const next = dosageEntries.filter((d) => d.definition_id !== defId);
+    setDosageEntries(next);
+    scheduleSave(readingValues, next, internalNotes);
+    setActiveTarget({ type: 'dosage', id: defId });
   };
 
   if (!initialized && existingReadings.length === 0 && existingDosages.length === 0) {
@@ -128,73 +220,113 @@ export function PoolVisitChemistryForm({
     );
   }
 
-  return (
-    <div className={cn('space-y-6', className)}>
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold">Today&apos;s readings</h4>
-        {readingDefs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No readings configured.</p>
-        ) : (
-          readingDefs.map((def) => (
-            <div key={def.id} className="flex items-center gap-2">
-              <Label className="w-32 shrink-0 text-sm">{def.label}</Label>
-              <Input
-                value={readingValues[def.id] || ''}
-                onChange={(e) => updateReading(def.id, e.target.value)}
-                onBlur={() => persist(readingValues, dosageEntries, internalNotes)}
-                placeholder={def.unit || ''}
-                disabled={readOnly}
-                className="flex-1"
-              />
-              {def.unit && <span className="text-xs text-muted-foreground w-10">{def.unit}</span>}
-            </div>
-          ))
-        )}
-      </div>
+  const readingLast = lastChemistry?.readingLast ?? {};
+  const dosageLast = lastChemistry?.dosageLast ?? {};
 
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold">Dosages applied</h4>
-        {dosageDefs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No dosages configured.</p>
-        ) : (
-          dosageDefs.map((def) => {
-            const presets = (def.preset_values as string[]) || [];
-            const active = dosageEntries.find((d) => d.definition_id === def.id);
-            return (
-              <div key={def.id} className="space-y-2">
-                <Label className="text-sm">
-                  {def.label}
-                  {def.unit ? ` (${def.unit})` : ''}
-                </Label>
-                <div className="flex flex-wrap gap-2">
-                  {presets.map((p) => (
-                    <Button
-                      key={p}
-                      type="button"
-                      size="sm"
-                      variant={active?.amount_display === p ? 'default' : 'outline'}
-                      onClick={() => addDosage(def.id, p)}
-                      disabled={readOnly}
-                    >
-                      {p}
-                    </Button>
-                  ))}
-                </div>
-                {active && (
-                  <Badge variant="secondary" className="gap-1">
-                    {active.amount_display}
-                    {!readOnly && (
-                      <button type="button" onClick={() => removeDosage(def.id)}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </Badge>
-                )}
+  return (
+    <div className={cn('space-y-4', className)}>
+      <Card className="border shadow-sm overflow-hidden">
+        <CardHeader className="pb-0 pt-3 px-4 bg-sky-600 text-white rounded-t-lg">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base font-semibold text-white">Readings</CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-sky-500 hover:text-white h-8 px-2"
+              onClick={() => setExpandedReadings((v) => !v)}
+            >
+              {expandedReadings ? (
+                <>
+                  Collapse <ChevronUp className="h-4 w-4 ml-1" />
+                </>
+              ) : (
+                <>
+                  Expand <ChevronDown className="h-4 w-4 ml-1" />
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        {expandedReadings && (
+          <CardContent className="p-0">
+            {readingDefs.length === 0 ? (
+              <p className="text-sm text-muted-foreground px-4 py-6">No readings configured.</p>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {readingDefs.map((def) => (
+                  <ChemistryDefinitionRow
+                    key={def.id}
+                    label={def.label}
+                    unit={def.unit}
+                    presets={getReadingPresets(def.key, def.preset_values)}
+                    value={readingValues[def.id]}
+                    lastLabel={!readingValues[def.id] ? readingLast[def.id]?.label : undefined}
+                    isActive={activeTarget?.type === 'reading' && activeTarget.id === def.id}
+                    readOnly={readOnly}
+                    onSelect={(v) => selectReading(def.id, v)}
+                    onClear={() => clearReading(def.id)}
+                    onActivate={() => setActiveTarget({ type: 'reading', id: def.id })}
+                  />
+                ))}
               </div>
-            );
-          })
+            )}
+          </CardContent>
         )}
-      </div>
+      </Card>
+
+      <Card className="border shadow-sm overflow-hidden">
+        <CardHeader className="pb-0 pt-3 px-4 bg-sky-600 text-white rounded-t-lg">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base font-semibold text-white">Dosages</CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-sky-500 hover:text-white h-8 px-2"
+              onClick={() => setExpandedDosages((v) => !v)}
+            >
+              {expandedDosages ? (
+                <>
+                  Collapse <ChevronUp className="h-4 w-4 ml-1" />
+                </>
+              ) : (
+                <>
+                  Expand <ChevronDown className="h-4 w-4 ml-1" />
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        {expandedDosages && (
+          <CardContent className="p-0">
+            {dosageDefs.length === 0 ? (
+              <p className="text-sm text-muted-foreground px-4 py-6">No dosages configured.</p>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {dosageDefs.map((def) => {
+                  const active = dosageEntries.find((d) => d.definition_id === def.id);
+                  return (
+                    <ChemistryDefinitionRow
+                      key={def.id}
+                      label={def.label}
+                      unit={def.unit}
+                      presets={getDosagePresets(def.preset_values)}
+                      value={active?.amount_display}
+                      lastLabel={!active?.amount_display ? dosageLast[def.id]?.label : undefined}
+                      isActive={activeTarget?.type === 'dosage' && activeTarget.id === def.id}
+                      readOnly={readOnly}
+                      onSelect={(v) => selectDosage(def.id, v)}
+                      onClear={() => clearDosage(def.id)}
+                      onActivate={() => setActiveTarget({ type: 'dosage', id: def.id })}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {showInternalNotes && (
         <div className="space-y-2">
