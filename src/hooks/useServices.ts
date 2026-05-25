@@ -3,13 +3,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Service, ServiceCategory, ServiceWithCategory } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
+import { filterPoolCategories, isPoolServiceCategory } from '@/lib/pool-service-categories';
 
-export function useServices() {
+type ServicesQueryOptions = { poolOnly?: boolean };
+
+export function useServices(options?: ServicesQueryOptions) {
   const { profile } = useAuth();
   const businessId = profile?.business_id;
+  const poolOnly = options?.poolOnly !== false;
 
   return useQuery({
-    queryKey: ['services', businessId],
+    queryKey: ['services', businessId, poolOnly],
     queryFn: async () => {
       if (!businessId) return [];
 
@@ -23,18 +27,21 @@ export function useServices() {
         .order('sort_order');
 
       if (error) throw error;
-      return data as ServiceWithCategory[];
+      const rows = data as ServiceWithCategory[];
+      if (!poolOnly) return rows;
+      return rows.filter((s) => !s.category || isPoolServiceCategory(s.category));
     },
     enabled: !!businessId,
   });
 }
 
-export function useServiceCategories() {
+export function useServiceCategories(options?: ServicesQueryOptions) {
   const { profile } = useAuth();
   const businessId = profile?.business_id;
+  const poolOnly = options?.poolOnly !== false;
 
   return useQuery({
-    queryKey: ['service-categories', businessId],
+    queryKey: ['service-categories', businessId, poolOnly],
     queryFn: async () => {
       if (!businessId) return [];
 
@@ -46,7 +53,9 @@ export function useServiceCategories() {
         .order('sort_order');
 
       if (error) throw error;
-      return data as ServiceCategory[];
+      const rows = data as ServiceCategory[];
+      if (!poolOnly) return rows;
+      return filterPoolCategories(rows);
     },
     enabled: !!businessId,
   });
@@ -160,6 +169,59 @@ export function useUpdateService() {
     },
     onError: (error) => {
       toast({ title: 'Failed to update service', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteService() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('services').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      toast({ title: 'Service deleted' });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not delete service',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+export function useDeleteServiceCategory() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (categoryId: string) => {
+      const { error: servicesError } = await supabase
+        .from('services')
+        .delete()
+        .eq('category_id', categoryId);
+      if (servicesError) throw servicesError;
+
+      const { error } = await supabase.from('service_categories').delete().eq('id', categoryId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['service-categories'] });
+      toast({ title: 'Category deleted' });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not delete category',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 }

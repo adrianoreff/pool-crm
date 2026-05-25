@@ -22,7 +22,10 @@ export default function CompleteJob() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: appointment, isLoading: isLoadingAppointment } = useAppointment(id || '');
-  const { progress, checklistTemplate } = useJobChecklist(id || '', appointment?.service_id || null);
+  const { progress, checklistTemplate, requiredIncomplete } = useJobChecklist(
+    id || '',
+    appointment?.service_id || null
+  );
   const { uploadPhoto, isUploading } = usePhotoUpload();
 
   const [workSummary, setWorkSummary] = useState('');
@@ -76,6 +79,15 @@ export default function CompleteJob() {
     if (!workSummary.trim()) {
       toast({
         title: 'Work summary is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (requiredIncomplete.length > 0) {
+      toast({
+        title: 'Checklist incomplete',
+        description: `Complete required items: ${requiredIncomplete.map((i) => i.description).join(', ')}`,
         variant: 'destructive',
       });
       return;
@@ -280,7 +292,14 @@ export default function CompleteJob() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm">Progress: {progress}%</span>
+              <span className="text-sm">
+                Progress: {progress}%
+                {requiredIncomplete.length > 0 && (
+                  <span className="block text-amber-600 text-xs mt-1">
+                    {requiredIncomplete.length} required item(s) remaining
+                  </span>
+                )}
+              </span>
               <Button
                 type="button"
                 variant="outline"

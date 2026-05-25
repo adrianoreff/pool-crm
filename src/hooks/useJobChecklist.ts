@@ -1,23 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { parseChecklistItems, getItemDisplayText } from '@/lib/service-checklist-utils';
+import type { ServiceChecklistItem } from '@/types/service-checklist';
 
-interface ChecklistItem {
-  id: string;
-  text: string;
-  category: string;
-}
-
-interface ServiceChecklist {
+interface ServiceChecklistTemplate {
   id: string;
   name: string;
-  items: ChecklistItem[];
+  items: ServiceChecklistItem[];
   business_id: string;
   service_id: string | null;
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 interface AppointmentChecklistItem {
@@ -32,37 +25,39 @@ interface AppointmentChecklistItem {
 }
 
 export function useJobChecklist(appointmentId: string, serviceId: string | null) {
-  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch checklist template
   const { data: checklistTemplate } = useQuery({
     queryKey: ['service-checklist', serviceId],
     queryFn: async () => {
       if (!serviceId) return null;
 
-      const { data, error } = await (supabase
-        .from('service_checklists' as any)
+      const { data, error } = await supabase
+        .from('service_checklists')
         .select('*')
         .eq('service_id', serviceId)
         .eq('is_active', true)
-        .maybeSingle() as any);
+        .maybeSingle();
 
       if (error) throw error;
-      return data as ServiceChecklist | null;
+      if (!data) return null;
+
+      return {
+        ...data,
+        items: parseChecklistItems(data.items),
+      } as ServiceChecklistTemplate;
     },
     enabled: !!serviceId,
   });
 
-  // Fetch completed items
   const { data: completedItems = [] } = useQuery({
     queryKey: ['appointment-checklist-items', appointmentId],
     queryFn: async () => {
-      const { data, error } = await (supabase
-        .from('appointment_checklist_items' as any)
+      const { data, error } = await supabase
+        .from('appointment_checklist_items')
         .select('*')
-        .eq('appointment_id', appointmentId) as any);
+        .eq('appointment_id', appointmentId);
 
       if (error) throw error;
       return (data || []) as AppointmentChecklistItem[];
@@ -70,46 +65,47 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
     enabled: !!appointmentId,
   });
 
-  // Calculate progress
-  const progress = checklistTemplate && checklistTemplate.items?.length > 0
-    ? completedItems.filter(item => item.completed).length / checklistTemplate.items.length
-    : 0;
+  const totalItems = checklistTemplate?.items.length ?? 0;
+  const progress =
+    totalItems > 0
+      ? completedItems.filter((item) => item.completed).length / totalItems
+      : 0;
 
-  // Mutation to toggle item completion
   const toggleItem = useMutation({
-    mutationFn: async ({ itemId, itemText, completed, notes }: {
+    mutationFn: async ({
+      itemId,
+      itemText,
+      completed,
+      notes,
+    }: {
       itemId: string;
       itemText: string;
       completed: boolean;
       notes?: string;
     }) => {
-      // Check if item already exists
-      const existing = completedItems.find(item => item.item_id === itemId);
+      const existing = completedItems.find((item) => item.item_id === itemId);
 
       if (existing) {
-        // Update existing
-        const { error } = await (supabase
-          .from('appointment_checklist_items' as any)
+        const { error } = await supabase
+          .from('appointment_checklist_items')
           .update({
             completed,
             completed_at: completed ? new Date().toISOString() : null,
             notes: notes || null,
+            item_text: itemText,
           })
-          .eq('id', existing.id) as any);
+          .eq('id', existing.id);
 
         if (error) throw error;
       } else {
-        // Create new
-        const { error } = await (supabase
-          .from('appointment_checklist_items' as any)
-          .insert({
-            appointment_id: appointmentId,
-            item_id: itemId,
-            item_text: itemText,
-            completed,
-            completed_at: completed ? new Date().toISOString() : null,
-            notes: notes || null,
-          }) as any);
+        const { error } = await supabase.from('appointment_checklist_items').insert({
+          appointment_id: appointmentId,
+          item_id: itemId,
+          item_text: itemText,
+          completed,
+          completed_at: completed ? new Date().toISOString() : null,
+          notes: notes || null,
+        });
 
         if (error) throw error;
       }
@@ -117,9 +113,19 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointment-checklist-items', appointmentId] });
     },
-    onError: (error: any) => {
-      toast({ title: 'Failed to update checklist', description: error.message, variant: 'destructive' });
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update checklist',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
+  });
+
+  const requiredIncomplete = (checklistTemplate?.items ?? []).filter((item) => {
+    if (!item.requireToFinishStop) return false;
+    const done = completedItems.find((ci) => ci.item_id === item.id)?.completed;
+    return !done;
   });
 
   return {
@@ -127,5 +133,8 @@ export function useJobChecklist(appointmentId: string, serviceId: string | null)
     completedItems,
     progress: Math.round(progress * 100),
     toggleItem,
+    requiredIncomplete,
+    getDisplayText: (item: ServiceChecklistItem, completed: boolean) =>
+      getItemDisplayText(item, completed),
   };
 }

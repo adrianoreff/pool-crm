@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { 
+import { useSearchParams } from 'react-router-dom';
+import {
   Plus,
   MoreHorizontal,
   Droplets,
@@ -11,9 +12,15 @@ import {
   Edit,
   Trash,
   GripVertical,
+  ListChecks,
+  FlaskConical,
 } from 'lucide-react';
+import { ServiceChecklistManager } from '@/components/services/ServiceChecklistManager';
+import { ReadingsManager } from '@/components/services/ReadingsManager';
+import { DosagesManager } from '@/components/services/DosagesManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -38,13 +45,33 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
-import { useServices, useServiceCategories, useToggleServiceActive } from '@/hooks/useServices';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  useServices,
+  useServiceCategories,
+  useToggleServiceActive,
+  useDeleteService,
+  useDeleteServiceCategory,
+} from '@/hooks/useServices';
 import { ServiceWithCategory, ServiceCategory } from '@/types/database';
 import { AddServiceModal, EditServiceModal, AddCategoryModal } from '@/components/modals';
 
 const categoryIcons: Record<string, React.ElementType> = {
-  Droplets, Zap, Thermometer, Home, Waves, Wrench,
+  Droplets,
+  Zap,
+  Thermometer,
+  Home,
+  Waves,
+  Wrench,
 };
 
 const formatDuration = (min: number | null, max: number | null) => {
@@ -69,10 +96,14 @@ function ServiceRow({
   service,
   categoryColor,
   onEdit,
+  onDelete,
+  onChecklist,
 }: {
   service: ServiceWithCategory;
   categoryColor: string;
   onEdit: (service: ServiceWithCategory) => void;
+  onDelete: (service: ServiceWithCategory) => void;
+  onChecklist: (service: ServiceWithCategory) => void;
 }) {
   const toggleActive = useToggleServiceActive();
 
@@ -106,15 +137,30 @@ function ServiceRow({
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" type="button">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onEdit(service)}>
-              <Edit className="mr-2 h-4 w-4" />Edit
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
             </DropdownMenuItem>
-            <DropdownMenuItem>Duplicate</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onChecklist(service)}>
+              <ListChecks className="mr-2 h-4 w-4" />
+              Service Checklist
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive"><Trash className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={(e) => {
+                e.preventDefault();
+                onDelete(service);
+              }}
+            >
+              <Trash className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>
@@ -123,36 +169,68 @@ function ServiceRow({
 }
 
 export default function Services() {
-  const { data: services = [], isLoading: loadingServices } = useServices();
-  const { data: categories = [], isLoading: loadingCategories } = useServiceCategories();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'services';
+  const setActiveTab = (tab: string) => setSearchParams({ tab });
+
+  const { data: services = [], isLoading: loadingServices } = useServices({ poolOnly: false });
+  const { data: categories = [], isLoading: loadingCategories } = useServiceCategories({
+    poolOnly: false,
+  });
+  const deleteService = useDeleteService();
+  const deleteCategory = useDeleteServiceCategory();
+
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [editingService, setEditingService] = useState<ServiceWithCategory | null>(null);
   const [isEditServiceOpen, setIsEditServiceOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<ServiceWithCategory | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<ServiceCategory | null>(null);
+  const [checklistService, setChecklistService] = useState<ServiceWithCategory | null>(null);
 
   const handleEditService = (service: ServiceWithCategory) => {
     setEditingService(service);
     setIsEditServiceOpen(true);
   };
 
+  const confirmDeleteService = () => {
+    if (!serviceToDelete) return;
+    deleteService.mutate(serviceToDelete.id, {
+      onSettled: () => setServiceToDelete(null),
+    });
+  };
+
+  const confirmDeleteCategory = () => {
+    if (!categoryToDelete) return;
+    deleteCategory.mutate(categoryToDelete.id, {
+      onSettled: () => setCategoryToDelete(null),
+    });
+  };
+
   const totalServices = services.length;
-  const activeServices = services.filter(s => s.is_active).length;
+  const activeServices = services.filter((s) => s.is_active).length;
 
   if (loadingServices || loadingCategories) {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between"><Skeleton className="h-8 w-32" /><Skeleton className="h-10 w-32" /></div>
-        {[1, 2, 3].map(i => <Skeleton key={i} className="h-48 w-full" />)}
+        <div className="flex justify-between">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-48 w-full" />
+        ))}
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
+  const serviceTypesContent = (
+    <>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Services</h1>
-          <p className="text-muted-foreground">{activeServices} of {totalServices} services active</p>
+          <p className="text-muted-foreground">
+            {activeServices} of {totalServices} services active
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setIsAddCategoryOpen(true)}>
@@ -170,33 +248,54 @@ export default function Services() {
         <Card className="shadow-card">
           <CardContent className="p-12 text-center">
             <Wrench className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-            <p className="text-muted-foreground mb-4">No service categories yet</p>
+            <p className="text-muted-foreground mb-4">No service categories yet.</p>
             <Button onClick={() => setIsAddCategoryOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Your First Category
+              Add Category
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <Accordion type="multiple" defaultValue={categories.map(c => c.id)}>
+        <Accordion type="multiple" defaultValue={categories.map((c) => c.id)}>
           {categories.map((category) => {
-            const categoryServices = services.filter(s => s.category_id === category.id);
+            const categoryServices = services.filter((s) => s.category_id === category.id);
             const Icon = categoryIcons[category.icon || 'Wrench'] || Wrench;
-            const activeCount = categoryServices.filter(s => s.is_active).length;
+            const activeCount = categoryServices.filter((s) => s.is_active).length;
 
             return (
-              <AccordionItem key={category.id} value={category.id} className="border rounded-lg shadow-card mb-4 overflow-hidden">
-                <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 hover:no-underline">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="rounded-lg p-2" style={{ backgroundColor: `${category.color}20` }}>
-                      <Icon className="h-5 w-5" style={{ color: category.color || '#888' }} />
+              <AccordionItem
+                key={category.id}
+                value={category.id}
+                className="border rounded-lg shadow-card mb-4 overflow-hidden"
+              >
+                <div className="flex items-center border-b border-transparent">
+                  <AccordionTrigger className="flex-1 px-4 py-3 hover:bg-muted/50 hover:no-underline">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div
+                        className="rounded-lg p-2"
+                        style={{ backgroundColor: `${category.color || '#0EA5E9'}20` }}
+                      >
+                        <Icon className="h-5 w-5" style={{ color: category.color || '#0EA5E9' }} />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-semibold">{category.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {activeCount} of {categoryServices.length} services active
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <h3 className="font-semibold">{category.name}</h3>
-                      <p className="text-sm text-muted-foreground">{activeCount} of {categoryServices.length} services active</p>
-                    </div>
-                  </div>
-                </AccordionTrigger>
+                  </AccordionTrigger>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 mr-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    aria-label={`Delete category ${category.name}`}
+                    onClick={() => setCategoryToDelete(category)}
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
                 <AccordionContent className="pb-0">
                   {categoryServices.length === 0 ? (
                     <div className="p-6 text-center">
@@ -224,8 +323,10 @@ export default function Services() {
                           <ServiceRow
                             key={service.id}
                             service={service}
-                            categoryColor={category.color || '#888'}
+                            categoryColor={category.color || '#0EA5E9'}
                             onEdit={handleEditService}
+                            onDelete={setServiceToDelete}
+                            onChecklist={setChecklistService}
                           />
                         ))}
                       </TableBody>
@@ -237,12 +338,42 @@ export default function Services() {
           })}
         </Accordion>
       )}
+    </>
+  );
 
-      {/* Modals */}
-      <AddServiceModal 
-        open={isAddServiceOpen} 
-        onOpenChange={setIsAddServiceOpen} 
-      />
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Services</h1>
+        <p className="text-muted-foreground">
+          Service types, checklists, readings and dosages for pool visits.
+        </p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="services">Service types</TabsTrigger>
+          <TabsTrigger value="readings" className="gap-1">
+            <FlaskConical className="h-4 w-4" />
+            Readings
+          </TabsTrigger>
+          <TabsTrigger value="dosages">Dosages</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="services" className="space-y-6 mt-6">
+          {serviceTypesContent}
+        </TabsContent>
+
+        <TabsContent value="readings" className="mt-6">
+          <ReadingsManager />
+        </TabsContent>
+
+        <TabsContent value="dosages" className="mt-6">
+          <DosagesManager />
+        </TabsContent>
+      </Tabs>
+
+      <AddServiceModal open={isAddServiceOpen} onOpenChange={setIsAddServiceOpen} />
       <EditServiceModal
         open={isEditServiceOpen}
         onOpenChange={(open) => {
@@ -251,10 +382,60 @@ export default function Services() {
         }}
         service={editingService}
       />
-      <AddCategoryModal 
-        open={isAddCategoryOpen} 
-        onOpenChange={setIsAddCategoryOpen} 
+      <AddCategoryModal open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen} />
+
+      <ServiceChecklistManager
+        open={!!checklistService}
+        onOpenChange={(open) => {
+          if (!open) setChecklistService(null);
+        }}
+        serviceId={checklistService?.id ?? null}
+        serviceName={checklistService?.name ?? ''}
       />
+
+      <AlertDialog open={!!serviceToDelete} onOpenChange={(open) => !open && setServiceToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete service?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete &quot;{serviceToDelete?.name}&quot;? This cannot be undone. Existing appointments
+              linked to this service may keep their history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteService}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleteService.isPending}
+            >
+              Delete service
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete &quot;{categoryToDelete?.name}&quot; and all services inside it? This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCategory}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleteCategory.isPending}
+            >
+              Delete category
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

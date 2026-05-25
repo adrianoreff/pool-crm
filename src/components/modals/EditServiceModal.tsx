@@ -124,7 +124,7 @@ export function EditServiceModal({ open, onOpenChange, service, onSuccess }: Edi
                 <FormItem>
                   <FormLabel>Service Name *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Drain Cleaning" {...field} />
+                    <Input placeholder="Weekly Pool Service" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

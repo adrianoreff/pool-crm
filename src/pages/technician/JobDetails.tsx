@@ -12,17 +12,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/technician/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { MapPreview } from '@/components/technician/MapPreview';
-import { MapPin, Phone, Mail, Clock, Wrench, CheckCircle2, AlertCircle, FileText, MessageSquare, Send, Droplets, Undo2 } from 'lucide-react';
-import { useCustomerVisitHistory, useVisitReport, useUnfinishVisit } from '@/hooks/useVisitData';
+import { MapPin, Phone, Mail, Clock, Wrench, CheckCircle2, AlertCircle, FileText, MessageSquare, Send, Droplets, Undo2, ListChecks, Camera } from 'lucide-react';
+import { useVisitReport, useUnfinishVisit } from '@/hooks/useVisitData';
+import { useJobChecklist } from '@/hooks/useJobChecklist';
+import { ChecklistSwipeItem } from '@/components/technician/ChecklistSwipeItem';
+import { PoolRecentActivityTable } from '@/components/technician/PoolRecentActivityTable';
+import { PoolVisitChemistryForm } from '@/components/technician/PoolVisitChemistryForm';
+import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
+import type { ServiceChecklistItem } from '@/types/service-checklist';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useBusiness } from '@/hooks/useBusiness';
@@ -44,11 +43,26 @@ export default function JobDetails() {
   const updateStatus = useUpdateJobStatus();
   const { messages, sendMessage, isSending, markAsRead } = useJobMessages(id);
   const [messageDraft, setMessageDraft] = useState('');
+  const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState('pool');
   const { toast } = useToast();
   const customerId = appointment?.customer_id;
-  const { data: visitHistory = [], isLoading: historyLoading } = useCustomerVisitHistory(customerId);
   const { data: visitReport } = useVisitReport(id);
   const unfinishVisit = useUnfinishVisit();
+  const {
+    checklistTemplate,
+    completedItems,
+    progress: checklistProgress,
+    toggleItem,
+    getDisplayText,
+    requiredIncomplete,
+  } = useJobChecklist(id || '', appointment?.service_id || null);
+
+  useEffect(() => {
+    if (appointment?.status === 'in_progress') {
+      setActiveTab('pool');
+    }
+  }, [appointment?.status]);
 
   useEffect(() => {
     if (id) markAsRead();
@@ -262,6 +276,25 @@ export default function JobDetails() {
     return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   };
 
+  const isItemCompleted = (itemId: string) =>
+    completedItems.find((ci) => ci.item_id === itemId)?.completed ?? false;
+
+  const getItemNotes = (itemId: string) =>
+    completedItems.find((ci) => ci.item_id === itemId)?.notes || '';
+
+  const handleChecklistToggle = async (item: ServiceChecklistItem, completed: boolean) => {
+    const itemText = getDisplayText(item, completed);
+    await toggleItem.mutateAsync({
+      itemId: item.id,
+      itemText,
+      completed,
+      notes: itemNotes[item.id],
+    });
+  };
+
+  const chemistryReadOnly =
+    appointment.status === 'completed' || appointment.status === 'cancelled';
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -310,7 +343,7 @@ export default function JobDetails() {
         </div>
       )}
 
-      <Tabs defaultValue="info" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="info">Info</TabsTrigger>
           <TabsTrigger value="pool" className="gap-1">
@@ -511,61 +544,130 @@ export default function JobDetails() {
         </TabsContent>
 
         <TabsContent value="pool" className="space-y-4 mt-0">
+          {checklistTemplate && checklistTemplate.items.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Today&apos;s Checklist
+                  </CardTitle>
+                  <span className="text-xs text-muted-foreground">(Swipe right to complete or undo)</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Progress</span>
+                    <span>{checklistProgress}%</span>
+                  </div>
+                  <Progress value={checklistProgress} className="h-2" />
+                </div>
+                {requiredIncomplete.length > 0 && (
+                  <p className="text-xs text-amber-600">
+                    {requiredIncomplete.length} required item(s) before finishing stop.
+                  </p>
+                )}
+                <div className="space-y-2">
+                  {checklistTemplate.items.map((item) => {
+                    const completed = isItemCompleted(item.id);
+                    const notes = getItemNotes(item.id);
+                    return (
+                      <div key={item.id} className="space-y-1">
+                        <ChecklistSwipeItem
+                          label={item.description}
+                          completedLabel={item.descriptionWhenComplete}
+                          completed={completed}
+                          disabled={toggleItem.isPending || chemistryReadOnly}
+                          onToggle={(next) => handleChecklistToggle(item, next)}
+                        />
+                        {item.requirePhoto && (
+                          <div className="flex items-center gap-1 px-1 text-xs text-muted-foreground">
+                            <Camera className="h-3 w-3" />
+                            Photo required
+                          </div>
+                        )}
+                        {completed && !chemistryReadOnly && (
+                          <Textarea
+                            placeholder="Notes..."
+                            value={itemNotes[item.id] ?? notes}
+                            onChange={(e) => setItemNotes({ ...itemNotes, [item.id]: e.target.value })}
+                            onBlur={() => {
+                              const draft = itemNotes[item.id];
+                              if (draft !== undefined && draft !== notes) {
+                                toggleItem.mutate({
+                                  itemId: item.id,
+                                  itemText: getDisplayText(item, true),
+                                  completed: true,
+                                  notes: draft,
+                                });
+                              }
+                            }}
+                            className="text-sm"
+                            rows={2}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Droplets className="h-4 w-4" />
-                Reading history
-              </CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Recent Activity</CardTitle>
             </CardHeader>
             <CardContent>
-              {historyLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              ) : visitHistory.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No completed visits yet.</p>
-              ) : (
-                <ScrollArea className="h-[280px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Readings</TableHead>
-                        <TableHead>Chemicals</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visitHistory.map((visit) => {
-                        const readings = (visit.visit_readings || [])
-                          .map((r: { definition?: { label: string }; value_numeric: number | null; value_text: string | null }) => {
-                            const val = r.value_text ?? (r.value_numeric != null ? String(r.value_numeric) : '');
-                            return r.definition?.label && val ? `${r.definition.label}: ${val}` : null;
-                          })
-                          .filter(Boolean)
-                          .join(', ');
-                        const dosages = (visit.visit_dosages || [])
-                          .map((d: { definition?: { label: string }; amount_display: string | null }) =>
-                            d.definition?.label && d.amount_display
-                              ? `${d.definition.label}: ${d.amount_display}`
-                              : null
-                          )
-                          .filter(Boolean)
-                          .join(', ');
-                        return (
-                          <TableRow key={visit.id}>
-                            <TableCell className="text-xs whitespace-nowrap">
-                              {visit.scheduled_date}
-                            </TableCell>
-                            <TableCell className="text-xs">{readings || '—'}</TableCell>
-                            <TableCell className="text-xs">{dosages || '—'}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              )}
+              <PoolRecentActivityTable customerId={customerId} />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Pool Info</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Equipment details — coming soon</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Items Needed</CardTitle>
+                <span className="text-xs text-muted-foreground">Coming soon</span>
+              </div>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Work Orders</CardTitle>
+                <span className="text-xs text-muted-foreground">Coming soon</span>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {id && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Droplets className="h-4 w-4" />
+                  Today&apos;s readings &amp; dosages
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PoolVisitChemistryForm
+                  appointmentId={id}
+                  readOnly={chemistryReadOnly}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           {visitReport?.email_status === 'sent' && visitReport.email_sent_at && (
             <Badge variant="secondary" className="w-full justify-center py-2">
               Service report sent {formatCompletedAt(visitReport.email_sent_at)}

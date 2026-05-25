@@ -12,7 +12,6 @@ import {
   MapPin,
   Route,
   Map,
-  FlaskConical,
   MessageSquare,
   Receipt,
   BarChart3,
@@ -55,7 +54,6 @@ const operationsNavItems: NavItem[] = [
   { label: 'Team', href: '/team', icon: UserCog },
   { label: 'Service Types', href: '/services', icon: Briefcase },
   { label: 'Service Areas', href: '/service-areas', icon: MapPin },
-  { label: 'Pool Chemistry', href: '/pool/chemistry', icon: FlaskConical },
 ];
 
 const communicationNavItemsBase: Omit<NavItem, 'badge'>[] = [

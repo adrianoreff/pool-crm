@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -57,6 +57,8 @@ export function AddServiceModal({ open, onOpenChange, onSuccess }: AddServiceMod
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const { data: categories = [] } = useServiceCategories();
+  const poolCategories = categories;
+  const singleCategoryId = poolCategories.length === 1 ? poolCategories[0]?.id : undefined;
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
@@ -64,12 +66,23 @@ export function AddServiceModal({ open, onOpenChange, onSuccess }: AddServiceMod
       name: '',
       description: '',
       category_id: '',
-      duration_min: 60,
-      duration_max: 120,
+      duration_min: 30,
+      duration_max: 30,
       base_price_min: 0,
       base_price_max: 0,
     },
   });
+
+  useEffect(() => {
+    if (!open) return;
+    const preferred =
+      poolCategories.find((c) => c.slug === 'pool') ??
+      poolCategories.find((c) => c.slug === 'pool-cleaning') ??
+      poolCategories[0];
+    if (preferred?.id) {
+      form.setValue('category_id', preferred.id);
+    }
+  }, [open, poolCategories, form]);
 
   const handleSubmit = async (data: ServiceFormData) => {
     if (!profile?.business_id) {
@@ -121,36 +134,40 @@ export function AddServiceModal({ open, onOpenChange, onSuccess }: AddServiceMod
                 <FormItem>
                   <FormLabel>Service Name *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Drain Cleaning" {...field} />
+                    <Input placeholder="Weekly Pool Service" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="category_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {poolCategories.length > 1 ? (
+              <FormField
+                control={form.control}
+                name="category_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select pool category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {poolCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : singleCategoryId ? null : (
+              <p className="text-sm text-destructive">No pool category found. Run onboarding or add Pool Service category.</p>
+            )}
             <FormField
               control={form.control}
               name="description"
@@ -158,7 +175,7 @@ export function AddServiceModal({ open, onOpenChange, onSuccess }: AddServiceMod
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief description of the service..." {...field} />
+                    <Textarea placeholder="Regular weekly pool cleaning and chemical balance..." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
