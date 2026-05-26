@@ -45,7 +45,7 @@ import {
   Send,
 } from 'lucide-react';
 import { AppointmentWithRelations, AppointmentStatus } from '@/types/database';
-import { useUpdateAppointmentStatus, useCancelAppointment } from '@/hooks/useAppointments';
+import { useUpdateAppointmentStatus, useCancelAppointment, useDeleteAppointment } from '@/hooks/useAppointments';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServices } from '@/hooks/useServices';
 import { useCheckTechnicianConflict } from '@/hooks/useTechnicianConflict';
@@ -94,6 +94,7 @@ const getStatusStyles = (status: string) => {
 export function AppointmentDetailModal({ open, onOpenChange, appointment }: AppointmentDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
@@ -113,6 +114,7 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
   const queryClient = useQueryClient();
   const updateStatus = useUpdateAppointmentStatus();
   const cancelAppointment = useCancelAppointment();
+  const deleteAppointment = useDeleteAppointment();
   const { data: technicians = [] } = useTechnicians();
   const { data: services = [] } = useServices();
   const checkConflict = useCheckTechnicianConflict();
@@ -320,6 +322,15 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
     setShowCancelDialog(false);
     setCancelReason('');
     onOpenChange(false);
+  };
+
+  const handleDelete = () => {
+    deleteAppointment.mutate(appointment.id, {
+      onSuccess: () => {
+        setShowDeleteDialog(false);
+        onOpenChange(false);
+      },
+    });
   };
 
   const handleStatusChange = (newStatus: string) => {
@@ -670,6 +681,11 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
                 Cancel Appointment
               </Button>
             )}
+            {appointment.status !== 'in_progress' && (
+              <Button variant="outline" className="text-destructive border-destructive/30" onClick={() => setShowDeleteDialog(true)}>
+                Delete Appointment
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -696,6 +712,23 @@ export function AppointmentDetailModal({ open, onOpenChange, appointment }: Appo
             <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancel} className="bg-destructive hover:bg-destructive/90">
               Cancel Appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete this appointment? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

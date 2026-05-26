@@ -73,7 +73,17 @@ const formatCurrency = (amount: number | null) => {
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return 'Never';
-  return formatAppointmentDate(dateStr);
+  const datePart = dateStr.includes('T') ? dateStr.split('T')[0]! : dateStr.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    const parsed = new Date(dateStr);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return parsed.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+  return formatAppointmentDate(datePart);
 };
 
 const getInitials = (firstName: string, lastName: string | null) => {
@@ -264,6 +274,23 @@ export default function Customers() {
                             <p className="text-xs text-muted-foreground">
                               Customer since {formatDate(customer.created_at)}
                             </p>
+                            {customer.tags && customer.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {customer.tags.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="inline-flex rounded px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                                {customer.tags.length > 3 && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    +{customer.tags.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </TableCell>

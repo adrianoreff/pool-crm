@@ -22,7 +22,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn, formatAppointmentDate } from '@/lib/utils';
-import { useCustomer, useCustomerAppointments } from '@/hooks/useCustomers';
+import { useCustomer, useCustomerAppointments, useUpdateCustomer } from '@/hooks/useCustomers';
+import {
+  getCustomerDisplayStatus,
+  CUSTOMER_STATUS_LABELS,
+  CUSTOMER_STATUS_COLORS,
+  applyCustomerStatus,
+  type CustomerDisplayStatus,
+} from '@/lib/customer-status';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
 import { EditCustomerModal, SendEmailModal } from '@/components/modals';
 import { CustomerRouteCard } from '@/components/customers/CustomerRouteCard';
@@ -88,6 +102,17 @@ export default function CustomerDetail() {
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const updateCustomer = useUpdateCustomer();
+
+  const handleStatusChange = (status: CustomerDisplayStatus) => {
+    if (!customer) return;
+    const fields = applyCustomerStatus(status);
+    updateCustomer.mutate({
+      id: customer.id,
+      customer_status: fields.customer_status,
+      is_active: fields.is_active,
+    });
+  };
 
   const handleCall = () => {
     if (customer?.phone) {
@@ -140,18 +165,53 @@ export default function CustomerDetail() {
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-2xl font-bold">
-              {customer.first_name} {customer.last_name}
-            </h1>
-            <p className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold">
+                {customer.first_name} {customer.last_name}
+              </h1>
+              <Badge
+                variant="outline"
+                className={cn('text-xs', CUSTOMER_STATUS_COLORS[getCustomerDisplayStatus(customer)])}
+              >
+                {CUSTOMER_STATUS_LABELS[getCustomerDisplayStatus(customer)]}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
               Customer since {formatDate(customer.created_at)}
             </p>
+            {customer.tags && customer.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {customer.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select
+            value={getCustomerDisplayStatus(customer)}
+            onValueChange={(v) => handleStatusChange(v as CustomerDisplayStatus)}
+            disabled={updateCustomer.isPending}
+          >
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(CUSTOMER_STATUS_LABELS) as CustomerDisplayStatus[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {CUSTOMER_STATUS_LABELS[key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={() => setIsEditModalOpen(true)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}

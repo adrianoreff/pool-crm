@@ -59,8 +59,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn, formatAppointmentDate, parseLocalDate, getLocalDateString } from '@/lib/utils';
-import { useAppointments, useTodayAppointments, usePendingAppointments, useCancelAppointment } from '@/hooks/useAppointments';
+import {
+  useAppointments,
+  useTodayAppointments,
+  usePendingAppointments,
+  useCancelAppointment,
+  useDeleteAppointment,
+  useBulkDeleteAppointments,
+  useBulkCancelAppointments,
+} from '@/hooks/useAppointments';
+import {
+  matchesAppointmentCategoryTab,
+  isRecurringAppointment,
+  isLeadFirstVisitAppointment,
+  type AppointmentCategoryTab,
+} from '@/lib/appointment-filters';
 import { useTechnicians } from '@/hooks/useTeam';
 import { useServiceCategories } from '@/hooks/useServices';
 import { useAppointmentsLatestEmailStatus } from '@/hooks/useLatestEmailStatus';
@@ -145,6 +161,12 @@ export default function Appointments() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
+  const [bulkCancelDialogOpen, setBulkCancelDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [categoryTab, setCategoryTab] = useState<AppointmentCategoryTab>('all');
   const [viewMode, setViewMode] = useState<ViewMode>(getStoredViewMode);
 
   const setViewModeAndStore = (mode: ViewMode) => {
@@ -160,6 +182,8 @@ export default function Appointments() {
     const status = searchParams.get('status');
     if (date === 'today' || date === 'week') setDatePreset(date);
     if (status && statusOptions.some(o => o.value === status)) setStatusFilter(status);
+    const tab = searchParams.get('tab');
+    if (tab === 'recurring' || tab === 'leads' || tab === 'all') setCategoryTab(tab);
   }, [searchParams]);
 
   const problemFilter = searchParams.get('problem') === '1';
@@ -178,6 +202,9 @@ export default function Appointments() {
   const { data: technicians = [] } = useTechnicians();
   const { data: categories = [] } = useServiceCategories();
   const cancelMutation = useCancelAppointment();
+  const deleteMutation = useDeleteAppointment();
+  const bulkDeleteMutation = useBulkDeleteAppointments();
+  const bulkCancelMutation = useBulkCancelAppointments();
 
   // Get appointment IDs for email status lookup
   const appointmentIds = allAppointments.map(a => a.id);
@@ -188,6 +215,7 @@ export default function Appointments() {
 
   // Filter appointments
   let filteredAppointments = allAppointments.filter(apt => {
+    if (!matchesAppointmentCategoryTab(apt, categoryTab)) return false;
     if (technicianFilter !== 'all' && apt.technician_id !== technicianFilter) return false;
     if (datePreset === 'today' && apt.scheduled_date !== getLocalDateString()) return false;
     if (datePreset === 'week') {
@@ -280,6 +308,85 @@ export default function Appointments() {
     setAppointmentToCancel(null);
   };
 
+  const handleDeleteClick = (aptId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAppointmentToDelete(aptId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (appointmentToDelete) {
+      deleteMutation.mutate(appointmentToDelete, {
+        onSuccess: () => {
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(appointmentToDelete);
+            return next;
+          });
+        },
+      });
+    }
+    setDeleteDialogOpen(false);
+    setAppointmentToDelete(null);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredAppointments.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredAppointments.map((a) => a.id)));
+    }
+  };
+
+  const confirmBulkCancel = () => {
+    bulkCancelMutation.mutate(
+      { ids: Array.from(selectedIds) },
+      {
+        onSuccess: () => {
+          setSelectedIds(new Set());
+          setBulkCancelDialogOpen(false);
+        },
+      }
+    );
+  };
+
+  const confirmBulkDelete = () => {
+    bulkDeleteMutation.mutate(Array.from(selectedIds), {
+      onSuccess: () => {
+        setSelectedIds(new Set());
+        setBulkDeleteDialogOpen(false);
+      },
+    });
+  };
+
+  const setCategoryTabAndUrl = (tab: AppointmentCategoryTab) => {
+    setCategoryTab(tab);
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'all') next.delete('tab');
+    else next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
+
+  const CategoryBadges = ({ apt }: { apt: AppointmentWithRelations }) => (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {isRecurringAppointment(apt) && (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Recurring</Badge>
+      )}
+      {isLeadFirstVisitAppointment(apt) && (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 text-amber-800">Lead</Badge>
+      )}
+    </div>
+  );
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? 
@@ -306,6 +413,33 @@ export default function Appointments() {
           New Appointment
         </Button>
       </div>
+
+      <Tabs value={categoryTab} onValueChange={(v) => setCategoryTabAndUrl(v as AppointmentCategoryTab)}>
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="recurring">Recurring</TabsTrigger>
+          <TabsTrigger value="leads">Leads / First visits</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {selectedIds.size > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setBulkCancelDialogOpen(true)}>
+                Cancel selected
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setBulkDeleteDialogOpen(true)}>
+                Delete selected
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Problem filter active */}
       {problemFilter && (
@@ -437,12 +571,21 @@ export default function Appointments() {
                     return (
                       <Card
                         key={apt.id}
-                        className="cursor-pointer hover:shadow-md transition-shadow border"
+                        className="cursor-pointer hover:shadow-md transition-shadow border relative"
                         onClick={() => handleViewDetails(apt)}
                       >
                         <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            {getStatusBadge(apt.status)}
+                          <div className="absolute top-3 left-3" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(apt.id)}
+                              onCheckedChange={() => toggleSelect(apt.id)}
+                            />
+                          </div>
+                          <div className="flex items-start justify-between gap-2 mb-2 pl-7">
+                            <div>
+                              {getStatusBadge(apt.status)}
+                              <CategoryBadges apt={apt} />
+                            </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -465,6 +608,14 @@ export default function Appointments() {
                                     onClick={(e) => { e.stopPropagation(); handleCancelClick(apt.id, e); }}
                                   >
                                     <Trash className="mr-2 h-4 w-4" /> Cancel
+                                  </DropdownMenuItem>
+                                )}
+                                {apt.status !== 'in_progress' && (
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={(e) => handleDeleteClick(apt.id, e)}
+                                  >
+                                    <Trash className="mr-2 h-4 w-4" /> Delete
                                   </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
@@ -509,6 +660,15 @@ export default function Appointments() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={
+                      filteredAppointments.length > 0 &&
+                      selectedIds.size === filteredAppointments.length
+                    }
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead 
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => handleSort('status')}
@@ -545,6 +705,7 @@ export default function Appointments() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-8 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-8 w-32" /></TableCell>
@@ -557,7 +718,7 @@ export default function Appointments() {
                 ))
               ) : filteredAppointments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12">
+                  <TableCell colSpan={9} className="text-center py-12">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
                     <p className="text-muted-foreground">No appointments found</p>
                     <Button className="mt-4" onClick={() => setIsNewAppointmentOpen(true)}>
@@ -580,7 +741,18 @@ export default function Appointments() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleViewDetails(apt)}
                     >
-                      <TableCell>{getStatusBadge(apt.status)}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(apt.id)}
+                          onCheckedChange={() => toggleSelect(apt.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          {getStatusBadge(apt.status)}
+                          <CategoryBadges apt={apt} />
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{formatDate(apt.scheduled_date)}</p>
@@ -678,6 +850,15 @@ export default function Appointments() {
                                 Cancel
                               </DropdownMenuItem>
                             )}
+                            {apt.status !== 'in_progress' && (
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={(e) => handleDeleteClick(apt.id, e)}
+                              >
+                                <Trash className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -715,6 +896,57 @@ export default function Appointments() {
             <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCancel} className="bg-destructive hover:bg-destructive/90">
               Cancel Appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete this appointment? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkCancelDialogOpen} onOpenChange={setBulkCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel {selectedIds.size} appointment(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Selected appointments will be marked as cancelled.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Back</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkCancel} className="bg-destructive hover:bg-destructive/90">
+              Cancel selected
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} appointment(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete selected appointments? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Back</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete selected
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

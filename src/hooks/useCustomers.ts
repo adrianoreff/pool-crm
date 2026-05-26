@@ -112,6 +112,8 @@ export function useCustomerAppointments(customerId: string) {
   });
 }
 
+import { applyCustomerStatus } from '@/lib/customer-status';
+
 export function useCreateCustomer() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -120,20 +122,30 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: async (customer: {
       first_name: string;
-      last_name?: string;
+      last_name?: string | null;
       phone: string;
-      email?: string;
-      address?: string;
-      city?: string;
-      state?: string;
-      zip_code?: string;
-      notes?: string;
+      email?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zip_code?: string | null;
+      gate_code?: string | null;
+      dog_name?: string | null;
+      notes?: string | null;
+      tags?: string[] | null;
+      customer_status?: 'active' | 'lead' | 'inactive';
+      is_active?: boolean;
     }) => {
+      const statusFields = customer.customer_status
+        ? applyCustomerStatus(customer.customer_status)
+        : { customer_status: 'active' as const, is_active: true };
+
       const { data, error } = await supabase
         .from('customers')
         .insert({
           business_id: profile!.business_id,
           ...customer,
+          ...statusFields,
         })
         .select()
         .single();
@@ -168,10 +180,18 @@ export function useUpdateCustomer() {
       zip_code: string;
       gate_code: string | null;
       dog_name: string | null;
+      tags: string[] | null;
+      customer_status: 'active' | 'lead' | 'inactive';
+      is_active: boolean;
     }>) => {
+      const patch = { ...updates };
+      if (updates.customer_status) {
+        Object.assign(patch, applyCustomerStatus(updates.customer_status));
+      }
+
       const { error } = await supabase
         .from('customers')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;

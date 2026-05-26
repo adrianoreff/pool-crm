@@ -391,3 +391,112 @@ export function useCancelAppointment() {
     },
   });
 }
+
+export function useDeleteAppointment() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: apt } = await supabase
+        .from('appointments')
+        .select('status')
+        .eq('id', id)
+        .single();
+
+      if (apt?.status === 'in_progress') {
+        throw new Error('Cannot delete an appointment that is in progress');
+      }
+
+      const { error } = await supabase.from('appointments').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      toast({ title: 'Appointment deleted' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete appointment', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useBulkDeleteAppointments() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return;
+
+      const { data: rows, error: fetchError } = await supabase
+        .from('appointments')
+        .select('id, status')
+        .in('id', ids);
+
+      if (fetchError) throw fetchError;
+
+      const blocked = (rows || []).filter((r) => r.status === 'in_progress');
+      if (blocked.length > 0) {
+        throw new Error('Cannot delete appointments that are in progress');
+      }
+
+      const { error } = await supabase.from('appointments').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      toast({ title: `${ids.length} appointment(s) deleted` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete appointments', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useBulkCancelAppointments() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ ids, reason }: { ids: string[]; reason?: string }) => {
+      if (ids.length === 0) return;
+
+      const { data: rows, error: fetchError } = await supabase
+        .from('appointments')
+        .select('id, status')
+        .in('id', ids);
+
+      if (fetchError) throw fetchError;
+
+      const blocked = (rows || []).filter(
+        (r) => r.status === 'in_progress' || r.status === 'completed' || r.status === 'cancelled'
+      );
+      if (blocked.length > 0) {
+        throw new Error('Some selected appointments cannot be cancelled');
+      }
+
+      const { error } = await supabase
+        .from('appointments')
+        .update({
+          status: 'cancelled' as AppointmentStatus,
+          cancelled_at: new Date().toISOString(),
+          cancelled_by: profile?.id,
+          cancellation_reason: reason || 'Bulk cancellation',
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', ids);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, { ids }) => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      toast({ title: `${ids.length} appointment(s) cancelled` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to cancel appointments', description: error.message, variant: 'destructive' });
+    },
+  });
+}
