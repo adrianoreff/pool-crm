@@ -130,8 +130,6 @@ export function PoolVisitEmailSection({
     if (readOnly) return;
     saveVisit.mutate({
       appointmentId,
-      readings: [],
-      dosages: [],
       emailSubject: nextHeader,
       emailMessage: nextMessage,
     });

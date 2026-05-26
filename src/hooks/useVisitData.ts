@@ -76,8 +76,8 @@ export function useSaveVisitData() {
   return useMutation({
     mutationFn: async (payload: {
       appointmentId: string;
-      readings: { definition_id: string; value_numeric?: number | null; value_text?: string | null }[];
-      dosages: { definition_id: string; amount_numeric?: number | null; amount_display?: string | null }[];
+      readings?: { definition_id: string; value_numeric?: number | null; value_text?: string | null }[];
+      dosages?: { definition_id: string; amount_numeric?: number | null; amount_display?: string | null }[];
       internalNotes?: string;
       emailSubject?: string;
       emailMessage?: string;
@@ -85,30 +85,64 @@ export function useSaveVisitData() {
       const { appointmentId, readings, dosages, internalNotes, emailSubject, emailMessage } =
         payload;
 
-      if (readings.length) {
-        const { error } = await supabase.from('visit_readings').upsert(
-          readings.map((r) => ({
-            appointment_id: appointmentId,
-            definition_id: r.definition_id,
-            value_numeric: r.value_numeric ?? null,
-            value_text: r.value_text ?? null,
-          })),
-          { onConflict: 'appointment_id,definition_id' }
-        );
-        if (error) throw error;
+      if (readings !== undefined) {
+        const keptIds = readings.map((r) => r.definition_id);
+
+        if (keptIds.length > 0) {
+          const { error } = await supabase.from('visit_readings').upsert(
+            readings.map((r) => ({
+              appointment_id: appointmentId,
+              definition_id: r.definition_id,
+              value_numeric: r.value_numeric ?? null,
+              value_text: r.value_text ?? null,
+            })),
+            { onConflict: 'appointment_id,definition_id' }
+          );
+          if (error) throw error;
+
+          const { error: deleteError } = await supabase
+            .from('visit_readings')
+            .delete()
+            .eq('appointment_id', appointmentId)
+            .not('definition_id', 'in', `(${keptIds.join(',')})`);
+          if (deleteError) throw deleteError;
+        } else {
+          const { error } = await supabase
+            .from('visit_readings')
+            .delete()
+            .eq('appointment_id', appointmentId);
+          if (error) throw error;
+        }
       }
 
-      if (dosages.length) {
-        const { error } = await supabase.from('visit_dosages').upsert(
-          dosages.map((d) => ({
-            appointment_id: appointmentId,
-            definition_id: d.definition_id,
-            amount_numeric: d.amount_numeric ?? null,
-            amount_display: d.amount_display ?? null,
-          })),
-          { onConflict: 'appointment_id,definition_id' }
-        );
-        if (error) throw error;
+      if (dosages !== undefined) {
+        const keptIds = dosages.map((d) => d.definition_id);
+
+        if (keptIds.length > 0) {
+          const { error } = await supabase.from('visit_dosages').upsert(
+            dosages.map((d) => ({
+              appointment_id: appointmentId,
+              definition_id: d.definition_id,
+              amount_numeric: d.amount_numeric ?? null,
+              amount_display: d.amount_display ?? null,
+            })),
+            { onConflict: 'appointment_id,definition_id' }
+          );
+          if (error) throw error;
+
+          const { error: deleteError } = await supabase
+            .from('visit_dosages')
+            .delete()
+            .eq('appointment_id', appointmentId)
+            .not('definition_id', 'in', `(${keptIds.join(',')})`);
+          if (deleteError) throw deleteError;
+        } else {
+          const { error } = await supabase
+            .from('visit_dosages')
+            .delete()
+            .eq('appointment_id', appointmentId);
+          if (error) throw error;
+        }
       }
 
       if (

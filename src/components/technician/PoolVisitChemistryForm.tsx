@@ -89,8 +89,8 @@ export function PoolVisitChemistryForm({
 }: PoolVisitChemistryFormProps) {
   const { data: readingDefs = [] } = usePoolReadingDefinitions();
   const { data: dosageDefs = [] } = usePoolDosageDefinitions();
-  const { data: existingReadings = [] } = useVisitReadings(appointmentId);
-  const { data: existingDosages = [] } = useVisitDosages(appointmentId);
+  const { data: existingReadings = [], isLoading: readingsLoading } = useVisitReadings(appointmentId);
+  const { data: existingDosages = [], isLoading: dosagesLoading } = useVisitDosages(appointmentId);
   const { data: lastChemistry } = useCustomerLastChemistry(customerId, appointmentId);
   const saveVisit = useSaveVisitData();
 
@@ -102,20 +102,25 @@ export function PoolVisitChemistryForm({
   const [expandedReadings, setExpandedReadings] = useState(true);
   const [expandedDosages, setExpandedDosages] = useState(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
+    if (hydratedRef.current || readingsLoading || dosagesLoading) return;
+
     const r: Record<string, string> = {};
     existingReadings.forEach((row: { definition_id: string; value_numeric: number | null; value_text: string | null }) => {
       r[row.definition_id] = row.value_text ?? (row.value_numeric != null ? String(row.value_numeric) : '');
     });
     setReadingValues(r);
-    const dosages = existingDosages.map((row: { definition_id: string; amount_display: string | null }) => ({
-      definition_id: row.definition_id,
-      amount_display: row.amount_display || '',
-    }));
-    setDosageEntries(dosages);
+    setDosageEntries(
+      existingDosages.map((row: { definition_id: string; amount_display: string | null }) => ({
+        definition_id: row.definition_id,
+        amount_display: row.amount_display || '',
+      }))
+    );
+    hydratedRef.current = true;
     setInitialized(true);
-  }, [existingReadings, existingDosages]);
+  }, [existingReadings, existingDosages, readingsLoading, dosagesLoading]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -212,7 +217,7 @@ export function PoolVisitChemistryForm({
     setActiveTarget({ type: 'dosage', id: defId });
   };
 
-  if (!initialized && existingReadings.length === 0 && existingDosages.length === 0) {
+  if (!initialized && (readingsLoading || dosagesLoading)) {
     return (
       <div className="flex justify-center py-4">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

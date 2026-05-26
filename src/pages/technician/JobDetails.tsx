@@ -24,7 +24,7 @@ import type { ServiceChecklistItem } from '@/types/service-checklist';
 import { useToast } from '@/hooks/use-toast';
 import { formatTime, formatAppointmentDateLong } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
-import { useBusiness } from '@/hooks/useBusiness';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 function formatTimeShort(time: string) {
   const [hours, minutes] = time.split(':');
@@ -551,6 +551,14 @@ export default function JobDetails() {
         </TabsContent>
 
         <TabsContent value="pool" className="space-y-4 mt-0">
+          {id && (
+            <PoolVisitChemistryForm
+              appointmentId={id}
+              customerId={customerId}
+              readOnly={chemistryReadOnly}
+            />
+          )}
+
           {showChecklist && (
             <TodaysChecklistCard
               items={checklistItems}
@@ -563,50 +571,6 @@ export default function JobDetails() {
             />
           )}
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PoolRecentActivityTable customerId={customerId} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Pool Info</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Equipment details — coming soon</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Items Needed</CardTitle>
-                <span className="text-xs text-muted-foreground">Coming soon</span>
-              </div>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Work Orders</CardTitle>
-                <span className="text-xs text-muted-foreground">Coming soon</span>
-              </div>
-            </CardHeader>
-          </Card>
-
-          {id && (
-            <PoolVisitChemistryForm
-              appointmentId={id}
-              customerId={customerId}
-              readOnly={chemistryReadOnly}
-            />
-          )}
-
           {id && appointment.customer?.email && (
             <PoolVisitEmailSection
               appointmentId={id}
@@ -614,6 +578,51 @@ export default function JobDetails() {
               readOnly={chemistryReadOnly}
             />
           )}
+
+          <Accordion type="single" collapsible className="border rounded-lg bg-card px-4 shadow-sm">
+            <AccordionItem value="pool-details" className="border-b-0">
+              <AccordionTrigger className="text-base font-semibold hover:no-underline py-4">
+                More pool details
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pb-4">
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Recent Activity</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PoolRecentActivityTable customerId={customerId} />
+                  </CardContent>
+                </Card>
+
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Pool Info</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">Equipment details — coming soon</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Items Needed</CardTitle>
+                      <span className="text-xs text-muted-foreground">Coming soon</span>
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Work Orders</CardTitle>
+                      <span className="text-xs text-muted-foreground">Coming soon</span>
+                    </div>
+                  </CardHeader>
+                </Card>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           {visitReport?.email_status === 'sent' && visitReport.email_sent_at && (
             <Badge variant="secondary" className="w-full justify-center py-2">
