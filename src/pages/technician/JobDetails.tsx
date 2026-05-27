@@ -4,6 +4,7 @@ import { useAppointment } from '@/hooks/useAppointments';
 import { useUpdateJobStatus } from '@/hooks/useUpdateJobStatus';
 import { useJobMessages } from '@/hooks/useJobMessages';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBusiness } from '@/hooks/useBusiness';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
