@@ -23,6 +23,8 @@ interface PoolVisitEmailSectionProps {
   appointmentId: string;
   customerEmail?: string | null;
   readOnly?: boolean;
+  /** Called after top email photo upload succeeds (used to auto-finish visit) */
+  onTopPhotoUploaded?: (url: string) => void;
 }
 
 function EmailPhotoSlot({
@@ -32,6 +34,7 @@ function EmailPhotoSlot({
   url,
   readOnly,
   onUploaded,
+  onTopPhotoUploaded,
 }: {
   label: string;
   role: EmailPhotoRole;
@@ -39,6 +42,7 @@ function EmailPhotoSlot({
   url?: string;
   readOnly?: boolean;
   onUploaded: (url: string) => void;
+  onTopPhotoUploaded?: (url: string) => void;
 }) {
   const { uploadPhoto, isUploading } = usePhotoUpload();
 
@@ -50,7 +54,10 @@ function EmailPhotoSlot({
       replaceExistingRole: true,
       setAsPrimary: role === 'top_email',
     });
-    if (result) onUploaded(result.url);
+    if (result) {
+      onUploaded(result.url);
+      if (role === 'top_email') onTopPhotoUploaded?.(result.url);
+    }
     e.target.value = '';
   };
 
@@ -93,6 +100,7 @@ export function PoolVisitEmailSection({
   appointmentId,
   customerEmail,
   readOnly = false,
+  onTopPhotoUploaded,
 }: PoolVisitEmailSectionProps) {
   const { profile } = useAuth();
   const isTechnician = profile?.role === 'technician';
@@ -208,6 +216,7 @@ export function PoolVisitEmailSection({
           url={topPhoto?.url}
           readOnly={readOnly}
           onUploaded={() => refetchPhotos()}
+          onTopPhotoUploaded={onTopPhotoUploaded}
         />
 
         <EmailPhotoSlot

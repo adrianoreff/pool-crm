@@ -1,38 +1,37 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAppointment } from '@/hooks/useAppointments';
-import { usePoolReadingDefinitions, usePoolDosageDefinitions } from '@/hooks/usePoolChemistry';
-import { useSaveVisitData, useCompletePoolVisit } from '@/hooks/useVisitData';
+import { useSaveVisitData } from '@/hooks/useVisitData';
 import { useJobChecklist } from '@/hooks/useJobChecklist';
+import { useFinishPoolVisit } from '@/hooks/useFinishPoolVisit';
 import {
   PoolVisitEmailSection,
   usePoolVisitEmailState,
 } from '@/components/technician/PoolVisitEmailSection';
+import { PoolVisitFinishActions } from '@/components/technician/PoolVisitFinishActions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PoolVisitChemistryForm, type PoolVisitChemistryState } from '@/components/technician/PoolVisitChemistryForm';
-import { ArrowLeft, Loader2, Send } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DEFAULT_POOL_REPORT_HEADER,
   DEFAULT_POOL_REPORT_MESSAGE,
 } from '@/lib/pool-service-report-template';
+import { usePoolReadingDefinitions } from '@/hooks/usePoolChemistry';
 
 export default function VisitFinish() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { data: appointment, isLoading } = useAppointment(id || '');
   const { data: readingDefs = [] } = usePoolReadingDefinitions();
-  const { data: dosageDefs = [] } = usePoolDosageDefinitions();
   const { requiredIncomplete } = useJobChecklist(id || '', appointment?.service_id || null, {
     serviceName: appointment?.service?.name,
     customerId: appointment?.customer_id,
   });
   const emailState = usePoolVisitEmailState(id);
   const saveVisit = useSaveVisitData();
-  const completeVisit = useCompletePoolVisit();
+  const { finishVisit, isSubmitting: isFinishing } = useFinishPoolVisit(id);
 
   const [chemistryState, setChemistryState] = useState<PoolVisitChemistryState>({
     readingValues: {},
@@ -41,80 +40,43 @@ export default function VisitFinish() {
   });
   const [step, setStep] = useState(0);
 
-  const handleFinish = async () => {
-    if (!id || !appointment?.customer?.email) {
-      toast({ title: 'Customer email required', variant: 'destructive' });
-      return;
-    }
-    if (!emailState.hasTopPhoto || !emailState.topPhotoUrl) {
-      toast({ title: 'Please add the top email photo', variant: 'destructive' });
-      return;
-    }
-    if (requiredIncomplete.length > 0) {
-      toast({
-        title: 'Checklist incomplete',
-        description: `Complete required items: ${requiredIncomplete.map((i) => i.description).join(', ')}`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const emailSubject =
-      emailState.emailSubject || DEFAULT_POOL_REPORT_HEADER;
-    const emailMessage =
-      emailState.emailMessage || DEFAULT_POOL_REPORT_MESSAGE;
-
-    try {
-      await saveVisit.mutateAsync({
-        appointmentId: id,
-        readings: readingDefs
-          .map((def) => ({
-            definition_id: def.id,
-            value_text: chemistryState.readingValues[def.id] || null,
-            value_numeric: parseFloat(chemistryState.readingValues[def.id] || '') || null,
-          }))
-          .filter((r) => chemistryState.readingValues[r.definition_id]),
-        dosages: chemistryState.dosageEntries.map((d) => ({
-          definition_id: d.definition_id,
-          amount_display: d.amount_display,
-        })),
-        internalNotes: chemistryState.internalNotes,
-        emailSubject,
-        emailMessage,
-      });
-
-      const readingsForEmail = readingDefs
-        .filter((def) => chemistryState.readingValues[def.id])
+  const persistChemistry = async () => {
+    if (!id) return;
+    await saveVisit.mutateAsync({
+      appointmentId: id,
+      readings: readingDefs
         .map((def) => ({
-          label: def.label,
-          value: chemistryState.readingValues[def.id],
-          unit: def.unit,
-        }));
+          definition_id: def.id,
+          value_text: chemistryState.readingValues[def.id] || null,
+          value_numeric: parseFloat(chemistryState.readingValues[def.id] || '') || null,
+        }))
+        .filter((r) => chemistryState.readingValues[r.definition_id]),
+      dosages: chemistryState.dosageEntries.map((d) => ({
+        definition_id: d.definition_id,
+        amount_display: d.amount_display,
+      })),
+      internalNotes: chemistryState.internalNotes,
+      emailSubject: emailState.emailSubject || DEFAULT_POOL_REPORT_HEADER,
+      emailMessage: emailState.emailMessage || DEFAULT_POOL_REPORT_MESSAGE,
+    });
+  };
 
-      const dosagesForEmail = chemistryState.dosageEntries.map((d) => {
-        const def = dosageDefs.find((x) => x.id === d.definition_id);
-        return { label: def?.label || 'Chemical', amount: d.amount_display };
-      });
+  const handleTopPhotoUploaded = async (url: string) => {
+    if (!id || isFinishing) return;
+    await persistChemistry();
+    await finishVisit({ requirePhoto: true, photoUrl: url });
+  };
 
-      await completeVisit.mutateAsync({
-        appointmentId: id,
-        customerEmail: appointment.customer.email,
-        customerName: `${appointment.customer.first_name} ${appointment.customer.last_name || ''}`.trim(),
-        photoUrl: emailState.topPhotoUrl,
-        extraPhotoUrl: emailState.extraPhotoUrl,
-        readings: readingsForEmail,
-        dosages: dosagesForEmail,
-        emailSubject,
-        emailBody: emailMessage,
-        timeSpentMinutes: appointment.time_spent_minutes ?? undefined,
-      });
+  const handleFinishWithPhoto = async () => {
+    if (!id) return;
+    await persistChemistry();
+    await finishVisit({ requirePhoto: true });
+  };
 
-      toast({ title: 'Visit complete! Customer emailed.' });
-      navigate('/technician/dashboard');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to complete visit';
-      toast({ title: message, variant: 'destructive' });
-    }
+  const handleFinishWithoutPhoto = async () => {
+    if (!id) return;
+    await persistChemistry();
+    await finishVisit({ requirePhoto: false });
   };
 
   if (isLoading || !appointment) {
@@ -126,7 +88,7 @@ export default function VisitFinish() {
   }
 
   const steps = ['Chemistry', 'Email & photos', 'Send'];
-  const isSubmitting = saveVisit.isPending || completeVisit.isPending;
+  const isSubmitting = saveVisit.isPending || isFinishing;
 
   return (
     <div className="space-y-4 pb-24">
@@ -183,14 +145,15 @@ export default function VisitFinish() {
           <PoolVisitEmailSection
             appointmentId={id}
             customerEmail={appointment.customer?.email}
+            onTopPhotoUploaded={handleTopPhotoUploaded}
           />
-          <Button
-            className="w-full"
-            disabled={!emailState.hasTopPhoto}
-            onClick={() => setStep(2)}
-          >
-            Next: Send report
-          </Button>
+          <PoolVisitFinishActions
+            hasTopPhoto={emailState.hasTopPhoto}
+            isSubmitting={isSubmitting}
+            checklistBlocked={requiredIncomplete.length > 0}
+            onFinishWithEmail={handleFinishWithPhoto}
+            onFinishWithoutPhoto={handleFinishWithoutPhoto}
+          />
         </div>
       )}
 
@@ -208,19 +171,13 @@ export default function VisitFinish() {
             {emailState.topPhotoUrl && (
               <img src={emailState.topPhotoUrl} alt="Top" className="w-full rounded-lg max-h-40 object-cover" />
             )}
-            <Button
-              className="w-full h-12 bg-[#F97316] hover:bg-[#EA580C]"
-              onClick={handleFinish}
-              disabled={isSubmitting || requiredIncomplete.length > 0 || !emailState.hasTopPhoto}
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <Send className="h-5 w-5 mr-2" /> Finish &amp; email customer
-                </>
-              )}
-            </Button>
+            <PoolVisitFinishActions
+              hasTopPhoto={emailState.hasTopPhoto}
+              isSubmitting={isSubmitting}
+              checklistBlocked={requiredIncomplete.length > 0}
+              onFinishWithEmail={handleFinishWithPhoto}
+              onFinishWithoutPhoto={handleFinishWithoutPhoto}
+            />
           </CardContent>
         </Card>
       )}

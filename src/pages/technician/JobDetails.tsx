@@ -20,6 +20,8 @@ import { TodaysChecklistCard } from '@/components/technician/TodaysChecklistCard
 import { PoolRecentActivityTable } from '@/components/technician/PoolRecentActivityTable';
 import { PoolVisitChemistryForm } from '@/components/technician/PoolVisitChemistryForm';
 import { PoolVisitEmailSection } from '@/components/technician/PoolVisitEmailSection';
+import { PoolVisitFinishActions } from '@/components/technician/PoolVisitFinishActions';
+import { useFinishPoolVisit } from '@/hooks/useFinishPoolVisit';
 import { formatDoneAgo } from '@/lib/format-relative-time';
 import type { ServiceChecklistItem } from '@/types/service-checklist';
 import { useToast } from '@/hooks/use-toast';
@@ -63,6 +65,13 @@ export default function JobDetails() {
     serviceName,
     customerId: appointment?.customer_id,
   });
+  const {
+    finishVisit,
+    isSubmitting: isFinishingVisit,
+    emailState,
+    hasCustomerEmail,
+    canFinish,
+  } = useFinishPoolVisit(id);
 
   useEffect(() => {
     if (appointment?.status === 'in_progress') {
@@ -246,7 +255,7 @@ export default function JobDetails() {
         <div className="flex gap-2">
           <Button
             className="bg-[#F97316] hover:bg-[#EA580C]"
-            onClick={() => navigate(`/technician/jobs/${id}/complete`)}
+            onClick={() => setActiveTab('pool')}
           >
             Finish visit
           </Button>
@@ -303,8 +312,16 @@ export default function JobDetails() {
   const chemistryReadOnly =
     appointment.status === 'completed' || appointment.status === 'cancelled';
 
+  const showPoolFinishActions =
+    canFinish && hasCustomerEmail && !chemistryReadOnly;
+
+  const handleTopPhotoUploaded = async (url: string) => {
+    if (!showPoolFinishActions || isFinishingVisit) return;
+    await finishVisit({ requirePhoto: true, photoUrl: url });
+  };
+
   return (
-    <div className="space-y-4">
+    <div className={showPoolFinishActions && activeTab === 'pool' ? 'space-y-4 pb-36' : 'space-y-4'}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
@@ -577,6 +594,7 @@ export default function JobDetails() {
               appointmentId={id}
               customerEmail={appointment.customer.email}
               readOnly={chemistryReadOnly}
+              onTopPhotoUploaded={showPoolFinishActions ? handleTopPhotoUploaded : undefined}
             />
           )}
 
@@ -633,13 +651,19 @@ export default function JobDetails() {
         </TabsContent>
       </Tabs>
 
-      {appointment.status === 'in_progress' && (
-        <Button
-          className="w-full bg-[#F97316] hover:bg-[#EA580C] h-12 text-lg"
-          onClick={() => navigate(`/technician/jobs/${id}/complete`)}
-        >
-          Finish visit
-        </Button>
+      {showPoolFinishActions && activeTab === 'pool' && (
+        <div className="fixed bottom-16 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+          <div className="max-w-lg mx-auto">
+            <PoolVisitFinishActions
+              compact
+              hasTopPhoto={emailState.hasTopPhoto}
+              isSubmitting={isFinishingVisit}
+              checklistBlocked={requiredIncomplete.length > 0}
+              onFinishWithEmail={() => finishVisit({ requirePhoto: true })}
+              onFinishWithoutPhoto={() => finishVisit({ requirePhoto: false })}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
