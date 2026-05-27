@@ -40,9 +40,8 @@ import VisitFinish from "./pages/technician/VisitFinish";
 import JobProblem from "./pages/technician/JobProblem";
 import History from "./pages/technician/History";
 import Profile from "./pages/technician/Profile";
-import RoutesDashboard from "./pages/RoutesDashboard";
+import Routes from "./pages/Routes";
 import RoutesMap from "./pages/RoutesMap";
-import RouteManager from "./pages/RouteManager";
 import PoolChemistrySettings from "./pages/PoolChemistrySettings";
 import AdminPanel from "./pages/AdminPanel";
 
@@ -98,9 +97,10 @@ const App = () => (
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/email-templates" element={<EmailTemplates />} />
-              <Route path="/routes/dashboard" element={<RoutesDashboard />} />
+              <Route path="/routes" element={<Routes />} />
+              <Route path="/routes/dashboard" element={<Navigate to="/routes?tab=today" replace />} />
+              <Route path="/routes/manage" element={<Navigate to="/routes?tab=setup" replace />} />
               <Route path="/routes/map" element={<RoutesMap />} />
-              <Route path="/routes/manage" element={<RouteManager />} />
               <Route path="/pool/chemistry" element={<PoolChemistrySettings />} />
               <Route path="/admin/panel" element={<AdminPanel />} />
             </Route>

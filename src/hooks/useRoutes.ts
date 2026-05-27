@@ -95,6 +95,35 @@ function formatRouteMutationError(error: { code?: string; message?: string }): s
   return error.message || 'Unknown error';
 }
 
+async function ensureRouteVisitsWindow(routeId: string, weeksAhead = 12) {
+  const { error } = await supabase.rpc('ensure_route_visits_window', {
+    p_route_id: routeId,
+    p_weeks_ahead: weeksAhead,
+  });
+  if (error) throw error;
+}
+
+async function cancelFutureForRoute(routeId: string) {
+  await supabase.rpc('cancel_future_route_stop_appointments', {
+    p_route_stop_id: null,
+    p_route_id: routeId,
+  });
+}
+
+async function cancelFutureForStop(stopId: string) {
+  await supabase.rpc('cancel_future_route_stop_appointments', {
+    p_route_stop_id: stopId,
+    p_route_id: null,
+  });
+}
+
+function invalidateRouteQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['routes'] });
+  queryClient.invalidateQueries({ queryKey: ['appointments'] });
+  queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
+  queryClient.invalidateQueries({ queryKey: ['route-day-stats'] });
+}
+
 const DAYS: Database['public']['Enums']['day_of_week'][] = [
   'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
 ];
@@ -199,9 +228,10 @@ export function useCreateRoute() {
         .select()
         .single();
       if (error) throw new Error(formatRouteMutationError(error));
+      await ensureRouteVisitsWindow(data.id);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['routes'] }),
+    onSuccess: () => invalidateRouteQueries(queryClient),
   });
 }
 
@@ -217,10 +247,12 @@ export function useAddRouteStop() {
       est_minutes?: number;
     }) => {
       await deactivateActiveStopsForCustomer(input.customer_id);
-      return upsertActiveRouteStop(input);
+      const stop = await upsertActiveRouteStop(input);
+      await ensureRouteVisitsWindow(input.route_id);
+      return stop;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      invalidateRouteQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['customer-route-stop'] });
     },
   });
@@ -248,9 +280,10 @@ export function useUpdateRoute() {
         .select()
         .single();
       if (error) throw new Error(formatRouteMutationError(error));
+      await ensureRouteVisitsWindow(data.id);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['routes'] }),
+    onSuccess: () => invalidateRouteQueries(queryClient),
   });
 }
 
@@ -259,6 +292,8 @@ export function useDeleteRoute() {
 
   return useMutation({
     mutationFn: async (routeId: string) => {
+      await cancelFutureForRoute(routeId);
+
       const { error: stopsError } = await supabase
         .from('route_stops')
         .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -272,10 +307,7 @@ export function useDeleteRoute() {
         .eq('id', routeId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routes'] });
-      queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
-    },
+    onSuccess: () => invalidateRouteQueries(queryClient),
   });
 }
 
@@ -320,10 +352,14 @@ export function useBulkAddRouteStops() {
         }
       }
 
+      if (added > 0) {
+        await ensureRouteVisitsWindow(input.route_id);
+      }
+
       return { added, skippedOnRoute, failed };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      invalidateRouteQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['customer-route-stop'] });
     },
   });
@@ -335,13 +371,15 @@ export function useMoveCustomerToRoute() {
   return useMutation({
     mutationFn: async (input: { route_id: string; customer_id: string }) => {
       await deactivateActiveStopsForCustomer(input.customer_id);
-      return upsertActiveRouteStop({
+      const stop = await upsertActiveRouteStop({
         route_id: input.route_id,
         customer_id: input.customer_id,
       });
+      await ensureRouteVisitsWindow(input.route_id);
+      return stop;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      invalidateRouteQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['customer-route-stop'] });
     },
   });
@@ -352,16 +390,41 @@ export function useRemoveRouteStop() {
 
   return useMutation({
     mutationFn: async (stopId: string) => {
+      await cancelFutureForStop(stopId);
       const { error } = await supabase
         .from('route_stops')
-        .update({ is_active: false })
+        .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', stopId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routes'] });
-      queryClient.invalidateQueries({ queryKey: ['technician-appointments'] });
+    onSuccess: () => invalidateRouteQueries(queryClient),
+  });
+}
+
+export function useRescheduleRouteVisit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      appointmentId: string;
+      scheduled_date: string;
+      scheduled_start_time?: string;
+      scheduled_end_time?: string;
+    }) => {
+      const payload: Record<string, string> = {
+        scheduled_date: input.scheduled_date,
+        updated_at: new Date().toISOString(),
+      };
+      if (input.scheduled_start_time) payload.scheduled_start_time = input.scheduled_start_time;
+      if (input.scheduled_end_time) payload.scheduled_end_time = input.scheduled_end_time;
+
+      const { error } = await supabase
+        .from('appointments')
+        .update(payload)
+        .eq('id', input.appointmentId);
+      if (error) throw error;
     },
+    onSuccess: () => invalidateRouteQueries(queryClient),
   });
 }
 

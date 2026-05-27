@@ -38,7 +38,12 @@ import { RouteAddCustomersDialog } from '@/components/routes/RouteAddCustomersDi
 import { EditRouteDialog } from '@/components/routes/EditRouteDialog';
 import type { RouteWithStops } from '@/hooks/useRoutes';
 
-export default function RouteManager() {
+interface RouteManagerProps {
+  /** When true, hide page title (used inside /routes Setup tab). */
+  embedded?: boolean;
+}
+
+export default function RouteManager({ embedded = false }: RouteManagerProps) {
   const { data: routes = [], isLoading } = useRoutes();
   const { data: team = [] } = useTeam();
   const { data: customers = [] } = useCustomers();
@@ -102,13 +107,20 @@ export default function RouteManager() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <MapPin className="h-7 w-7 text-primary" />
-            Route Manager
-          </h1>
-          <p className="text-muted-foreground">Assign customers to technician routes by weekday</p>
-        </div>
+        {!embedded ? (
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <MapPin className="h-7 w-7 text-primary" />
+              Route Manager
+            </h1>
+            <p className="text-muted-foreground">Assign customers to technician routes by weekday</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Assign customers to weekly routes. Visits are scheduled automatically for the next 12
+            weeks.
+          </p>
+        )}
         <Dialog open={newRouteOpen} onOpenChange={setNewRouteOpen}>
           <DialogTrigger asChild>
             <Button>

@@ -41,7 +41,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Route Dashboard', href: '/routes/dashboard', icon: Route },
+  { label: 'Routes', href: '/routes', icon: Route },
   { label: 'Routes Map', href: '/routes/map', icon: Map },
   { label: 'Calendar', href: '/calendar', icon: Calendar },
   { label: 'Visits', href: '/appointments', icon: ClipboardList },
@@ -50,7 +50,6 @@ const mainNavItems: NavItem[] = [
 
 const operationsNavItems: NavItem[] = [
   { label: 'Admin Panel', href: '/admin/panel', icon: ListChecks },
-  { label: 'Route Manager', href: '/routes/manage', icon: MapPin },
   { label: 'Team', href: '/team', icon: UserCog },
   { label: 'Service Types', href: '/services', icon: Briefcase },
   { label: 'Service Areas', href: '/service-areas', icon: MapPin },
