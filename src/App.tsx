@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { TechnicianRouteGuard } from "./components/auth/TechnicianRouteGuard";
@@ -47,6 +47,15 @@ import AdminPanel from "./pages/AdminPanel";
 
 const queryClient = new QueryClient();
 
+function RootRedirect() {
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab');
+  if (tab === 'today' || tab === 'setup') {
+    return <Navigate to={`/routes?tab=${tab}`} replace />;
+  }
+  return <Navigate to="/dashboard" replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -82,7 +91,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/appointments" element={<Appointments />} />

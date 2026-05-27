@@ -3,6 +3,7 @@ import { useRoutes, dateToDayOfWeek } from '@/hooks/useRoutes';
 import { useTeam } from '@/hooks/useTeam';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useEnsureRouteVisitsForDate } from '@/hooks/useEnsureRouteVisits';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   computeRouteDayStats,
   formatRouteDayBanner,
+  suggestDatesForRoutes,
   STOP_STATUS_LABELS,
   type RouteDayStats,
 } from '@/lib/route-day-stats';
@@ -49,11 +51,13 @@ export function RoutesTodayTab() {
     useState<AppointmentWithRelations | null>(null);
   const [rescheduleCustomerName, setRescheduleCustomerName] = useState('');
 
+  const { profile, loading: authLoading, session } = useAuth();
   const { data: routes = [], isLoading } = useRoutes();
   const { data: team = [] } = useTeam();
   const ensureForDate = useEnsureRouteVisitsForDate();
   const { toast } = useToast();
   const lastEnsuredDate = useRef<string | null>(null);
+  const canSync = Boolean(session && profile?.business_id && !authLoading);
 
   const dayOfWeek = dateToDayOfWeek(date);
   const activeRoutes = useMemo(() => routes.filter((r) => r.is_active !== false), [routes]);
@@ -69,14 +73,20 @@ export function RoutesTodayTab() {
   });
 
   useEffect(() => {
-    if (!date || lastEnsuredDate.current === date) return;
+    if (!canSync || !date) return;
+    if (lastEnsuredDate.current === date) return;
     lastEnsuredDate.current = date;
 
     ensureForDate.mutate(date, {
       onError: (e) => {
+        const msg = e instanceof Error ? e.message : 'Unknown error';
+        if (/not signed in|business not set up/i.test(msg)) {
+          lastEnsuredDate.current = null;
+          return;
+        }
         toast({
           title: 'Could not sync visits',
-          description: e instanceof Error ? e.message : 'Unknown error',
+          description: msg,
           variant: 'destructive',
         });
         lastEnsuredDate.current = null;
@@ -85,7 +95,12 @@ export function RoutesTodayTab() {
         refetch();
       },
     });
-  }, [date]);
+  }, [date, canSync]);
+
+  const routeSuggestions = useMemo(
+    () => suggestDatesForRoutes(activeRoutes, date),
+    [activeRoutes, date]
+  );
 
   const routeStats = useMemo(() => {
     return routesForDay.map((route) => {
@@ -143,14 +158,57 @@ export function RoutesTodayTab() {
         </div>
       ) : routeStats.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground space-y-2">
-            <p>
-              No routes on <span className="capitalize font-medium">{DAY_LABELS[dayOfWeek]}</span>.
-            </p>
-            <p className="text-sm">
-              Select a date that matches your route day (e.g. Thursday for Oceanside), or add routes
-              in the Setup tab.
-            </p>
+          <CardContent className="py-8 space-y-4">
+            <div className="text-center text-muted-foreground space-y-2">
+              <p>
+                No routes on <span className="capitalize font-medium">{DAY_LABELS[dayOfWeek]}</span>{' '}
+                for {date}.
+              </p>
+              <p className="text-sm">
+                Your routes run on other weekdays. Jump to the matching date below or add routes in
+                Setup.
+              </p>
+            </div>
+            {activeRoutes.length > 0 ? (
+              <div className="space-y-2">
+                {routeSuggestions.map(({ route, suggestedDate }) => {
+                  const tech = team.find((t) => t.id === route.technician_id);
+                  const techName = tech
+                    ? `${tech.first_name || ''} ${tech.last_name || ''}`.trim()
+                    : 'Technician';
+                  const stopCount = route.stops?.filter((s) => s.is_active).length ?? 0;
+                  return (
+                    <div
+                      key={route.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                    >
+                      <div>
+                        <p className="font-medium capitalize">
+                          {route.name} · {DAY_LABELS[route.day_of_week]}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {techName} · {stopCount} pool{stopCount === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          lastEnsuredDate.current = null;
+                          setDate(suggestedDate);
+                        }}
+                      >
+                        View {suggestedDate}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-sm text-muted-foreground">
+                No active routes yet. Open the Setup tab to create one.
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (

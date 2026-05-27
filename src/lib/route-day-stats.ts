@@ -1,6 +1,8 @@
 import type { RouteWithStops } from '@/hooks/useRoutes';
+import { dateToDayOfWeek } from '@/hooks/useRoutes';
 import type { AppointmentWithRelations } from '@/types/database';
 import { DAY_LABELS, type DayOfWeek } from '@/lib/route-assignments';
+import { addDaysToDateString } from '@/lib/utils';
 
 export type StopDayStatus = 'not_scheduled' | 'scheduled' | 'completed' | 'cancelled' | 'in_progress' | 'other';
 
@@ -108,6 +110,27 @@ export function computeRouteDayStats(
     progress: planned ? (completed / planned) * 100 : 0,
     stops,
   };
+}
+
+/** Next calendar date on or after `fromDate` that matches `weekday` (YYYY-MM-DD). */
+export function nextDateForWeekday(fromDate: string, weekday: DayOfWeek): string {
+  let cursor = fromDate;
+  for (let i = 0; i < 7; i++) {
+    if (dateToDayOfWeek(cursor) === weekday) return cursor;
+    cursor = addDaysToDateString(cursor, 1);
+  }
+  return fromDate;
+}
+
+/** Upcoming dates for each route's weekday (from selected date forward). */
+export function suggestDatesForRoutes(
+  routes: RouteWithStops[],
+  fromDate: string
+): { route: RouteWithStops; suggestedDate: string }[] {
+  return routes.map((route) => ({
+    route,
+    suggestedDate: nextDateForWeekday(fromDate, route.day_of_week),
+  }));
 }
 
 export function formatRouteDayBanner(dayOfWeek: DayOfWeek, date: string): string {
