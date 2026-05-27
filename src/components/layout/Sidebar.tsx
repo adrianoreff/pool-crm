@@ -13,6 +13,7 @@ import {
   Route,
   Map,
   MessageSquare,
+  Phone,
   Receipt,
   BarChart3,
   Settings,
@@ -56,6 +57,7 @@ const operationsNavItems: NavItem[] = [
 ];
 
 const communicationNavItemsBase: Omit<NavItem, 'badge'>[] = [
+  { label: 'Call Logs', href: '/calls', icon: Phone },
   { label: 'Messages', href: '/messages', icon: MessageSquare },
 ];
 
