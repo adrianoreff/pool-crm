@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from "react-router-dom";
+import { BrowserRouter, Routes as RouterRoutes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { TechnicianRouteGuard } from "./components/auth/TechnicianRouteGuard";
@@ -40,7 +40,7 @@ import VisitFinish from "./pages/technician/VisitFinish";
 import JobProblem from "./pages/technician/JobProblem";
 import History from "./pages/technician/History";
 import Profile from "./pages/technician/Profile";
-import Routes from "./pages/Routes";
+import RoutesPage from "./pages/Routes";
 import RoutesMap from "./pages/RoutesMap";
 import PoolChemistrySettings from "./pages/PoolChemistrySettings";
 import AdminPanel from "./pages/AdminPanel";
@@ -63,7 +63,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <RouterRoutes>
             {/* Public Widget Route - No auth required */}
             <Route path="/widget/:embedCode" element={<BookingWidget />} />
             
@@ -106,7 +106,7 @@ const App = () => (
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/email-templates" element={<EmailTemplates />} />
-              <Route path="/routes" element={<Routes />} />
+              <Route path="/routes" element={<RoutesPage />} />
               <Route path="/routes/dashboard" element={<Navigate to="/routes?tab=today" replace />} />
               <Route path="/routes/manage" element={<Navigate to="/routes?tab=setup" replace />} />
               <Route path="/routes/map" element={<RoutesMap />} />
@@ -137,7 +137,7 @@ const App = () => (
             
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
+          </RouterRoutes>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
