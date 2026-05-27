@@ -70,6 +70,76 @@ export function useCustomerVisitHistory(customerId: string | undefined, limit = 
   });
 }
 
+const SERVICE_HISTORY_SELECT = `
+  id, scheduled_date, status, completed_at, started_at,
+  scheduled_start_time, scheduled_end_time, time_spent_minutes,
+  technician:users!appointments_technician_id_fkey(id, first_name, last_name),
+  visit_readings(value_numeric, value_text, definition:pool_reading_definitions(label, key, unit)),
+  visit_dosages(amount_display, amount_numeric, definition:pool_dosage_definitions(label, key, unit)),
+  visit_reports(email_subject, email_message, email_sent_at, email_status, internal_notes),
+  appointment_photos(url, photo_role, is_primary),
+  appointment_checklist_items(item_text, completed, completed_at)
+`;
+
+export type CustomerServiceHistoryVisit = {
+  id: string;
+  scheduled_date: string;
+  status: string;
+  completed_at: string | null;
+  started_at: string | null;
+  scheduled_start_time: string | null;
+  scheduled_end_time: string | null;
+  time_spent_minutes: number | null;
+  technician: { id: string; first_name: string | null; last_name: string | null } | null;
+  visit_readings: Array<{
+    value_numeric: number | null;
+    value_text: string | null;
+    definition: { label: string; key: string; unit: string | null } | null;
+  }>;
+  visit_dosages: Array<{
+    amount_display: string | null;
+    amount_numeric: number | null;
+    definition: { label: string; key: string; unit: string | null } | null;
+  }>;
+  visit_reports: Array<{
+    email_subject: string | null;
+    email_message: string | null;
+    email_sent_at: string | null;
+    email_status: string | null;
+    internal_notes: string | null;
+  }> | {
+    email_subject: string | null;
+    email_message: string | null;
+    email_sent_at: string | null;
+    email_status: string | null;
+    internal_notes: string | null;
+  } | null;
+  appointment_photos: Array<{ url: string; photo_role: string | null; is_primary: boolean | null }>;
+  appointment_checklist_items: Array<{
+    item_text: string;
+    completed: boolean | null;
+    completed_at: string | null;
+  }>;
+};
+
+export function useCustomerServiceHistory(customerId: string | undefined, limit = 50) {
+  return useQuery({
+    queryKey: ['customer-service-history', customerId, limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(SERVICE_HISTORY_SELECT)
+        .eq('customer_id', customerId!)
+        .eq('status', 'completed')
+        .order('scheduled_date', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []) as CustomerServiceHistoryVisit[];
+    },
+    enabled: !!customerId,
+  });
+}
+
 export function useSaveVisitData() {
   const queryClient = useQueryClient();
 

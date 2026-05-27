@@ -7,10 +7,15 @@ export type CustomerRouteStop = {
   customer_id: string;
   sort_order: number;
   is_active: boolean;
+  frequency_weeks?: number | null;
+  start_on?: string | null;
+  stop_after?: string | null;
+  est_minutes?: number | null;
   route: {
     id: string;
     name: string;
     day_of_week: string;
+    technician_id?: string;
     technician: { first_name: string | null; last_name: string | null } | null;
   };
 };
@@ -23,7 +28,8 @@ export function useCustomerRouteStop(customerId: string | undefined) {
         .from('route_stops')
         .select(`
           id, route_id, customer_id, sort_order, is_active,
-          route:routes(id, name, day_of_week, technician:users!routes_technician_id_fkey(first_name, last_name))
+          frequency_weeks, start_on, stop_after, est_minutes,
+          route:routes(id, name, day_of_week, technician_id, technician:users!routes_technician_id_fkey(first_name, last_name))
         `)
         .eq('customer_id', customerId!)
         .eq('is_active', true)

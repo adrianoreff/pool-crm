@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   KeyRound,
   Dog,
+  Droplets,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +41,8 @@ import {
 import { useCustomerEmailLogs } from '@/hooks/useEmailLogs';
 import { EditCustomerModal, SendEmailModal } from '@/components/modals';
 import { CustomerRouteCard } from '@/components/customers/CustomerRouteCard';
+import { CustomerServiceHistory } from '@/components/customers/CustomerServiceHistory';
+import { CustomerPoolInfoCard } from '@/components/customers/CustomerPoolInfoCard';
 import { EmailStatusBadge } from '@/components/ui/email-status-badge';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -216,10 +219,14 @@ export default function CustomerDetail() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview" className="gap-2">
             <FileText className="h-4 w-4" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="pool" className="gap-2">
+            <Droplets className="h-4 w-4" />
+            Service History
           </TabsTrigger>
           <TabsTrigger value="emails" className="gap-2">
             <Mail className="h-4 w-4" />
@@ -267,6 +274,8 @@ export default function CustomerDetail() {
             customerId={customer.id}
             customerName={`${customer.first_name} ${customer.last_name || ''}`.trim()}
           />
+
+          <CustomerPoolInfoCard customerId={customer.id} />
 
           {/* Contact Info */}
           <div>
@@ -443,6 +452,10 @@ export default function CustomerDetail() {
               )}
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="pool" className="space-y-4">
+          <CustomerServiceHistory customerId={customer.id} />
         </TabsContent>
 
         <TabsContent value="emails" className="space-y-3">

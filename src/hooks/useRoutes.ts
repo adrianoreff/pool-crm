@@ -46,6 +46,9 @@ async function upsertActiveRouteStop(input: {
   sort_order?: number;
   address_id?: string | null;
   est_minutes?: number;
+  frequency_weeks?: number;
+  start_on?: string | null;
+  stop_after?: string | null;
 }) {
   const { data: inactive } = await supabase
     .from('route_stops')
@@ -62,6 +65,10 @@ async function upsertActiveRouteStop(input: {
       .update({
         is_active: true,
         sort_order: sortOrder,
+        est_minutes: input.est_minutes ?? 30,
+        frequency_weeks: input.frequency_weeks ?? 1,
+        start_on: input.start_on ?? null,
+        stop_after: input.stop_after ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', inactive.id)
@@ -80,6 +87,9 @@ async function upsertActiveRouteStop(input: {
       address_id: input.address_id ?? null,
       sort_order: sortOrder,
       est_minutes: input.est_minutes ?? 30,
+      frequency_weeks: input.frequency_weeks ?? 1,
+      start_on: input.start_on ?? null,
+      stop_after: input.stop_after ?? null,
       is_active: true,
     })
     .select()
@@ -365,15 +375,137 @@ export function useBulkAddRouteStops() {
   });
 }
 
+export async function findOrCreateRouteForAssignment(
+  businessId: string,
+  technicianId: string,
+  dayOfWeek: Database['public']['Enums']['day_of_week'],
+  technicianName: string
+) {
+  const { data: existing } = await supabase
+    .from('routes')
+    .select('id, name, is_active')
+    .eq('business_id', businessId)
+    .eq('technician_id', technicianId)
+    .eq('day_of_week', dayOfWeek)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.is_active === false) {
+      await supabase
+        .from('routes')
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+    }
+    return existing.id;
+  }
+
+  const dayLabel =
+    dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+  const { data: created, error } = await supabase
+    .from('routes')
+    .insert({
+      business_id: businessId,
+      technician_id: technicianId,
+      name: `${technicianName} ${dayLabel}`.trim(),
+      day_of_week: dayOfWeek,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(formatRouteMutationError(error));
+  await ensureRouteVisitsWindow(created.id);
+  return created.id;
+}
+
+export function useSaveCustomerRouteAssignment() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (input: {
+      customer_id: string;
+      assignment: import('@/lib/route-assignment-form').RouteAssignmentFormData;
+      est_minutes?: number | null;
+      customerName?: string;
+    }) => {
+      if (!profile?.business_id) throw new Error('Business not set up');
+      const { assignment, customer_id } = input;
+
+      if (!assignment.enabled) {
+        const { data: active } = await supabase
+          .from('route_stops')
+          .select('id')
+          .eq('customer_id', customer_id)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (active) {
+          await cancelFutureForStop(active.id);
+          await supabase
+            .from('route_stops')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('id', active.id);
+        }
+        return null;
+      }
+
+      if (!assignment.technician_id || !assignment.day_of_week) {
+        throw new Error('Select technician and day of week');
+      }
+
+      const tech = await supabase
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', assignment.technician_id)
+        .single();
+      const techName = tech.data
+        ? `${tech.data.first_name || ''} ${tech.data.last_name || ''}`.trim() || 'Route'
+        : 'Route';
+
+      const routeId = await findOrCreateRouteForAssignment(
+        profile.business_id,
+        assignment.technician_id,
+        assignment.day_of_week,
+        techName
+      );
+
+      await deactivateActiveStopsForCustomer(customer_id);
+      const stop = await upsertActiveRouteStop({
+        route_id: routeId,
+        customer_id,
+        est_minutes: input.est_minutes ?? 15,
+        frequency_weeks: assignment.frequency_weeks,
+        start_on: assignment.start_on || null,
+        stop_after: assignment.stop_after || null,
+      });
+      await ensureRouteVisitsWindow(routeId);
+      return stop;
+    },
+    onSuccess: () => {
+      invalidateRouteQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['customer-route-stop'] });
+    },
+  });
+}
+
 export function useMoveCustomerToRoute() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { route_id: string; customer_id: string }) => {
+    mutationFn: async (input: {
+      route_id: string;
+      customer_id: string;
+      frequency_weeks?: number;
+      start_on?: string | null;
+      stop_after?: string | null;
+      est_minutes?: number;
+    }) => {
       await deactivateActiveStopsForCustomer(input.customer_id);
       const stop = await upsertActiveRouteStop({
         route_id: input.route_id,
         customer_id: input.customer_id,
+        frequency_weeks: input.frequency_weeks,
+        start_on: input.start_on,
+        stop_after: input.stop_after,
+        est_minutes: input.est_minutes,
       });
       await ensureRouteVisitsWindow(input.route_id);
       return stop;

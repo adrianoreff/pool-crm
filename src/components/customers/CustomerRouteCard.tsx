@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCustomerRouteStop } from '@/hooks/useCustomerRoute';
+import { FREQUENCY_OPTIONS } from '@/lib/route-assignment-form';
+import { formatAppointmentDate } from '@/lib/utils';
 import { useRemoveRouteStop } from '@/hooks/useRoutes';
 import { AssignToRouteModal } from './AssignToRouteModal';
 import { useToast } from '@/hooks/use-toast';
@@ -78,9 +80,14 @@ export function CustomerRouteCard({ customerId, customerName }: CustomerRouteCar
                   </span>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Stop #{stop.sort_order + 1} on this route. Generate visits from Route Dashboard to schedule appointments.
-              </p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>
+                  {FREQUENCY_OPTIONS.find((f) => f.value === (stop.frequency_weeks ?? 1))?.label ?? 'Weekly'}
+                  {stop.start_on && ` · from ${formatAppointmentDate(stop.start_on)}`}
+                  {stop.stop_after && ` · until ${formatAppointmentDate(stop.stop_after)}`}
+                </p>
+                <p>Stop #{stop.sort_order + 1} on this route. Visits sync automatically from Routes.</p>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
