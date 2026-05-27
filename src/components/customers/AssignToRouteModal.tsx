@@ -15,21 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
-import { useRoutes, useAddRouteStop } from '@/hooks/useRoutes';
+import { useRoutes, useMoveCustomerToRoute } from '@/hooks/useRoutes';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const DAY_LABELS: Record<string, string> = {
-  sunday: 'Sunday',
-  monday: 'Monday',
-  tuesday: 'Tuesday',
-  wednesday: 'Wednesday',
-  thursday: 'Thursday',
-  friday: 'Friday',
-  saturday: 'Saturday',
-};
+import { DAY_LABELS } from '@/lib/route-assignments';
 
 interface AssignToRouteModalProps {
   open: boolean;
@@ -47,7 +38,7 @@ export function AssignToRouteModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: routes = [], isLoading } = useRoutes();
-  const addStop = useAddRouteStop();
+  const moveToRoute = useMoveCustomerToRoute();
   const [routeId, setRouteId] = useState('');
 
   const activeRoutes = routes.filter((r) => r.is_active);
@@ -55,12 +46,7 @@ export function AssignToRouteModal({
   const handleAssign = async () => {
     if (!routeId) return;
     try {
-      await supabase
-        .from('route_stops')
-        .update({ is_active: false })
-        .eq('customer_id', customerId)
-        .eq('is_active', true);
-      await addStop.mutateAsync({
+      await moveToRoute.mutateAsync({
         route_id: routeId,
         customer_id: customerId,
       });
@@ -124,9 +110,9 @@ export function AssignToRouteModal({
           </Button>
           <Button
             onClick={handleAssign}
-            disabled={!routeId || addStop.isPending || activeRoutes.length === 0}
+            disabled={!routeId || moveToRoute.isPending || activeRoutes.length === 0}
           >
-            {addStop.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {moveToRoute.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Add to route
           </Button>
         </DialogFooter>
